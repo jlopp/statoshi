@@ -80,6 +80,7 @@ StatsdClient::StatsdClient(const string& host,
     d->sock = -1;
     config(host, port, ns);
     srandom(time(NULL));
+    exit_ = false;
 
     pthread_spin_init(&batching_spin_lock_, PTHREAD_PROCESS_PRIVATE);
     batching_thread_ = std::thread([this] {
