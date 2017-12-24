@@ -35,11 +35,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
-#include <sys/types.h>
 #include <netinet/in.h>
 #include "statsd_client.h"
 #include "util.h"
-#include <fcntl.h>
 
 using namespace std;
 namespace statsd {
@@ -74,16 +72,41 @@ struct _StatsdClientData {
     char    errmsg[1024];
 };
 
-StatsdClient::StatsdClient(const string& host, int port, const string& ns)
+StatsdClient::StatsdClient(const string& host,
+                           int port,
+                           const string& ns)
 {
     d = new _StatsdClientData;
     d->sock = -1;
     config(host, port, ns);
     srandom(time(NULL));
+
+    pthread_spin_init(&batching_spin_lock_, PTHREAD_PROCESS_PRIVATE);
+    batching_thread_ = std::thread([this] {
+      while (!exit_) {
+          std::deque<std::string> staged_message_queue;
+
+          pthread_spin_lock(&batching_spin_lock_);
+          batching_message_queue_.swap(staged_message_queue);
+          pthread_spin_unlock(&batching_spin_lock_);
+
+          while(!staged_message_queue.empty()) {
+              send_to_daemon(staged_message_queue.front());
+              staged_message_queue.pop_front();
+          }
+
+          std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+      }
+    });
 }
 
 StatsdClient::~StatsdClient()
 {
+    exit_ = true;
+    batching_thread_.join();
+    pthread_spin_destroy(&batching_spin_lock_);
+
+
     // close socket
     if (d->sock >= 0) {
         close(d->sock);
@@ -130,8 +153,10 @@ int StatsdClient::init()
 
         ret = getaddrinfo(d->host.c_str(), NULL, &hints, &result);
         if ( ret ) {
+            close(d->sock);
+            d->sock = -1;
             snprintf(d->errmsg, sizeof(d->errmsg),
-                    "getaddrinfo fail, error=%d, msg=%s", ret, gai_strerror(ret) );
+                     "getaddrinfo fail, error=%d, msg=%s", ret, gai_strerror(ret) );
             return -2;
         }
         struct sockaddr_in* host_addr = (struct sockaddr_in*)result->ai_addr;
@@ -204,12 +229,12 @@ int StatsdClient::send(string key, size_t value, const string &type, float sampl
     if ( fequal( sample_rate, 1.0 ) )
     {
         snprintf(buf, sizeof(buf), "%s%s:%zd|%s",
-                d->ns.c_str(), key.c_str(), value, type.c_str());
+                 d->ns.c_str(), key.c_str(), value, type.c_str());
     }
     else
     {
         snprintf(buf, sizeof(buf), "%s%s:%zd|%s|@%.2f",
-                d->ns.c_str(), key.c_str(), value, type.c_str(), sample_rate);
+                 d->ns.c_str(), key.c_str(), value, type.c_str(), sample_rate);
     }
 
     return send(buf);
@@ -244,6 +269,20 @@ int StatsdClient::sendDouble(string key, double value, const string &type, float
 
 int StatsdClient::send(const string &message)
 {
+    pthread_spin_lock(&batching_spin_lock_);
+    if (batching_message_queue_.empty() ||
+        batching_message_queue_.back().length() > max_batching_size) {
+        batching_message_queue_.push_back(message);
+    } else {
+        (*batching_message_queue_.rbegin()).append("\n").append(message);
+    }
+    pthread_spin_unlock(&batching_spin_lock_);
+
+    return 0;
+}
+
+
+int StatsdClient::send_to_daemon(const string &message) {
     int ret = init();
     if ( ret )
     {
@@ -252,9 +291,10 @@ int StatsdClient::send(const string &message)
     ret = sendto(d->sock, message.data(), message.size(), 0, (struct sockaddr *) &d->server, sizeof(d->server));
     if ( ret == -1) {
         snprintf(d->errmsg, sizeof(d->errmsg),
-                "sendto server fail, host=%s:%d, err=%m", d->host.c_str(), d->port);
+                 "sendto server fail, host=%s:%d, err=%m", d->host.c_str(), d->port);
         return -1;
     }
+
     return 0;
 }
 
@@ -264,4 +304,5 @@ const char* StatsdClient::errmsg()
 }
 
 }
+
 
