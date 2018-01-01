@@ -5,7 +5,11 @@
 #include <sys/types.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
+#include <pthread.h>
 #include <string>
+#include <thread>
+#include <deque>
+#include <iostream>
 
 namespace statsd {
 
@@ -20,6 +24,7 @@ class StatsdClient {
         // you can config at anytime; client will use new address (useful for Singleton)
         void config(const std::string& host, int port, const std::string& ns = "");
         const char* errmsg();
+        int send_to_daemon(const std::string &);
 
     public:
         int inc(const std::string& key, float sample_rate = 1.0);
@@ -40,16 +45,22 @@ class StatsdClient {
          * type = "c", "g" or "ms"
          */
         int send(std::string key, size_t value,
-                const std::string& type, float sample_rate);
-        int sendDouble(std::string key, double value,
-                const std::string& type, float sample_rate);
+                 const std::string& type, float sample_rate);
 
+        int sendDouble(std::string key, double value,
+                 const std::string& type, float sample_rate);
     protected:
         int init();
         void cleanup(std::string& key);
 
     protected:
         struct _StatsdClientData* d;
+
+        bool exit_;
+        pthread_spinlock_t batching_spin_lock_;
+        std::thread batching_thread_;
+        std::deque<std::string> batching_message_queue_;
+        const uint64_t max_batching_size = 32768;
 };
 
 }; // end namespace
