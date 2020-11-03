@@ -417,7 +417,13 @@ static UniValue getmininginfo(const JSONRPCRequest& request)
     obj.pushKV("pooledtx",         (uint64_t)mempool.size());
     obj.pushKV("chain",            Params().NetworkIDString());
     obj.pushKV("warnings",         GetWarnings(false));
+    util::Ref contextLong;
+    JSONRPCRequest requestLong(contextLong);
+    requestLong.params = UniValue(UniValue::VARR);
+    requestLong.params.nblocks = 600;
+    obj.pushKV("networkhashpsLong",    getnetworkhashps(requestLong));
     statsClient.gauge("network.exahashesPerSecond", getnetworkhashps(request).get_real() / 1e18);
+    statsClient.gauge("network.exahashesPerSecondLong", getnetworkhashps(requestLong).get_real() / 1e18);
     statsClient.gauge("network.difficulty", (double)GetDifficulty(::ChainActive().Tip()));
 
     return obj;
