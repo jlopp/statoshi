@@ -6,8 +6,10 @@
 #define BITCOIN_RPC_BLOCKCHAIN_H
 
 #include <amount.h>
+#include <streams.h>
 #include <sync.h>
 
+#include <any>
 #include <stdint.h>
 #include <vector>
 
@@ -16,13 +18,11 @@ extern RecursiveMutex cs_main;
 class CBlock;
 class CBlockIndex;
 class CBlockPolicyEstimator;
+class CChainState;
 class CTxMemPool;
 class ChainstateManager;
 class UniValue;
 struct NodeContext;
-namespace util {
-class Ref;
-} // namespace util
 
 static constexpr int NUM_GETBLOCKSTATS_PERCENTILES = 5;
 
@@ -52,9 +52,18 @@ UniValue blockheaderToJSON(const CBlockIndex* tip, const CBlockIndex* blockindex
 /** Used by getblockstats to get feerates at different percentiles by weight  */
 void CalculatePercentilesByWeight(CAmount result[NUM_GETBLOCKSTATS_PERCENTILES], std::vector<std::pair<CAmount, int64_t>>& scores, int64_t total_weight);
 
-NodeContext& EnsureNodeContext(const util::Ref& context);
-CTxMemPool& EnsureMemPool(const util::Ref& context);
-ChainstateManager& EnsureChainman(const util::Ref& context);
-CBlockPolicyEstimator& EnsureFeeEstimator(const util::Ref& context);
+NodeContext& EnsureAnyNodeContext(const std::any& context);
+CTxMemPool& EnsureMemPool(const NodeContext& node);
+CTxMemPool& EnsureAnyMemPool(const std::any& context);
+ChainstateManager& EnsureChainman(const NodeContext& node);
+ChainstateManager& EnsureAnyChainman(const std::any& context);
+CBlockPolicyEstimator& EnsureFeeEstimator(const NodeContext& node);
+CBlockPolicyEstimator& EnsureAnyFeeEstimator(const std::any& context);
+
+/**
+ * Helper to create UTXO snapshots given a chainstate and a file handle.
+ * @return a UniValue map containing metadata about the snapshot.
+ */
+UniValue CreateUTXOSnapshot(NodeContext& node, CChainState& chainstate, CAutoFile& afile);
 
 #endif

@@ -1,10 +1,11 @@
-// Copyright (c) 2020 The Bitcoin Core developers
+// Copyright (c) 2020-2021 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <test/fuzz/FuzzedDataProvider.h>
 #include <test/fuzz/fuzz.h>
 #include <test/fuzz/util.h>
+#include <test/util/setup_common.h>
 #include <util/system.h>
 
 #include <cstdint>
@@ -12,6 +13,11 @@
 #include <vector>
 
 namespace {
+void initialize_system()
+{
+    static const auto testing_setup = MakeNoLogFileContext<>();
+}
+
 std::string GetArgumentName(const std::string& name)
 {
     size_t idx = name.find('=');
@@ -20,9 +26,8 @@ std::string GetArgumentName(const std::string& name)
     }
     return name.substr(0, idx);
 }
-} // namespace
 
-FUZZ_TARGET(system)
+FUZZ_TARGET_INIT(system, initialize_system)
 {
     FuzzedDataProvider fuzzed_data_provider(buffer.data(), buffer.size());
     ArgsManager args_manager{};
@@ -31,7 +36,8 @@ FUZZ_TARGET(system)
         SetupHelpOptions(args_manager);
     }
 
-    while (fuzzed_data_provider.ConsumeBool()) {
+    LIMITED_WHILE(fuzzed_data_provider.ConsumeBool(), 3000)
+    {
         CallOneOf(
             fuzzed_data_provider,
             [&] {
@@ -51,10 +57,10 @@ FUZZ_TARGET(system)
                 // Avoid hitting:
                 // util/system.cpp:425: void ArgsManager::AddArg(const std::string &, const std::string &, unsigned int, const OptionsCategory &): Assertion `ret.second' failed.
                 const std::string argument_name = GetArgumentName(fuzzed_data_provider.ConsumeRandomLengthString(16));
-                if (args_manager.GetArgFlags(argument_name) != nullopt) {
+                if (args_manager.GetArgFlags(argument_name) != std::nullopt) {
                     return;
                 }
-                args_manager.AddArg(argument_name, fuzzed_data_provider.ConsumeRandomLengthString(16), fuzzed_data_provider.ConsumeIntegral<unsigned int>(), options_category);
+                args_manager.AddArg(argument_name, fuzzed_data_provider.ConsumeRandomLengthString(16), fuzzed_data_provider.ConsumeIntegral<unsigned int>() & ~ArgsManager::COMMAND, options_category);
             },
             [&] {
                 // Avoid hitting:
@@ -63,7 +69,7 @@ FUZZ_TARGET(system)
                 std::vector<std::string> hidden_arguments;
                 for (const std::string& name : names) {
                     const std::string hidden_argument = GetArgumentName(name);
-                    if (args_manager.GetArgFlags(hidden_argument) != nullopt) {
+                    if (args_manager.GetArgFlags(hidden_argument) != std::nullopt) {
                         continue;
                     }
                     if (std::find(hidden_arguments.begin(), hidden_arguments.end(), hidden_argument) != hidden_arguments.end()) {
@@ -96,7 +102,7 @@ FUZZ_TARGET(system)
     const int64_t i64 = fuzzed_data_provider.ConsumeIntegral<int64_t>();
     const bool b = fuzzed_data_provider.ConsumeBool();
 
-    (void)args_manager.GetArg(s1, i64);
+    (void)args_manager.GetIntArg(s1, i64);
     (void)args_manager.GetArg(s1, s2);
     (void)args_manager.GetArgFlags(s1);
     (void)args_manager.GetArgs(s1);
@@ -113,3 +119,4 @@ FUZZ_TARGET(system)
 
     (void)HelpRequested(args_manager);
 }
+} // namespace

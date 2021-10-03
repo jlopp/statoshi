@@ -6,23 +6,23 @@
 
 import time
 
-from test_framework.blocktools import create_transaction
-from test_framework.messages import msg_tx
+from test_framework.messages import msg_tx, msg_inv, CInv, MSG_WTX
 from test_framework.p2p import P2PInterface, P2PTxInvStore
 from test_framework.test_framework import BitcoinTestFramework
 from test_framework.util import assert_equal
+from test_framework.wallet import MiniWallet
 
 
 class P2PBlocksOnly(BitcoinTestFramework):
     def set_test_params(self):
-        self.setup_clean_chain = False
         self.num_nodes = 1
         self.extra_args = [["-blocksonly"]]
 
-    def skip_test_if_missing_module(self):
-        self.skip_if_no_wallet()
-
     def run_test(self):
+        self.miniwallet = MiniWallet(self.nodes[0])
+        # Add enough mature utxos to the wallet, so that all txs spend confirmed coins
+        self.miniwallet.rescan_utxos()
+
         self.blocksonly_mode_tests()
         self.blocks_relay_conn_tests()
 
@@ -31,14 +31,21 @@ class P2PBlocksOnly(BitcoinTestFramework):
         assert_equal(self.nodes[0].getnetworkinfo()['localrelay'], False)
 
         self.nodes[0].add_p2p_connection(P2PInterface())
-        tx, txid, tx_hex = self.check_p2p_tx_violation()
+        tx, txid, wtxid, tx_hex = self.check_p2p_tx_violation()
+
+        self.log.info('Check that tx invs also violate the protocol')
+        self.nodes[0].add_p2p_connection(P2PInterface())
+        with self.nodes[0].assert_debug_log(['transaction (0000000000000000000000000000000000000000000000000000000000001234) inv sent in violation of protocol, disconnecting peer']):
+            self.nodes[0].p2ps[0].send_message(msg_inv([CInv(t=MSG_WTX, h=0x1234)]))
+            self.nodes[0].p2ps[0].wait_for_disconnect()
+            del self.nodes[0].p2ps[0]
 
         self.log.info('Check that txs from rpc are not rejected and relayed to other peers')
         tx_relay_peer = self.nodes[0].add_p2p_connection(P2PInterface())
         assert_equal(self.nodes[0].getpeerinfo()[0]['relaytxes'], True)
 
         assert_equal(self.nodes[0].testmempoolaccept([tx_hex])[0]['allowed'], True)
-        with self.nodes[0].assert_debug_log(['received getdata for: wtx {} peer=1'.format(txid)]):
+        with self.nodes[0].assert_debug_log(['received getdata for: wtx {} peer'.format(wtxid)]):
             self.nodes[0].sendrawtransaction(tx_hex)
             tx_relay_peer.wait_for_tx(txid)
             assert_equal(self.nodes[0].getmempoolinfo()['size'], 1)
@@ -70,7 +77,7 @@ class P2PBlocksOnly(BitcoinTestFramework):
         self.log.info("Relay-permission peer's transaction is accepted and relayed")
 
         self.nodes[0].disconnect_p2ps()
-        self.nodes[0].generate(1)
+        self.generate(self.nodes[0], 1)
 
     def blocks_relay_conn_tests(self):
         self.log.info('Tests with node in normal mode with block-relay-only connections')
@@ -80,7 +87,7 @@ class P2PBlocksOnly(BitcoinTestFramework):
         # Ensure we disconnect if a block-relay-only connection sends us a transaction
         self.nodes[0].add_outbound_p2p_connection(P2PInterface(), p2p_idx=0, connection_type="block-relay-only")
         assert_equal(self.nodes[0].getpeerinfo()[0]['relaytxes'], False)
-        _, txid, tx_hex = self.check_p2p_tx_violation(index=2)
+        _, txid, _, tx_hex = self.check_p2p_tx_violation()
 
         self.log.info("Check that txs from RPC are not sent to blockrelay connection")
         conn = self.nodes[0].add_outbound_p2p_connection(P2PTxInvStore(), p2p_idx=1, connection_type="block-relay-only")
@@ -90,29 +97,22 @@ class P2PBlocksOnly(BitcoinTestFramework):
         # Bump time forward to ensure nNextInvSend timer pops
         self.nodes[0].setmocktime(int(time.time()) + 60)
 
-        # Calling sync_with_ping twice requires that the node calls
-        # `ProcessMessage` twice, and thus ensures `SendMessages` must have
-        # been called at least once
-        conn.sync_with_ping()
-        conn.sync_with_ping()
+        conn.sync_send_with_ping()
         assert(int(txid, 16) not in conn.get_invs())
 
-    def check_p2p_tx_violation(self, index=1):
+    def check_p2p_tx_violation(self):
         self.log.info('Check that txs from P2P are rejected and result in disconnect')
-        input_txid = self.nodes[0].getblock(self.nodes[0].getblockhash(index), 2)['tx'][0]['txid']
-        tx = create_transaction(self.nodes[0], input_txid, self.nodes[0].getnewaddress(), amount=(50 - 0.001))
-        txid = tx.rehash()
-        tx_hex = tx.serialize().hex()
+        spendtx = self.miniwallet.create_self_transfer(from_node=self.nodes[0])
 
         with self.nodes[0].assert_debug_log(['transaction sent in violation of protocol peer=0']):
-            self.nodes[0].p2ps[0].send_message(msg_tx(tx))
+            self.nodes[0].p2ps[0].send_message(msg_tx(spendtx['tx']))
             self.nodes[0].p2ps[0].wait_for_disconnect()
             assert_equal(self.nodes[0].getmempoolinfo()['size'], 0)
 
         # Remove the disconnected peer
         del self.nodes[0].p2ps[0]
 
-        return tx, txid, tx_hex
+        return spendtx['tx'], spendtx['txid'], spendtx['wtxid'], spendtx['hex']
 
 
 if __name__ == '__main__':

@@ -17,7 +17,6 @@ from test_framework.wallet_util import bytes_to_wif, generate_wif_key
 
 class CreateWalletTest(BitcoinTestFramework):
     def set_test_params(self):
-        self.setup_clean_chain = False
         self.num_nodes = 1
 
     def skip_test_if_missing_module(self):
@@ -25,7 +24,7 @@ class CreateWalletTest(BitcoinTestFramework):
 
     def run_test(self):
         node = self.nodes[0]
-        node.generate(1) # Leave IBD for sethdseed
+        self.generate(node, 1) # Leave IBD for sethdseed
 
         self.nodes[0].createwallet(wallet_name='w0')
         w0 = node.get_wallet_rpc('w0')

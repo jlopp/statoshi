@@ -1,4 +1,4 @@
-// Copyright (c) 2020 The Bitcoin Core developers
+// Copyright (c) 2020-2021 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -7,7 +7,6 @@
 #include <net.h>
 #include <net_permissions.h>
 #include <netaddress.h>
-#include <optional.h>
 #include <protocol.h>
 #include <random.h>
 #include <test/fuzz/FuzzedDataProvider.h>
@@ -15,14 +14,16 @@
 #include <test/fuzz/util.h>
 #include <test/util/net.h>
 #include <test/util/setup_common.h>
+#include <util/asmap.h>
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
 void initialize_net()
 {
-    static const BasicTestingSetup basic_testing_setup;
+    static const auto testing_setup = MakeNoLogFileContext<>(CBaseChainParams::MAIN);
 }
 
 FUZZ_TARGET_INIT(net, initialize_net)
@@ -38,15 +39,8 @@ FUZZ_TARGET_INIT(net, initialize_net)
                 node.CloseSocketDisconnect();
             },
             [&] {
-                node.MaybeSetAddrName(fuzzed_data_provider.ConsumeRandomLengthString(32));
-            },
-            [&] {
-                const std::vector<bool> asmap = ConsumeRandomLengthBitVector(fuzzed_data_provider);
-                if (!SanityCheckASMap(asmap)) {
-                    return;
-                }
                 CNodeStats stats;
-                node.copyStats(stats, asmap);
+                node.CopyStats(stats);
             },
             [&] {
                 const CNode* add_ref_node = node.AddRef();
@@ -56,27 +50,6 @@ FUZZ_TARGET_INIT(net, initialize_net)
                 if (node.GetRefCount() > 0) {
                     node.Release();
                 }
-            },
-            [&] {
-                if (node.m_addr_known == nullptr) {
-                    return;
-                }
-                const std::optional<CAddress> addr_opt = ConsumeDeserializable<CAddress>(fuzzed_data_provider);
-                if (!addr_opt) {
-                    return;
-                }
-                node.AddAddressKnown(*addr_opt);
-            },
-            [&] {
-                if (node.m_addr_known == nullptr) {
-                    return;
-                }
-                const std::optional<CAddress> addr_opt = ConsumeDeserializable<CAddress>(fuzzed_data_provider);
-                if (!addr_opt) {
-                    return;
-                }
-                FastRandomContext fast_random_context{ConsumeUInt256(fuzzed_data_provider)};
-                node.PushAddress(*addr_opt, fast_random_context);
             },
             [&] {
                 const std::optional<CInv> inv_opt = ConsumeDeserializable<CInv>(fuzzed_data_provider);
@@ -103,14 +76,12 @@ FUZZ_TARGET_INIT(net, initialize_net)
     }
 
     (void)node.GetAddrLocal();
-    (void)node.GetAddrName();
     (void)node.GetId();
     (void)node.GetLocalNonce();
     (void)node.GetLocalServices();
     const int ref_count = node.GetRefCount();
     assert(ref_count >= 0);
     (void)node.GetCommonVersion();
-    (void)node.RelayAddrsWithConn();
 
     const NetPermissionFlags net_permission_flags = ConsumeWeakEnum(fuzzed_data_provider, ALL_NET_PERMISSION_FLAGS);
     (void)node.HasPermission(net_permission_flags);

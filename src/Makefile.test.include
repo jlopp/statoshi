@@ -2,9 +2,11 @@
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-if ENABLE_FUZZ
+if ENABLE_FUZZ_BINARY
 noinst_PROGRAMS += test/fuzz/fuzz
-else
+endif
+
+if !ENABLE_FUZZ
 bin_PROGRAMS += test/test_bitcoin
 endif
 
@@ -33,11 +35,12 @@ BITCOIN_TEST_SUITE = \
   $(TEST_UTIL_H)
 
 FUZZ_SUITE_LD_COMMON = \
- $(LIBBITCOIN_SERVER) \
- $(LIBBITCOIN_COMMON) \
- $(LIBBITCOIN_UTIL) \
  $(LIBTEST_UTIL) \
  $(LIBTEST_FUZZ) \
+ $(LIBBITCOIN_SERVER) \
+ $(LIBBITCOIN_WALLET) \
+ $(LIBBITCOIN_COMMON) \
+ $(LIBBITCOIN_UTIL) \
  $(LIBBITCOIN_CONSENSUS) \
  $(LIBBITCOIN_CRYPTO) \
  $(LIBBITCOIN_CLI) \
@@ -49,6 +52,14 @@ FUZZ_SUITE_LD_COMMON = \
  $(LIBSECP256K1) \
  $(EVENT_LIBS) \
  $(EVENT_PTHREADS_LIBS)
+
+if USE_UPNP
+FUZZ_SUITE_LD_COMMON += $(MINIUPNPC_LIBS)
+endif
+
+if USE_NATPMP
+FUZZ_SUITE_LD_COMMON += $(NATPMP_LIBS)
+endif
 
 # test_bitcoin binary #
 BITCOIN_TESTS =\
@@ -70,6 +81,7 @@ BITCOIN_TESTS =\
   test/bswap_tests.cpp \
   test/checkqueue_tests.cpp \
   test/coins_tests.cpp \
+  test/coinstatsindex_tests.cpp \
   test/compilerbug_tests.cpp \
   test/compress_tests.cpp \
   test/crypto_tests.cpp \
@@ -80,6 +92,7 @@ BITCOIN_TESTS =\
   test/fs_tests.cpp \
   test/getarg_tests.cpp \
   test/hash_tests.cpp \
+  test/i2p_tests.cpp \
   test/interfaces_tests.cpp \
   test/key_io_tests.cpp \
   test/key_tests.cpp \
@@ -91,6 +104,7 @@ BITCOIN_TESTS =\
   test/merkleblock_tests.cpp \
   test/miner_tests.cpp \
   test/multisig_tests.cpp \
+  test/net_peer_eviction_tests.cpp \
   test/net_tests.cpp \
   test/netbase_tests.cpp \
   test/pmt_tests.cpp \
@@ -100,7 +114,6 @@ BITCOIN_TESTS =\
   test/prevector_tests.cpp \
   test/raii_event_tests.cpp \
   test/random_tests.cpp \
-  test/ref_tests.cpp \
   test/reverselock_tests.cpp \
   test/rpc_tests.cpp \
   test/sanity_tests.cpp \
@@ -109,11 +122,13 @@ BITCOIN_TESTS =\
   test/script_tests.cpp \
   test/script_standard_tests.cpp \
   test/scriptnum_tests.cpp \
+  test/serfloat_tests.cpp \
   test/serialize_tests.cpp \
   test/settings_tests.cpp \
   test/sighash_tests.cpp \
   test/sigopcount_tests.cpp \
   test/skiplist_tests.cpp \
+  test/sock_tests.cpp \
   test/streams_tests.cpp \
   test/sync_tests.cpp \
   test/system_tests.cpp \
@@ -137,6 +152,7 @@ BITCOIN_TESTS =\
 if ENABLE_WALLET
 BITCOIN_TESTS += \
   wallet/test/psbt_wallet_tests.cpp \
+  wallet/test/spend_tests.cpp \
   wallet/test/wallet_tests.cpp \
   wallet/test/walletdb_tests.cpp \
   wallet/test/wallet_crypto_tests.cpp \
@@ -145,11 +161,18 @@ BITCOIN_TESTS += \
   wallet/test/ismine_tests.cpp \
   wallet/test/scriptpubkeyman_tests.cpp
 
+FUZZ_SUITE_LD_COMMON +=\
+ $(SQLITE_LIBS) \
+ $(BDB_LIBS)
+
 if USE_BDB
 BITCOIN_TESTS += wallet/test/db_tests.cpp
 endif
 
+
 BITCOIN_TEST_SUITE += \
+  wallet/test/util.cpp \
+  wallet/test/util.h \
   wallet/test/wallet_test_fixture.cpp \
   wallet/test/wallet_test_fixture.h \
   wallet/test/init_test_fixture.cpp \
@@ -172,19 +195,18 @@ test_test_bitcoin_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS) $(
 
 if ENABLE_ZMQ
 test_test_bitcoin_LDADD += $(LIBBITCOIN_ZMQ) $(ZMQ_LIBS)
+FUZZ_SUITE_LD_COMMON += $(LIBBITCOIN_ZMQ) $(ZMQ_LIBS)
 endif
-
-if ENABLE_FUZZ
 
 FUZZ_SUITE_LDFLAGS_COMMON = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS) $(PTHREAD_FLAGS)
 
+if ENABLE_FUZZ_BINARY
 test_fuzz_fuzz_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
 test_fuzz_fuzz_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 test_fuzz_fuzz_LDADD = $(FUZZ_SUITE_LD_COMMON)
-test_fuzz_fuzz_LDFLAGS = $(FUZZ_SUITE_LDFLAGS_COMMON)
+test_fuzz_fuzz_LDFLAGS = $(FUZZ_SUITE_LDFLAGS_COMMON) $(RUNTIME_LDFLAGS)
 test_fuzz_fuzz_SOURCES = \
  test/fuzz/addition_overflow.cpp \
- test/fuzz/addrdb.cpp \
  test/fuzz/addrman.cpp \
  test/fuzz/asmap.cpp \
  test/fuzz/asmap_direct.cpp \
@@ -210,7 +232,6 @@ test_fuzz_fuzz_SOURCES = \
  test/fuzz/crypto_hkdf_hmac_sha256_l32.cpp \
  test/fuzz/crypto_poly1305.cpp \
  test/fuzz/cuckoocache.cpp \
- test/fuzz/data_stream.cpp \
  test/fuzz/decode_tx.cpp \
  test/fuzz/descriptor_parse.cpp \
  test/fuzz/deserialize.cpp \
@@ -222,6 +243,7 @@ test_fuzz_fuzz_SOURCES = \
  test/fuzz/golomb_rice.cpp \
  test/fuzz/hex.cpp \
  test/fuzz/http_request.cpp \
+ test/fuzz/i2p.cpp \
  test/fuzz/integer.cpp \
  test/fuzz/key.cpp \
  test/fuzz/key_io.cpp \
@@ -235,8 +257,9 @@ test_fuzz_fuzz_SOURCES = \
  test/fuzz/net.cpp \
  test/fuzz/net_permissions.cpp \
  test/fuzz/netaddress.cpp \
+ test/fuzz/netbase_dns_lookup.cpp \
  test/fuzz/node_eviction.cpp \
- test/fuzz/p2p_transport_deserializer.cpp \
+ test/fuzz/p2p_transport_serialization.cpp \
  test/fuzz/parse_hd_keypath.cpp \
  test/fuzz/parse_iso8601.cpp \
  test/fuzz/parse_numbers.cpp \
@@ -254,6 +277,7 @@ test_fuzz_fuzz_SOURCES = \
  test/fuzz/random.cpp \
  test/fuzz/rbf.cpp \
  test/fuzz/rolling_bloom_filter.cpp \
+ test/fuzz/rpc.cpp \
  test/fuzz/script.cpp \
  test/fuzz/script_assets_test_minimizer.cpp \
  test/fuzz/script_bitcoin_consensus.cpp \
@@ -268,18 +292,23 @@ test_fuzz_fuzz_SOURCES = \
  test/fuzz/secp256k1_ecdsa_signature_parse_der_lax.cpp \
  test/fuzz/signature_checker.cpp \
  test/fuzz/signet.cpp \
+ test/fuzz/socks5.cpp \
  test/fuzz/span.cpp \
  test/fuzz/spanparsing.cpp \
  test/fuzz/string.cpp \
  test/fuzz/strprintf.cpp \
  test/fuzz/system.cpp \
  test/fuzz/timedata.cpp \
+ test/fuzz/torcontrol.cpp \
  test/fuzz/transaction.cpp \
  test/fuzz/tx_in.cpp \
  test/fuzz/tx_out.cpp \
- test/fuzz/txrequest.cpp
-
-endif # ENABLE_FUZZ
+ test/fuzz/tx_pool.cpp \
+ test/fuzz/txrequest.cpp \
+ test/fuzz/utxo_snapshot.cpp \
+ test/fuzz/validation_load_mempool.cpp \
+ test/fuzz/versionbits.cpp
+endif # ENABLE_FUZZ_BINARY
 
 nodist_test_test_bitcoin_SOURCES = $(GENERATED_TEST_FILES)
 
@@ -307,8 +336,8 @@ bitcoin_test_clean : FORCE
 
 check-local: $(BITCOIN_TESTS:.cpp=.cpp.test)
 if BUILD_BITCOIN_TX
-	@echo "Running test/util/bitcoin-util-test.py..."
-	$(PYTHON) $(top_builddir)/test/util/bitcoin-util-test.py
+	@echo "Running test/util/test_runner.py..."
+	$(PYTHON) $(top_builddir)/test/util/test_runner.py
 endif
 	@echo "Running test/util/rpcauth-test.py..."
 	$(PYTHON) $(top_builddir)/test/util/rpcauth-test.py
@@ -322,11 +351,6 @@ endif
 	$(AM_V_at)$(MAKE) $(AM_MAKEFLAGS) -C secp256k1 check
 if EMBEDDED_UNIVALUE
 	$(AM_V_at)$(MAKE) $(AM_MAKEFLAGS) -C univalue check
-endif
-
-if ENABLE_FUZZ_LINK_ALL
-all-local: $(FUZZ_BINARY)
-	bash ./test/fuzz/danger_link_all.sh
 endif
 
 %.cpp.test: %.cpp

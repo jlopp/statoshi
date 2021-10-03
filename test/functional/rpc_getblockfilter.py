@@ -21,8 +21,8 @@ class GetBlockFilterTest(BitcoinTestFramework):
         # Create two chains by disconnecting nodes 0 & 1, mining, then reconnecting
         self.disconnect_nodes(0, 1)
 
-        self.nodes[0].generate(3)
-        self.nodes[1].generate(4)
+        self.generate(self.nodes[0], 3)
+        self.generate(self.nodes[1], 4)
 
         assert_equal(self.nodes[0].getblockcount(), 3)
         chain0_hashes = [self.nodes[0].getblockhash(block_height) for block_height in range(4)]
@@ -53,6 +53,12 @@ class GetBlockFilterTest(BitcoinTestFramework):
         # Test getblockfilter with undefined filter type
         genesis_hash = self.nodes[0].getblockhash(0)
         assert_raises_rpc_error(-5, "Unknown filtertype", self.nodes[0].getblockfilter, genesis_hash, "unknown")
+
+        # Test getblockfilter fails on node without compact block filter index
+        self.restart_node(0, extra_args=["-blockfilterindex=0"])
+        for filter_type in FILTER_TYPES:
+            assert_raises_rpc_error(-1, "Index is not enabled for filtertype {}".format(filter_type),
+                                    self.nodes[0].getblockfilter, genesis_hash, filter_type)
 
 if __name__ == '__main__':
     GetBlockFilterTest().main()
