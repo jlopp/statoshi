@@ -16,6 +16,7 @@ static constexpr int64_t ORPHAN_TX_EXPIRE_TIME = 20 * 60;
 static constexpr int64_t ORPHAN_TX_EXPIRE_INTERVAL = 5 * 60;
 
 RecursiveMutex g_cs_orphans;
+statsd::StatsdClient statsClientTx;
 
 bool TxOrphanage::AddTx(const CTransactionRef& tx, NodeId peer)
 {
@@ -50,6 +51,8 @@ bool TxOrphanage::AddTx(const CTransactionRef& tx, NodeId peer)
 
     LogPrint(BCLog::MEMPOOL, "stored orphan tx %s (mapsz %u outsz %u)\n", hash.ToString(),
              m_orphans.size(), m_outpoint_to_orphan_it.size());
+    statsClientTx.inc("transactions.orphans.add", 1.0f);
+    statsClientTx.gauge("transactions.orphans", Size());
     return true;
 }
 
@@ -82,6 +85,8 @@ int TxOrphanage::EraseTx(const uint256& txid)
     m_wtxid_to_orphan_it.erase(it->second.tx->GetWitnessHash());
 
     m_orphans.erase(it);
+    statsClientTx.inc("transactions.orphans.remove", 1.0f);
+    statsClientTx.gauge("transactions.orphans", Size());
     return 1;
 }
 

@@ -10,6 +10,8 @@
 #include <primitives/transaction.h>
 #include <sync.h>
 
+#include "statsd_client.h"
+
 /** Guards orphan transactions and extra txs for compact blocks */
 extern RecursiveMutex g_cs_orphans;
 
