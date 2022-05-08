@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2015-2020 The Bitcoin Core developers
+# Copyright (c) 2015-2021 The Bitcoin Core developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 """Test transaction signing using the signrawtransaction* RPCs."""
@@ -25,12 +25,12 @@ from test_framework.messages import (
 from test_framework.script import (
     CScript,
     OP_CHECKLOCKTIMEVERIFY,
-    OP_CHECKSIG,
     OP_CHECKSEQUENCEVERIFY,
     OP_DROP,
     OP_TRUE,
 )
 from test_framework.script_util import (
+    key_to_p2pk_script,
     key_to_p2pkh_script,
     script_to_p2sh_p2wsh_script,
     script_to_p2wsh_script,
@@ -203,7 +203,6 @@ class SignRawTransactionsTest(BitcoinTestFramework):
         self.generate(self.nodes[0], COINBASE_MATURITY + 1)
         self.nodes[0].sendtoaddress(p2sh_p2wsh_address["address"], 49.999)
         self.generate(self.nodes[0], 1)
-        self.sync_all()
         # Get the UTXO info from scantxoutset
         unspent_output = self.nodes[1].scantxoutset('start', [p2sh_p2wsh_address['descriptor']])['unspents'][0]
         spk = script_to_p2sh_p2wsh_script(p2sh_p2wsh_address['redeemScript']).hex()
@@ -229,7 +228,7 @@ class SignRawTransactionsTest(BitcoinTestFramework):
         embedded_pubkey = eckey.get_pubkey().get_bytes().hex()
         witness_script = {
             'P2PKH': key_to_p2pkh_script(embedded_pubkey).hex(),
-            'P2PK': CScript([bytes.fromhex(embedded_pubkey), OP_CHECKSIG]).hex()
+            'P2PK': key_to_p2pk_script(embedded_pubkey).hex()
         }.get(tx_type, "Invalid tx_type")
         redeem_script = script_to_p2wsh_script(witness_script).hex()
         addr = script_to_p2sh(redeem_script)
@@ -271,7 +270,7 @@ class SignRawTransactionsTest(BitcoinTestFramework):
         getcontext().prec = 8
 
         # Make sure CSV is active
-        assert self.nodes[0].getblockchaininfo()['softforks']['csv']['active']
+        assert self.nodes[0].getdeploymentinfo()['deployments']['csv']['active']
 
         # Create a P2WSH script with CSV
         script = CScript([1, OP_CHECKSEQUENCEVERIFY, OP_DROP])
@@ -306,7 +305,7 @@ class SignRawTransactionsTest(BitcoinTestFramework):
         getcontext().prec = 8
 
         # Make sure CLTV is active
-        assert self.nodes[0].getblockchaininfo()['softforks']['bip65']['active']
+        assert self.nodes[0].getdeploymentinfo()['deployments']['bip65']['active']
 
         # Create a P2WSH script with CLTV
         script = CScript([100, OP_CHECKLOCKTIMEVERIFY, OP_DROP])

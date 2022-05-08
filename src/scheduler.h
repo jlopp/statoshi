@@ -1,17 +1,22 @@
-// Copyright (c) 2015-2020 The Bitcoin Core developers
+// Copyright (c) 2015-2021 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #ifndef BITCOIN_SCHEDULER_H
 #define BITCOIN_SCHEDULER_H
 
+#include <attributes.h>
+#include <sync.h>
+#include <threadsafety.h>
+
+#include <chrono>
 #include <condition_variable>
+#include <cstddef>
 #include <functional>
 #include <list>
 #include <map>
 #include <thread>
-
-#include <sync.h>
+#include <utility>
 
 /**
  * Simple class for background tasks that should be run
@@ -117,17 +122,17 @@ private:
 class SingleThreadedSchedulerClient
 {
 private:
-    CScheduler* m_pscheduler;
+    CScheduler& m_scheduler;
 
-    RecursiveMutex m_cs_callbacks_pending;
-    std::list<std::function<void()>> m_callbacks_pending GUARDED_BY(m_cs_callbacks_pending);
-    bool m_are_callbacks_running GUARDED_BY(m_cs_callbacks_pending) = false;
+    Mutex m_callbacks_mutex;
+    std::list<std::function<void()>> m_callbacks_pending GUARDED_BY(m_callbacks_mutex);
+    bool m_are_callbacks_running GUARDED_BY(m_callbacks_mutex) = false;
 
     void MaybeScheduleProcessQueue();
     void ProcessQueue();
 
 public:
-    explicit SingleThreadedSchedulerClient(CScheduler* pschedulerIn) : m_pscheduler(pschedulerIn) {}
+    explicit SingleThreadedSchedulerClient(CScheduler& scheduler LIFETIMEBOUND) : m_scheduler{scheduler} {}
 
     /**
      * Add a callback to be executed. Callbacks are executed serially
@@ -146,4 +151,4 @@ public:
     size_t CallbacksPending();
 };
 
-#endif
+#endif // BITCOIN_SCHEDULER_H

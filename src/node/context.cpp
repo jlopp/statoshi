@@ -9,10 +9,13 @@
 #include <interfaces/chain.h>
 #include <net.h>
 #include <net_processing.h>
+#include <netgroup.h>
 #include <policy/fees.h>
 #include <scheduler.h>
 #include <txmempool.h>
 #include <validation.h>
 
+namespace node {
 NodeContext::NodeContext() {}
 NodeContext::~NodeContext() {}
+} // namespace node

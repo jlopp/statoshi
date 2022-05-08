@@ -12,10 +12,12 @@ Developer Notes
       - [Generating Documentation](#generating-documentation)
     - [Development tips and tricks](#development-tips-and-tricks)
         - [Compiling for debugging](#compiling-for-debugging)
+        - [Show sources in debugging](#show-sources-in-debugging)
         - [Compiling for gprof profiling](#compiling-for-gprof-profiling)
         - [`debug.log`](#debuglog)
         - [Signet, testnet, and regtest modes](#signet-testnet-and-regtest-modes)
         - [DEBUG_LOCKORDER](#debug_lockorder)
+        - [DEBUG_LOCKCONTENTION](#debug_lockcontention)
         - [Valgrind suppressions file](#valgrind-suppressions-file)
         - [Compiling for test coverage](#compiling-for-test-coverage)
         - [Performance profiling with perf](#performance-profiling-with-perf)
@@ -136,10 +138,56 @@ public:
 } // namespace foo
 ```
 
+Coding Style (C++ named arguments)
+------------------------------
+
+When passing named arguments, use a format that clang-tidy understands. The
+argument names can otherwise not be verified by clang-tidy.
+
+For example:
+
+```c++
+void function(Addrman& addrman, bool clear);
+
+int main()
+{
+    function(g_addrman, /*clear=*/false);
+}
+```
+
+### Running clang-tidy
+
+To run clang-tidy on Ubuntu/Debian, install the dependencies:
+
+```sh
+apt install clang-tidy bear clang
+```
+
+Then, pass clang as compiler to configure, and use bear to produce the `compile_commands.json`:
+
+```sh
+./autogen.sh && ./configure CC=clang CXX=clang++
+make clean && bear make -j $(nproc)     # For bear 2.x
+make clean && bear -- make -j $(nproc)  # For bear 3.x
+```
+
+To run clang-tidy on all source files:
+
+```sh
+( cd ./src/ && run-clang-tidy  -j $(nproc) )
+```
+
+To run clang-tidy on the changed source lines:
+
+```sh
+git diff | ( cd ./src/ && clang-tidy-diff -p2 -j $(nproc) )
+```
+
 Coding Style (Python)
 ---------------------
 
 Refer to [/test/functional/README.md#style-guidelines](/test/functional/README.md#style-guidelines).
+
 
 Coding Style (Doxygen-compatible comments)
 ------------------------------------------
@@ -253,6 +301,35 @@ Development tips and tricks
 Run configure with `--enable-debug` to add additional compiler flags that
 produce better debugging builds.
 
+### Show sources in debugging
+
+If you have ccache enabled, absolute paths are stripped from debug information
+with the -fdebug-prefix-map and -fmacro-prefix-map options (if supported by the
+compiler). This might break source file detection in case you move binaries
+after compilation, debug from the directory other than the project root or use
+an IDE that only supports absolute paths for debugging.
+
+There are a few possible fixes:
+
+1. Configure source file mapping.
+
+For `gdb` create or append to `.gdbinit` file:
+```
+set substitute-path ./src /path/to/project/root/src
+```
+
+For `lldb` create or append to `.lldbinit` file:
+```
+settings set target.source-map ./src /path/to/project/root/src
+```
+
+2. Add a symlink to the `./src` directory:
+```
+ln -s /path/to/project/root/src src
+```
+
+3. Use `debugedit` to modify debug information in the binary.
+
 ### Compiling for gprof profiling
 
 Run configure with the `--enable-gprof` option, then make.
@@ -286,6 +363,19 @@ configure option adds `-DDEBUG_LOCKORDER` to the compiler flags. This inserts
 run-time checks to keep track of which locks are held and adds warnings to the
 `debug.log` file if inconsistencies are detected.
 
+### DEBUG_LOCKCONTENTION
+
+Defining `DEBUG_LOCKCONTENTION` adds a "lock" logging category to the logging
+RPC that, when enabled, logs the location and duration of each lock contention
+to the `debug.log` file.
+
+To enable it, run configure with `-DDEBUG_LOCKCONTENTION` added to your
+CPPFLAGS, e.g. `CPPFLAGS="-DDEBUG_LOCKCONTENTION"`, then build and run bitcoind.
+
+You can then use the `-debug=lock` configuration option at bitcoind startup or
+`bitcoin-cli logging '["lock"]'` at runtime to turn on lock contention logging.
+It can be toggled off again with `bitcoin-cli logging [] '["lock"]'`.
+
 ### Assertions and Checks
 
 The util file `src/util/check.h` offers helpers to protect against coding and
@@ -301,7 +391,7 @@ other input.
   failure, it will throw an exception, which can be caught to recover from the
   error.
    - For example, a nullptr dereference or any other logic bug in RPC code
-     means that the RPC code is faulty and can not be executed. However, the
+     means that the RPC code is faulty and cannot be executed. However, the
      logic bug can be shown to the user and the program can continue to run.
 * `Assume` should be used to document assumptions when program execution can
   safely continue even if the assumption is violated. In debug builds it
@@ -999,6 +1089,9 @@ Current subtrees include:
   - Subtree at https://github.com/bitcoin-core/univalue-subtree ; maintained by Core contributors.
   - Deviates from upstream https://github.com/jgarzik/univalue.
 
+- src/minisketch
+  - Upstream at https://github.com/sipa/minisketch ; maintained by Core contributors.
+
 Upgrading LevelDB
 ---------------------
 
@@ -1127,7 +1220,10 @@ A few guidelines for introducing and reviewing new RPC interfaces:
 
   - *Rationale*: Consistency with the existing interface.
 
-- Argument naming: use snake case `fee_delta` (and not, e.g. camel case `feeDelta`)
+- Argument and field naming: please consider whether there is already a naming
+  style or spelling convention in the API for the type of object in question
+  (`blockhash`, for example), and if so, try to use that. If not, use snake case
+  `fee_delta` (and not, e.g. `feedelta` or camel case `feeDelta`).
 
   - *Rationale*: Consistency with the existing interface.
 
@@ -1166,7 +1262,7 @@ A few guidelines for introducing and reviewing new RPC interfaces:
 
 - Don't forget to fill in the argument names correctly in the RPC command table.
 
-  - *Rationale*: If not, the call can not be used with name-based arguments.
+  - *Rationale*: If not, the call cannot be used with name-based arguments.
 
 - Add every non-string RPC argument `(method, idx, name)` to the table `vRPCConvertParams` in `rpc/client.cpp`.
 
@@ -1220,6 +1316,12 @@ A few guidelines for introducing and reviewing new RPC interfaces:
   timestamps in the documentation.
 
   - *Rationale*: User-facing consistency.
+
+- Use `fs::path::u8string()` and `fs::u8path()` functions when converting path
+  to JSON strings, not `fs::PathToString` and `fs::PathFromString`
+
+  - *Rationale*: JSON strings are Unicode strings, not byte strings, and
+    RFC8259 requires JSON to be encoded as UTF-8.
 
 Internal interface guidelines
 -----------------------------

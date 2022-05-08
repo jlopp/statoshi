@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2020 The Bitcoin Core developers
+// Copyright (c) 2012-2021 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -44,7 +44,7 @@ BOOST_AUTO_TEST_CASE(manythreads)
 
     std::mutex counterMutex[10];
     int counter[10] = { 0 };
-    FastRandomContext rng{/* fDeterministic */ true};
+    FastRandomContext rng{/*fDeterministic=*/true};
     auto zeroToNine = [](FastRandomContext& rc) -> int { return rc.randrange(10); }; // [0, 9]
     auto randomMsec = [](FastRandomContext& rc) -> int { return -11 + (int)rc.randrange(1012); }; // [-11, 1000]
     auto randomDelta = [](FastRandomContext& rc) -> int { return -1000 + (int)rc.randrange(2001); }; // [-1000, 1000]
@@ -128,8 +128,8 @@ BOOST_AUTO_TEST_CASE(singlethreadedscheduler_ordered)
     CScheduler scheduler;
 
     // each queue should be well ordered with respect to itself but not other queues
-    SingleThreadedSchedulerClient queue1(&scheduler);
-    SingleThreadedSchedulerClient queue2(&scheduler);
+    SingleThreadedSchedulerClient queue1(scheduler);
+    SingleThreadedSchedulerClient queue2(scheduler);
 
     // create more threads than queues
     // if the queues only permit execution of one task at once then
@@ -137,7 +137,7 @@ BOOST_AUTO_TEST_CASE(singlethreadedscheduler_ordered)
     // if they don't we'll get out of order behaviour
     std::vector<std::thread> threads;
     for (int i = 0; i < 5; ++i) {
-        threads.emplace_back(std::bind(&CScheduler::serviceQueue, &scheduler));
+        threads.emplace_back([&] { scheduler.serviceQueue(); });
     }
 
     // these are not atomic, if SinglethreadedSchedulerClient prevents

@@ -1,10 +1,11 @@
-// Copyright (c) 2015-2020 The Bitcoin Core developers
+// Copyright (c) 2015-2021 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <scheduler.h>
 
 #include <random.h>
+#include <util/syscall_sandbox.h>
 #include <util/time.h>
 
 #include <assert.h>
@@ -24,6 +25,7 @@ CScheduler::~CScheduler()
 
 void CScheduler::serviceQueue()
 {
+    SetSyscallSandboxPolicy(SyscallSandboxPolicy::SCHEDULER);
     WAIT_LOCK(newTaskMutex, lock);
     ++nThreadsServicingQueue;
 
@@ -109,7 +111,7 @@ static void Repeat(CScheduler& s, CScheduler::Function f, std::chrono::milliseco
 
 void CScheduler::scheduleEvery(CScheduler::Function f, std::chrono::milliseconds delta)
 {
-    scheduleFromNow([=] { Repeat(*this, f, delta); }, delta);
+    scheduleFromNow([this, f, delta] { Repeat(*this, f, delta); }, delta);
 }
 
 size_t CScheduler::getQueueInfo(std::chrono::system_clock::time_point& first,
@@ -134,21 +136,21 @@ bool CScheduler::AreThreadsServicingQueue() const
 void SingleThreadedSchedulerClient::MaybeScheduleProcessQueue()
 {
     {
-        LOCK(m_cs_callbacks_pending);
+        LOCK(m_callbacks_mutex);
         // Try to avoid scheduling too many copies here, but if we
         // accidentally have two ProcessQueue's scheduled at once its
         // not a big deal.
         if (m_are_callbacks_running) return;
         if (m_callbacks_pending.empty()) return;
     }
-    m_pscheduler->schedule(std::bind(&SingleThreadedSchedulerClient::ProcessQueue, this), std::chrono::system_clock::now());
+    m_scheduler.schedule([this] { this->ProcessQueue(); }, std::chrono::system_clock::now());
 }
 
 void SingleThreadedSchedulerClient::ProcessQueue()
 {
     std::function<void()> callback;
     {
-        LOCK(m_cs_callbacks_pending);
+        LOCK(m_callbacks_mutex);
         if (m_are_callbacks_running) return;
         if (m_callbacks_pending.empty()) return;
         m_are_callbacks_running = true;
@@ -165,7 +167,7 @@ void SingleThreadedSchedulerClient::ProcessQueue()
         ~RAIICallbacksRunning()
         {
             {
-                LOCK(instance->m_cs_callbacks_pending);
+                LOCK(instance->m_callbacks_mutex);
                 instance->m_are_callbacks_running = false;
             }
             instance->MaybeScheduleProcessQueue();
@@ -177,10 +179,8 @@ void SingleThreadedSchedulerClient::ProcessQueue()
 
 void SingleThreadedSchedulerClient::AddToProcessQueue(std::function<void()> func)
 {
-    assert(m_pscheduler);
-
     {
-        LOCK(m_cs_callbacks_pending);
+        LOCK(m_callbacks_mutex);
         m_callbacks_pending.emplace_back(std::move(func));
     }
     MaybeScheduleProcessQueue();
@@ -188,17 +188,17 @@ void SingleThreadedSchedulerClient::AddToProcessQueue(std::function<void()> func
 
 void SingleThreadedSchedulerClient::EmptyQueue()
 {
-    assert(!m_pscheduler->AreThreadsServicingQueue());
+    assert(!m_scheduler.AreThreadsServicingQueue());
     bool should_continue = true;
     while (should_continue) {
         ProcessQueue();
-        LOCK(m_cs_callbacks_pending);
+        LOCK(m_callbacks_mutex);
         should_continue = !m_callbacks_pending.empty();
     }
 }
 
 size_t SingleThreadedSchedulerClient::CallbacksPending()
 {
-    LOCK(m_cs_callbacks_pending);
+    LOCK(m_callbacks_mutex);
     return m_callbacks_pending.size();
 }

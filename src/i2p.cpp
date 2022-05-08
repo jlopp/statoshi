@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2020 The Bitcoin Core developers
+// Copyright (c) 2020-2021 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -69,12 +69,11 @@ static std::string SwapBase64(const std::string& from)
 static Binary DecodeI2PBase64(const std::string& i2p_b64)
 {
     const std::string& std_b64 = SwapBase64(i2p_b64);
-    bool invalid;
-    Binary decoded = DecodeBase64(std_b64.c_str(), &invalid);
-    if (invalid) {
+    auto decoded = DecodeBase64(std_b64);
+    if (!decoded) {
         throw std::runtime_error(strprintf("Cannot decode Base64: \"%s\"", i2p_b64));
     }
-    return decoded;
+    return std::move(*decoded);
 }
 
 /**
@@ -328,7 +327,7 @@ void Session::GenerateAndSavePrivateKey(const Sock& sock)
     if (!WriteBinaryFile(m_private_key_file,
                          std::string(m_private_key.begin(), m_private_key.end()))) {
         throw std::runtime_error(
-            strprintf("Cannot save I2P private key to %s", m_private_key_file));
+            strprintf("Cannot save I2P private key to %s", fs::quoted(fs::PathToString(m_private_key_file))));
     }
 }
 

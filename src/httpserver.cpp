@@ -1,6 +1,10 @@
-// Copyright (c) 2015-2020 The Bitcoin Core developers
+// Copyright (c) 2015-2021 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
+#if defined(HAVE_CONFIG_H)
+#include <config/bitcoin-config.h>
+#endif
 
 #include <httpserver.h>
 
@@ -12,12 +16,14 @@
 #include <shutdown.h>
 #include <sync.h>
 #include <util/strencodings.h>
+#include <util/syscall_sandbox.h>
 #include <util/system.h>
 #include <util/threadnames.h>
 #include <util/translation.h>
 
 #include <deque>
 #include <memory>
+#include <optional>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string>
@@ -25,11 +31,12 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-#include <event2/thread.h>
 #include <event2/buffer.h>
 #include <event2/bufferevent.h>
-#include <event2/util.h>
+#include <event2/http.h>
 #include <event2/keyvalq_struct.h>
+#include <event2/thread.h>
+#include <event2/util.h>
 
 #include <support/events.h>
 
@@ -279,6 +286,7 @@ static void http_reject_request_cb(struct evhttp_request* req, void*)
 static bool ThreadHTTP(struct event_base* base)
 {
     util::ThreadRename("http");
+    SetSyscallSandboxPolicy(SyscallSandboxPolicy::NET_HTTP_SERVER);
     LogPrint(BCLog::HTTP, "Entering http event loop\n");
     event_base_dispatch(base);
     // Event loop will be interrupted by InterruptHTTPServer()
@@ -332,6 +340,7 @@ static bool HTTPBindAddresses(struct evhttp* http)
 static void HTTPWorkQueueRun(WorkQueue<HTTPClosure>* queue, int worker_num)
 {
     util::ThreadRename(strprintf("httpworker.%i", worker_num));
+    SetSyscallSandboxPolicy(SyscallSandboxPolicy::NET_HTTP_SERVER_WORKER);
     queue->Run();
 }
 
@@ -351,12 +360,8 @@ bool InitHTTPServer()
 
     // Redirect libevent's logging to our own log
     event_set_log_callback(&libevent_log_cb);
-    // Update libevent's log handling. Returns false if our version of
-    // libevent doesn't support debug logging, in which case we should
-    // clear the BCLog::LIBEVENT flag.
-    if (!UpdateHTTPServerLogging(LogInstance().WillLogCategory(BCLog::LIBEVENT))) {
-        LogInstance().DisableCategory(BCLog::LIBEVENT);
-    }
+    // Update libevent's log handling.
+    UpdateHTTPServerLogging(LogInstance().WillLogCategory(BCLog::LIBEVENT));
 
 #ifdef WIN32
     evthread_use_windows_threads();
@@ -395,18 +400,12 @@ bool InitHTTPServer()
     return true;
 }
 
-bool UpdateHTTPServerLogging(bool enable) {
-#if LIBEVENT_VERSION_NUMBER >= 0x02010100
+void UpdateHTTPServerLogging(bool enable) {
     if (enable) {
         event_enable_debug_logging(EVENT_DBG_ALL);
     } else {
         event_enable_debug_logging(EVENT_DBG_NONE);
     }
-    return true;
-#else
-    // Can't update libevent logging if version < 02010100
-    return false;
-#endif
 }
 
 static std::thread g_thread_http;
@@ -594,7 +593,13 @@ CService HTTPRequest::GetPeer() const
         // evhttp retains ownership over returned address string
         const char* address = "";
         uint16_t port = 0;
+
+#ifdef HAVE_EVHTTP_CONNECTION_GET_PEER_CONST_CHAR
+        evhttp_connection_get_peer(con, &address, &port);
+#else
         evhttp_connection_get_peer(con, (char**)&address, &port);
+#endif // HAVE_EVHTTP_CONNECTION_GET_PEER_CONST_CHAR
+
         peer = LookupNumeric(address, port);
     }
     return peer;
@@ -624,6 +629,37 @@ HTTPRequest::RequestMethod HTTPRequest::GetRequestMethod() const
         return UNKNOWN;
         break;
     }
+}
+
+std::optional<std::string> HTTPRequest::GetQueryParameter(const std::string& key) const
+{
+    const char* uri{evhttp_request_get_uri(req)};
+
+    return GetQueryParameterFromUri(uri, key);
+}
+
+std::optional<std::string> GetQueryParameterFromUri(const char* uri, const std::string& key)
+{
+    evhttp_uri* uri_parsed{evhttp_uri_parse(uri)};
+    const char* query{evhttp_uri_get_query(uri_parsed)};
+    std::optional<std::string> result;
+
+    if (query) {
+        // Parse the query string into a key-value queue and iterate over it
+        struct evkeyvalq params_q;
+        evhttp_parse_query_str(query, &params_q);
+
+        for (struct evkeyval* param{params_q.tqh_first}; param != nullptr; param = param->next.tqe_next) {
+            if (param->key == key) {
+                result = param->value;
+                break;
+            }
+        }
+        evhttp_clear_headers(&params_q);
+    }
+    evhttp_uri_free(uri_parsed);
+
+    return result;
 }
 
 void RegisterHTTPHandler(const std::string &prefix, bool exactMatch, const HTTPRequestHandler &handler)

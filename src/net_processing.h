@@ -1,5 +1,5 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
-// Copyright (c) 2009-2020 The Bitcoin Core developers
+// Copyright (c) 2009-2021 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -9,7 +9,7 @@
 #include <net.h>
 #include <validationinterface.h>
 
-class CAddrMan;
+class AddrMan;
 class CChainParams;
 class CTxMemPool;
 class ChainstateManager;
@@ -29,6 +29,8 @@ struct CNodeStateStats {
     int m_starting_height = -1;
     std::chrono::microseconds m_ping_wait;
     std::vector<int> vHeightInFlight;
+    bool m_relay_txs;
+    CAmount m_fee_filter_received;
     uint64_t m_addr_processed = 0;
     uint64_t m_addr_rate_limited = 0;
     bool m_addr_relay_enabled{false};
@@ -37,10 +39,19 @@ struct CNodeStateStats {
 class PeerManager : public CValidationInterface, public NetEventsInterface
 {
 public:
-    static std::unique_ptr<PeerManager> make(const CChainParams& chainparams, CConnman& connman, CAddrMan& addrman,
+    static std::unique_ptr<PeerManager> make(const CChainParams& chainparams, CConnman& connman, AddrMan& addrman,
                                              BanMan* banman, ChainstateManager& chainman,
                                              CTxMemPool& pool, bool ignore_incoming_txs);
     virtual ~PeerManager() { }
+
+    /**
+     * Attempt to manually fetch block from a given peer. We must already have the header.
+     *
+     * @param[in]  peer_id      The peer id
+     * @param[in]  block_index  The blockindex
+     * @returns std::nullopt if a request was successfully made, otherwise an error message
+     */
+    virtual std::optional<std::string> FetchBlock(NodeId peer_id, const CBlockIndex& block_index) = 0;
 
     /** Begin running background tasks, should only be called once */
     virtual void StartScheduledTasks(CScheduler& scheduler) = 0;
@@ -76,6 +87,9 @@ public:
     /** Process a single message from a peer. Public for fuzz testing */
     virtual void ProcessMessage(CNode& pfrom, const std::string& msg_type, CDataStream& vRecv,
                                 const std::chrono::microseconds time_received, const std::atomic<bool>& interruptMsgProc) = 0;
+
+    /** This function is used for testing the stale tip eviction logic, see denialofservice_tests.cpp */
+    virtual void UpdateLastBlockAnnounceTime(NodeId node, int64_t time_in_seconds) = 0;
 };
 
 #endif // BITCOIN_NET_PROCESSING_H

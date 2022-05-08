@@ -1,12 +1,14 @@
-// Copyright (c) 2009-2020 The Bitcoin Core developers
+// Copyright (c) 2009-2021 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <core_io.h>
 
+#include <consensus/amount.h>
 #include <consensus/consensus.h>
 #include <consensus/validation.h>
 #include <key_io.h>
+#include <script/descriptor.h>
 #include <script/script.h>
 #include <script/standard.h>
 #include <serialize.h>
@@ -16,6 +18,10 @@
 #include <util/check.h>
 #include <util/strencodings.h>
 #include <util/system.h>
+
+#include <map>
+#include <string>
+#include <vector>
 
 UniValue ValueFromAmount(const CAmount amount)
 {
@@ -63,7 +69,7 @@ std::string FormatScript(const CScript& script)
         ret += strprintf("0x%x ", HexStr(std::vector<uint8_t>(it2, script.end())));
         break;
     }
-    return ret.substr(0, ret.size() - 1);
+    return ret.substr(0, ret.empty() ? ret.npos : ret.size() - 1);
 }
 
 const std::map<unsigned char, std::string> mapSigHashTypes = {
@@ -141,28 +147,28 @@ std::string EncodeHexTx(const CTransaction& tx, const int serializeFlags)
     return HexStr(ssTx);
 }
 
-void ScriptToUniv(const CScript& script, UniValue& out)
-{
-    ScriptPubKeyToUniv(script, out, /* include_hex */ true, /* include_address */ false);
-}
-
-void ScriptPubKeyToUniv(const CScript& scriptPubKey, UniValue& out, bool include_hex, bool include_address)
+void ScriptToUniv(const CScript& script, UniValue& out, bool include_hex, bool include_address)
 {
     CTxDestination address;
 
-    out.pushKV("asm", ScriptToAsmStr(scriptPubKey));
-    if (include_hex) out.pushKV("hex", HexStr(scriptPubKey));
+    out.pushKV("asm", ScriptToAsmStr(script));
+    if (include_address) {
+        out.pushKV("desc", InferDescriptor(script, DUMMY_SIGNING_PROVIDER)->ToString());
+    }
+    if (include_hex) {
+        out.pushKV("hex", HexStr(script));
+    }
 
     std::vector<std::vector<unsigned char>> solns;
-    const TxoutType type{Solver(scriptPubKey, solns)};
+    const TxoutType type{Solver(script, solns)};
 
-    if (include_address && ExtractDestination(scriptPubKey, address) && type != TxoutType::PUBKEY) {
+    if (include_address && ExtractDestination(script, address) && type != TxoutType::PUBKEY) {
         out.pushKV("address", EncodeDestination(address));
     }
     out.pushKV("type", GetTxnOutputType(type));
 }
 
-void TxToUniv(const CTransaction& tx, const uint256& hashBlock, UniValue& entry, bool include_hex, int serialize_flags, const CTxUndo* txundo)
+void TxToUniv(const CTransaction& tx, const uint256& block_hash, UniValue& entry, bool include_hex, int serialize_flags, const CTxUndo* txundo, TxVerbosity verbosity)
 {
     entry.pushKV("txid", tx.GetHash().GetHex());
     entry.pushKV("hash", tx.GetWitnessHash().GetHex());
@@ -178,7 +184,7 @@ void TxToUniv(const CTransaction& tx, const uint256& hashBlock, UniValue& entry,
 
     // If available, use Undo data to calculate the fee. Note that txundo == nullptr
     // for coinbase transactions and for transactions where undo data is unavailable.
-    const bool calculate_fee = txundo != nullptr;
+    const bool have_undo = txundo != nullptr;
     CAmount amt_total_in = 0;
     CAmount amt_total_out = 0;
 
@@ -202,9 +208,23 @@ void TxToUniv(const CTransaction& tx, const uint256& hashBlock, UniValue& entry,
             }
             in.pushKV("txinwitness", txinwitness);
         }
-        if (calculate_fee) {
-            const CTxOut& prev_txout = txundo->vprevout[i].out;
+        if (have_undo) {
+            const Coin& prev_coin = txundo->vprevout[i];
+            const CTxOut& prev_txout = prev_coin.out;
+
             amt_total_in += prev_txout.nValue;
+
+            if (verbosity == TxVerbosity::SHOW_DETAILS_AND_PREVOUT) {
+                UniValue o_script_pub_key(UniValue::VOBJ);
+                ScriptToUniv(prev_txout.scriptPubKey, /*out=*/o_script_pub_key, /*include_hex=*/true, /*include_address=*/true);
+
+                UniValue p(UniValue::VOBJ);
+                p.pushKV("generated", bool(prev_coin.fCoinBase));
+                p.pushKV("height", uint64_t(prev_coin.nHeight));
+                p.pushKV("value", ValueFromAmount(prev_txout.nValue));
+                p.pushKV("scriptPubKey", o_script_pub_key);
+                in.pushKV("prevout", p);
+            }
         }
         in.pushKV("sequence", (int64_t)txin.nSequence);
         vin.push_back(in);
@@ -221,24 +241,25 @@ void TxToUniv(const CTransaction& tx, const uint256& hashBlock, UniValue& entry,
         out.pushKV("n", (int64_t)i);
 
         UniValue o(UniValue::VOBJ);
-        ScriptPubKeyToUniv(txout.scriptPubKey, o, true);
+        ScriptToUniv(txout.scriptPubKey, /*out=*/o, /*include_hex=*/true, /*include_address=*/true);
         out.pushKV("scriptPubKey", o);
         vout.push_back(out);
 
-        if (calculate_fee) {
+        if (have_undo) {
             amt_total_out += txout.nValue;
         }
     }
     entry.pushKV("vout", vout);
 
-    if (calculate_fee) {
+    if (have_undo) {
         const CAmount fee = amt_total_in - amt_total_out;
         CHECK_NONFATAL(MoneyRange(fee));
         entry.pushKV("fee", ValueFromAmount(fee));
     }
 
-    if (!hashBlock.IsNull())
-        entry.pushKV("blockhash", hashBlock.GetHex());
+    if (!block_hash.IsNull()) {
+        entry.pushKV("blockhash", block_hash.GetHex());
+    }
 
     if (include_hex) {
         entry.pushKV("hex", EncodeHexTx(tx, serialize_flags)); // The hex-encoded transaction. Used the name "hex" to be consistent with the verbose output of "getrawtransaction".

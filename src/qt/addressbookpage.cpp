@@ -1,4 +1,4 @@
-// Copyright (c) 2011-2020 The Bitcoin Core developers
+// Copyright (c) 2011-2021 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -189,7 +189,7 @@ void AddressBookPage::onEditAction()
     dlg->setModel(model);
     QModelIndex origIndex = proxyModel->mapToSource(indexes.at(0));
     dlg->loadRow(origIndex.row());
-    GUIUtil::ShowModalDialogAndDeleteOnClose(dlg);
+    GUIUtil::ShowModalDialogAsynchronously(dlg);
 }
 
 void AddressBookPage::on_newAddress_clicked()

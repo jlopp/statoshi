@@ -1,14 +1,14 @@
-// Copyright (c) 2009-2020 The Bitcoin Core developers
+// Copyright (c) 2009-2021 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <rpc/server.h>
 
+#include <addrman.h>
 #include <banman.h>
 #include <chainparams.h>
 #include <clientversion.h>
 #include <core_io.h>
-#include <net.h>
 #include <net_permissions.h>
 #include <net_processing.h>
 #include <net_types.h> // For banmap_t
@@ -17,12 +17,12 @@
 #include <policy/settings.h>
 #include <rpc/blockchain.h>
 #include <rpc/protocol.h>
+#include <rpc/server_util.h>
 #include <rpc/util.h>
 #include <sync.h>
 #include <timedata.h>
 #include <util/strencodings.h>
 #include <util/string.h>
-#include <util/system.h>
 #include <util/translation.h>
 #include <validation.h>
 #include <version.h>
@@ -32,6 +32,8 @@
 
 #include <univalue.h>
 
+using node::NodeContext;
+
 const std::vector<std::string> CONNECTION_TYPE_DOC{
         "outbound-full-relay (default automatic connections)",
         "block-relay-only (does not relay transactions or addresses)",
@@ -40,22 +42,6 @@ const std::vector<std::string> CONNECTION_TYPE_DOC{
         "addr-fetch (short-lived automatic connection for soliciting addresses)",
         "feeler (short-lived automatic connection for testing addresses)"
 };
-
-CConnman& EnsureConnman(const NodeContext& node)
-{
-    if (!node.connman) {
-        throw JSONRPCError(RPC_CLIENT_P2P_DISABLED, "Error: Peer-to-peer functionality missing or disabled");
-    }
-    return *node.connman;
-}
-
-PeerManager& EnsurePeerman(const NodeContext& node)
-{
-    if (!node.peerman) {
-        throw JSONRPCError(RPC_CLIENT_P2P_DISABLED, "Error: Peer-to-peer functionality missing or disabled");
-    }
-    return *node.peerman;
-}
 
 static RPCHelpMan getconnectioncount()
 {
@@ -105,82 +91,83 @@ static RPCHelpMan ping()
 
 static RPCHelpMan getpeerinfo()
 {
-    return RPCHelpMan{"getpeerinfo",
-                "\nReturns data about each connected network node as a json array of objects.\n",
-                {},
-                RPCResult{
-                    RPCResult::Type::ARR, "", "",
+    return RPCHelpMan{
+        "getpeerinfo",
+        "Returns data about each connected network peer as a json array of objects.",
+        {},
+        RPCResult{
+            RPCResult::Type::ARR, "", "",
+            {
+                {RPCResult::Type::OBJ, "", "",
+                {
                     {
-                        {RPCResult::Type::OBJ, "", "",
-                        {
-                            {
-                            {RPCResult::Type::NUM, "id", "Peer index"},
-                            {RPCResult::Type::STR, "addr", "(host:port) The IP address and port of the peer"},
-                            {RPCResult::Type::STR, "addrbind", /* optional */ true, "(ip:port) Bind address of the connection to the peer"},
-                            {RPCResult::Type::STR, "addrlocal", /* optional */ true, "(ip:port) Local address as reported by the peer"},
-                            {RPCResult::Type::STR, "network", "Network (" + Join(GetNetworkNames(/* append_unroutable */ true), ", ") + ")"},
-                            {RPCResult::Type::NUM, "mapped_as", /* optional */ true, "The AS in the BGP route to the peer used for diversifying\n"
-                                                                "peer selection (only available if the asmap config flag is set)"},
-                            {RPCResult::Type::STR_HEX, "services", "The services offered"},
-                            {RPCResult::Type::ARR, "servicesnames", "the services offered, in human-readable form",
-                            {
-                                {RPCResult::Type::STR, "SERVICE_NAME", "the service name if it is recognised"}
-                            }},
-                            {RPCResult::Type::BOOL, "relaytxes", "Whether peer has asked us to relay transactions to it"},
-                            {RPCResult::Type::NUM_TIME, "lastsend", "The " + UNIX_EPOCH_TIME + " of the last send"},
-                            {RPCResult::Type::NUM_TIME, "lastrecv", "The " + UNIX_EPOCH_TIME + " of the last receive"},
-                            {RPCResult::Type::NUM_TIME, "last_transaction", "The " + UNIX_EPOCH_TIME + " of the last valid transaction received from this peer"},
-                            {RPCResult::Type::NUM_TIME, "last_block", "The " + UNIX_EPOCH_TIME + " of the last block received from this peer"},
-                            {RPCResult::Type::NUM, "bytessent", "The total bytes sent"},
-                            {RPCResult::Type::NUM, "bytesrecv", "The total bytes received"},
-                            {RPCResult::Type::NUM_TIME, "conntime", "The " + UNIX_EPOCH_TIME + " of the connection"},
-                            {RPCResult::Type::NUM, "timeoffset", "The time offset in seconds"},
-                            {RPCResult::Type::NUM, "pingtime", /* optional */ true, "ping time (if available)"},
-                            {RPCResult::Type::NUM, "minping", /* optional */ true, "minimum observed ping time (if any at all)"},
-                            {RPCResult::Type::NUM, "pingwait", /* optional */ true, "ping wait (if non-zero)"},
-                            {RPCResult::Type::NUM, "version", "The peer version, such as 70001"},
-                            {RPCResult::Type::STR, "subver", "The string version"},
-                            {RPCResult::Type::BOOL, "inbound", "Inbound (true) or Outbound (false)"},
-                            {RPCResult::Type::BOOL, "bip152_hb_to", "Whether we selected peer as (compact blocks) high-bandwidth peer"},
-                            {RPCResult::Type::BOOL, "bip152_hb_from", "Whether peer selected us as (compact blocks) high-bandwidth peer"},
-                            {RPCResult::Type::NUM, "startingheight", "The starting height (block) of the peer"},
-                            {RPCResult::Type::NUM, "synced_headers", "The last header we have in common with this peer"},
-                            {RPCResult::Type::NUM, "synced_blocks", "The last block we have in common with this peer"},
-                            {RPCResult::Type::ARR, "inflight", "",
-                            {
-                                {RPCResult::Type::NUM, "n", "The heights of blocks we're currently asking from this peer"},
-                            }},
-                            {RPCResult::Type::BOOL, "addr_relay_enabled", "Whether we participate in address relay with this peer"},
-                            {RPCResult::Type::NUM, "addr_processed", "The total number of addresses processed, excluding those dropped due to rate limiting"},
-                            {RPCResult::Type::NUM, "addr_rate_limited", "The total number of addresses dropped due to rate limiting"},
-                            {RPCResult::Type::ARR, "permissions", "Any special permissions that have been granted to this peer",
-                            {
-                                {RPCResult::Type::STR, "permission_type", Join(NET_PERMISSIONS_DOC, ",\n") + ".\n"},
-                            }},
-                            {RPCResult::Type::NUM, "minfeefilter", "The minimum fee rate for transactions this peer accepts"},
-                            {RPCResult::Type::OBJ_DYN, "bytessent_per_msg", "",
-                            {
-                                {RPCResult::Type::NUM, "msg", "The total bytes sent aggregated by message type\n"
-                                                              "When a message type is not listed in this json object, the bytes sent are 0.\n"
-                                                              "Only known message types can appear as keys in the object."}
-                            }},
-                            {RPCResult::Type::OBJ_DYN, "bytesrecv_per_msg", "",
-                            {
-                                {RPCResult::Type::NUM, "msg", "The total bytes received aggregated by message type\n"
-                                                              "When a message type is not listed in this json object, the bytes received are 0.\n"
-                                                              "Only known message types can appear as keys in the object and all bytes received\n"
-                                                              "of unknown message types are listed under '"+NET_MESSAGE_COMMAND_OTHER+"'."}
-                            }},
-                            {RPCResult::Type::STR, "connection_type", "Type of connection: \n" + Join(CONNECTION_TYPE_DOC, ",\n") + ".\n"
-                                                                      "Please note this output is unlikely to be stable in upcoming releases as we iterate to\n"
-                                                                      "best capture connection behaviors."},
-                        }},
+                    {RPCResult::Type::NUM, "id", "Peer index"},
+                    {RPCResult::Type::STR, "addr", "(host:port) The IP address and port of the peer"},
+                    {RPCResult::Type::STR, "addrbind", /*optional=*/true, "(ip:port) Bind address of the connection to the peer"},
+                    {RPCResult::Type::STR, "addrlocal", /*optional=*/true, "(ip:port) Local address as reported by the peer"},
+                    {RPCResult::Type::STR, "network", "Network (" + Join(GetNetworkNames(/*append_unroutable=*/true), ", ") + ")"},
+                    {RPCResult::Type::NUM, "mapped_as", /*optional=*/true, "The AS in the BGP route to the peer used for diversifying\n"
+                                                        "peer selection (only available if the asmap config flag is set)"},
+                    {RPCResult::Type::STR_HEX, "services", "The services offered"},
+                    {RPCResult::Type::ARR, "servicesnames", "the services offered, in human-readable form",
+                    {
+                        {RPCResult::Type::STR, "SERVICE_NAME", "the service name if it is recognised"}
                     }},
-                },
-                RPCExamples{
-                    HelpExampleCli("getpeerinfo", "")
+                    {RPCResult::Type::BOOL, "relaytxes", /*optional=*/true, "Whether peer has asked us to relay transactions to it"},
+                    {RPCResult::Type::NUM_TIME, "lastsend", "The " + UNIX_EPOCH_TIME + " of the last send"},
+                    {RPCResult::Type::NUM_TIME, "lastrecv", "The " + UNIX_EPOCH_TIME + " of the last receive"},
+                    {RPCResult::Type::NUM_TIME, "last_transaction", "The " + UNIX_EPOCH_TIME + " of the last valid transaction received from this peer"},
+                    {RPCResult::Type::NUM_TIME, "last_block", "The " + UNIX_EPOCH_TIME + " of the last block received from this peer"},
+                    {RPCResult::Type::NUM, "bytessent", "The total bytes sent"},
+                    {RPCResult::Type::NUM, "bytesrecv", "The total bytes received"},
+                    {RPCResult::Type::NUM_TIME, "conntime", "The " + UNIX_EPOCH_TIME + " of the connection"},
+                    {RPCResult::Type::NUM, "timeoffset", "The time offset in seconds"},
+                    {RPCResult::Type::NUM, "pingtime", /*optional=*/true, "ping time (if available)"},
+                    {RPCResult::Type::NUM, "minping", /*optional=*/true, "minimum observed ping time (if any at all)"},
+                    {RPCResult::Type::NUM, "pingwait", /*optional=*/true, "ping wait (if non-zero)"},
+                    {RPCResult::Type::NUM, "version", "The peer version, such as 70001"},
+                    {RPCResult::Type::STR, "subver", "The string version"},
+                    {RPCResult::Type::BOOL, "inbound", "Inbound (true) or Outbound (false)"},
+                    {RPCResult::Type::BOOL, "bip152_hb_to", "Whether we selected peer as (compact blocks) high-bandwidth peer"},
+                    {RPCResult::Type::BOOL, "bip152_hb_from", "Whether peer selected us as (compact blocks) high-bandwidth peer"},
+                    {RPCResult::Type::NUM, "startingheight", /*optional=*/true, "The starting height (block) of the peer"},
+                    {RPCResult::Type::NUM, "synced_headers", /*optional=*/true, "The last header we have in common with this peer"},
+                    {RPCResult::Type::NUM, "synced_blocks", /*optional=*/true, "The last block we have in common with this peer"},
+                    {RPCResult::Type::ARR, "inflight", /*optional=*/true, "",
+                    {
+                        {RPCResult::Type::NUM, "n", "The heights of blocks we're currently asking from this peer"},
+                    }},
+                    {RPCResult::Type::BOOL, "addr_relay_enabled", /*optional=*/true, "Whether we participate in address relay with this peer"},
+                    {RPCResult::Type::NUM, "addr_processed", /*optional=*/true, "The total number of addresses processed, excluding those dropped due to rate limiting"},
+                    {RPCResult::Type::NUM, "addr_rate_limited", /*optional=*/true, "The total number of addresses dropped due to rate limiting"},
+                    {RPCResult::Type::ARR, "permissions", "Any special permissions that have been granted to this peer",
+                    {
+                        {RPCResult::Type::STR, "permission_type", Join(NET_PERMISSIONS_DOC, ",\n") + ".\n"},
+                    }},
+                    {RPCResult::Type::NUM, "minfeefilter", /*optional=*/true, "The minimum fee rate for transactions this peer accepts"},
+                    {RPCResult::Type::OBJ_DYN, "bytessent_per_msg", "",
+                    {
+                        {RPCResult::Type::NUM, "msg", "The total bytes sent aggregated by message type\n"
+                                                      "When a message type is not listed in this json object, the bytes sent are 0.\n"
+                                                      "Only known message types can appear as keys in the object."}
+                    }},
+                    {RPCResult::Type::OBJ_DYN, "bytesrecv_per_msg", "",
+                    {
+                        {RPCResult::Type::NUM, "msg", "The total bytes received aggregated by message type\n"
+                                                      "When a message type is not listed in this json object, the bytes received are 0.\n"
+                                                      "Only known message types can appear as keys in the object and all bytes received\n"
+                                                      "of unknown message types are listed under '"+NET_MESSAGE_TYPE_OTHER+"'."}
+                    }},
+                    {RPCResult::Type::STR, "connection_type", "Type of connection: \n" + Join(CONNECTION_TYPE_DOC, ",\n") + ".\n"
+                                                              "Please note this output is unlikely to be stable in upcoming releases as we iterate to\n"
+                                                              "best capture connection behaviors."},
+                }},
+            }},
+        },
+        RPCExamples{
+            HelpExampleCli("getpeerinfo", "")
             + HelpExampleRpc("getpeerinfo", "")
-                },
+        },
         [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
 {
     NodeContext& node = EnsureAnyNodeContext(request.context);
@@ -210,14 +197,13 @@ static RPCHelpMan getpeerinfo()
         }
         obj.pushKV("services", strprintf("%016x", stats.nServices));
         obj.pushKV("servicesnames", GetServicesNames(stats.nServices));
-        obj.pushKV("relaytxes", stats.fRelayTxes);
-        obj.pushKV("lastsend", stats.nLastSend);
-        obj.pushKV("lastrecv", stats.nLastRecv);
-        obj.pushKV("last_transaction", stats.nLastTXTime);
-        obj.pushKV("last_block", stats.nLastBlockTime);
+        obj.pushKV("lastsend", count_seconds(stats.m_last_send));
+        obj.pushKV("lastrecv", count_seconds(stats.m_last_recv));
+        obj.pushKV("last_transaction", count_seconds(stats.m_last_tx_time));
+        obj.pushKV("last_block", count_seconds(stats.m_last_block_time));
         obj.pushKV("bytessent", stats.nSendBytes);
         obj.pushKV("bytesrecv", stats.nRecvBytes);
-        obj.pushKV("conntime", stats.nTimeConnected);
+        obj.pushKV("conntime", count_seconds(stats.m_connected));
         obj.pushKV("timeoffset", stats.nTimeOffset);
         if (stats.m_last_ping_time > 0us) {
             obj.pushKV("pingtime", CountSecondsDouble(stats.m_last_ping_time));
@@ -245,6 +231,8 @@ static RPCHelpMan getpeerinfo()
                 heights.push_back(height);
             }
             obj.pushKV("inflight", heights);
+            obj.pushKV("relaytxes", statestats.m_relay_txs);
+            obj.pushKV("minfeefilter", ValueFromAmount(statestats.m_fee_filter_received));
             obj.pushKV("addr_relay_enabled", statestats.m_addr_relay_enabled);
             obj.pushKV("addr_processed", statestats.m_addr_processed);
             obj.pushKV("addr_rate_limited", statestats.m_addr_rate_limited);
@@ -254,21 +242,20 @@ static RPCHelpMan getpeerinfo()
             permissions.push_back(permission);
         }
         obj.pushKV("permissions", permissions);
-        obj.pushKV("minfeefilter", ValueFromAmount(stats.minFeeFilter));
 
-        UniValue sendPerMsgCmd(UniValue::VOBJ);
-        for (const auto& i : stats.mapSendBytesPerMsgCmd) {
+        UniValue sendPerMsgType(UniValue::VOBJ);
+        for (const auto& i : stats.mapSendBytesPerMsgType) {
             if (i.second > 0)
-                sendPerMsgCmd.pushKV(i.first, i.second);
+                sendPerMsgType.pushKV(i.first, i.second);
         }
-        obj.pushKV("bytessent_per_msg", sendPerMsgCmd);
+        obj.pushKV("bytessent_per_msg", sendPerMsgType);
 
-        UniValue recvPerMsgCmd(UniValue::VOBJ);
-        for (const auto& i : stats.mapRecvBytesPerMsgCmd) {
+        UniValue recvPerMsgType(UniValue::VOBJ);
+        for (const auto& i : stats.mapRecvBytesPerMsgType) {
             if (i.second > 0)
-                recvPerMsgCmd.pushKV(i.first, i.second);
+                recvPerMsgType.pushKV(i.first, i.second);
         }
-        obj.pushKV("bytesrecv_per_msg", recvPerMsgCmd);
+        obj.pushKV("bytesrecv_per_msg", recvPerMsgType);
         obj.pushKV("connection_type", ConnectionTypeAsString(stats.m_conn_type));
 
         ret.push_back(obj);
@@ -343,7 +330,7 @@ static RPCHelpMan addconnection()
         "\nOpen an outbound connection to a specified node. This RPC is for testing only.\n",
         {
             {"address", RPCArg::Type::STR, RPCArg::Optional::NO, "The IP address and port to attempt connecting to."},
-            {"connection_type", RPCArg::Type::STR, RPCArg::Optional::NO, "Type of connection to open (\"outbound-full-relay\", \"block-relay-only\" or \"addr-fetch\")."},
+            {"connection_type", RPCArg::Type::STR, RPCArg::Optional::NO, "Type of connection to open (\"outbound-full-relay\", \"block-relay-only\", \"addr-fetch\" or \"feeler\")."},
         },
         RPCResult{
             RPCResult::Type::OBJ, "", "",
@@ -371,6 +358,8 @@ static RPCHelpMan addconnection()
         conn_type = ConnectionType::BLOCK_RELAY;
     } else if (conn_type_in == "addr-fetch") {
         conn_type = ConnectionType::ADDR_FETCH;
+    } else if (conn_type_in == "feeler") {
+        conn_type = ConnectionType::FEELER;
     } else {
         throw JSONRPCError(RPC_INVALID_PARAMETER, self.ToString());
     }
@@ -566,8 +555,8 @@ static UniValue GetNetworksInfo()
     UniValue networks(UniValue::VARR);
     for (int n = 0; n < NET_MAX; ++n) {
         enum Network network = static_cast<enum Network>(n);
-        if (network == NET_UNROUTABLE || network == NET_CJDNS || network == NET_INTERNAL) continue;
-        proxyType proxy;
+        if (network == NET_UNROUTABLE || network == NET_INTERNAL) continue;
+        Proxy proxy;
         UniValue obj(UniValue::VOBJ);
         GetProxy(network, proxy);
         obj.pushKV("name", GetNetworkName(network));
@@ -659,7 +648,7 @@ static RPCHelpMan getnetworkinfo()
     obj.pushKV("incrementalfee", ValueFromAmount(::incrementalRelayFee.GetFeePerK()));
     UniValue localAddresses(UniValue::VARR);
     {
-        LOCK(cs_mapLocalHost);
+        LOCK(g_maplocalhost_mutex);
         for (const std::pair<const CNetAddr, LocalServiceInfo> &item : mapLocalHost)
         {
             UniValue rec(UniValue::VOBJ);
@@ -858,7 +847,9 @@ static RPCHelpMan setnetworkactive()
 static RPCHelpMan getnodeaddresses()
 {
     return RPCHelpMan{"getnodeaddresses",
-                "\nReturn known addresses, which can potentially be used to find new nodes in the network.\n",
+                "Return known addresses, after filtering for quality and recency.\n"
+                "These can potentially be used to find new peers in the network.\n"
+                "The total number of addresses known to the node may be higher.",
                 {
                     {"count", RPCArg::Type::NUM, RPCArg::Default{1}, "The maximum number of addresses to return. Specify 0 to return all known addresses."},
                     {"network", RPCArg::Type::STR, RPCArg::DefaultHint{"all networks"}, "Return only addresses of the specified network. Can be one of: " + Join(GetNetworkNames(), ", ") + "."},
@@ -897,7 +888,7 @@ static RPCHelpMan getnodeaddresses()
     }
 
     // returns a shuffled list of CAddress
-    const std::vector<CAddress> vAddr{connman.GetAddresses(count, /* max_pct */ 0, network)};
+    const std::vector<CAddress> vAddr{connman.GetAddresses(count, /*max_pct=*/0, network)};
     UniValue ret(UniValue::VARR);
 
     for (const CAddress& addr : vAddr) {
@@ -968,30 +959,25 @@ static RPCHelpMan addpeeraddress()
     };
 }
 
-void RegisterNetRPCCommands(CRPCTable &t)
+void RegisterNetRPCCommands(CRPCTable& t)
 {
-// clang-format off
-static const CRPCCommand commands[] =
-{ //  category              actor
-  //  --------------------- -----------------------
-    { "network",             &getconnectioncount,      },
-    { "network",             &ping,                    },
-    { "network",             &getpeerinfo,             },
-    { "network",             &addnode,                 },
-    { "network",             &disconnectnode,          },
-    { "network",             &getaddednodeinfo,        },
-    { "network",             &getnettotals,            },
-    { "network",             &getnetworkinfo,          },
-    { "network",             &setban,                  },
-    { "network",             &listbanned,              },
-    { "network",             &clearbanned,             },
-    { "network",             &setnetworkactive,        },
-    { "network",             &getnodeaddresses,        },
-
-    { "hidden",              &addconnection,           },
-    { "hidden",              &addpeeraddress,          },
-};
-// clang-format on
+    static const CRPCCommand commands[]{
+        {"network", &getconnectioncount},
+        {"network", &ping},
+        {"network", &getpeerinfo},
+        {"network", &addnode},
+        {"network", &disconnectnode},
+        {"network", &getaddednodeinfo},
+        {"network", &getnettotals},
+        {"network", &getnetworkinfo},
+        {"network", &setban},
+        {"network", &listbanned},
+        {"network", &clearbanned},
+        {"network", &setnetworkactive},
+        {"network", &getnodeaddresses},
+        {"hidden", &addconnection},
+        {"hidden", &addpeeraddress},
+    };
     for (const auto& c : commands) {
         t.appendCommand(c.name, &c);
     }

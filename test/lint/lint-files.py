@@ -13,13 +13,14 @@ import sys
 from subprocess import check_output
 from typing import Optional, NoReturn
 
+CMD_TOP_LEVEL = ["git", "rev-parse", "--show-toplevel"]
 CMD_ALL_FILES = "git ls-files -z --full-name"
 CMD_SOURCE_FILES = 'git ls-files -z --full-name -- "*.[cC][pP][pP]" "*.[hH]" "*.[pP][yY]" "*.[sS][hH]"'
 CMD_SHEBANG_FILES = "git grep --full-name --line-number -I '^#!'"
 ALLOWED_FILENAME_REGEXP = "^[a-zA-Z0-9/_.@][a-zA-Z0-9/_.@-]*$"
 ALLOWED_SOURCE_FILENAME_REGEXP = "^[a-z0-9_./-]+$"
 ALLOWED_SOURCE_FILENAME_EXCEPTION_REGEXP = (
-    "^src/(secp256k1/|univalue/|test/fuzz/FuzzedDataProvider.h)"
+    "^src/(secp256k1/|minisketch/|univalue/|test/fuzz/FuzzedDataProvider.h)"
 )
 ALLOWED_PERMISSION_NON_EXECUTABLES = 644
 ALLOWED_PERMISSION_EXECUTABLES = 755
@@ -184,6 +185,8 @@ def check_shebang_file_permissions() -> int:
 
 
 def main() -> NoReturn:
+    root_dir = check_output(CMD_TOP_LEVEL).decode("utf8").strip()
+    os.chdir(root_dir)
     failed_tests = 0
     failed_tests += check_all_filenames()
     failed_tests += check_source_filenames()

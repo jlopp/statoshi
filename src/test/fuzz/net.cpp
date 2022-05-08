@@ -32,7 +32,7 @@ FUZZ_TARGET_INIT(net, initialize_net)
     SetMockTime(ConsumeTime(fuzzed_data_provider));
     CNode node{ConsumeNode(fuzzed_data_provider)};
     node.SetCommonVersion(fuzzed_data_provider.ConsumeIntegral<int>());
-    while (fuzzed_data_provider.ConsumeBool()) {
+    LIMITED_WHILE(fuzzed_data_provider.ConsumeBool(), 10000) {
         CallOneOf(
             fuzzed_data_provider,
             [&] {
@@ -50,16 +50,6 @@ FUZZ_TARGET_INIT(net, initialize_net)
                 if (node.GetRefCount() > 0) {
                     node.Release();
                 }
-            },
-            [&] {
-                const std::optional<CInv> inv_opt = ConsumeDeserializable<CInv>(fuzzed_data_provider);
-                if (!inv_opt) {
-                    return;
-                }
-                node.AddKnownTx(inv_opt->hash);
-            },
-            [&] {
-                node.PushTxInventory(ConsumeUInt256(fuzzed_data_provider));
             },
             [&] {
                 const std::optional<CService> service_opt = ConsumeDeserializable<CService>(fuzzed_data_provider);

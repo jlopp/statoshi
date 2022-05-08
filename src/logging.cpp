@@ -1,8 +1,9 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
-// Copyright (c) 2009-2020 The Bitcoin Core developers
+// Copyright (c) 2009-2021 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include <fs.h>
 #include <logging.h>
 #include <util/threadnames.h>
 #include <util/string.h>
@@ -159,7 +160,11 @@ const CLogCategoryDesc LogCategories[] =
     {BCLog::VALIDATION, "validation"},
     {BCLog::I2P, "i2p"},
     {BCLog::IPC, "ipc"},
+#ifdef DEBUG_LOCKCONTENTION
     {BCLog::LOCK, "lock"},
+#endif
+    {BCLog::UTIL, "util"},
+    {BCLog::BLOCKSTORE, "blockstorage"},
     {BCLog::ALL, "1"},
     {BCLog::ALL, "all"},
 };

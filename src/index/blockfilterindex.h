@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2020 The Bitcoin Core developers
+// Copyright (c) 2018-2021 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -37,6 +37,8 @@ private:
     Mutex m_cs_headers_cache;
     /** cache of block hash to filter header, to avoid disk access when responding to getcfcheckpt. */
     std::unordered_map<uint256, uint256, FilterHeaderHasher> m_headers_cache GUARDED_BY(m_cs_headers_cache);
+
+    bool AllowPrune() const override { return true; }
 
 protected:
     bool Init() override;
