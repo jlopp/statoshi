@@ -8,7 +8,7 @@
 #include <primitives/transaction.h>
 #include <consensus/validation.h>
 #include <statsd_client.h>
-#include <boost/thread.hpp>
+#include <boost/date_time/posix_time/posix_time.hpp>
 
 statsd::StatsdClient txstatsClient2;
 

@@ -1123,6 +1123,7 @@ bool CConnman::AttemptToEvictConnection()
     for (CNode* pnode : m_nodes) {
         if (pnode->GetId() == *node_id_to_evict) {
             LogPrint(BCLog::NET, "selected %s connection for eviction peer=%d; disconnecting\n", pnode->ConnectionTypeAsString(), pnode->GetId());
+            statsClient.inc("peers.disconnect", 1.0f);
             pnode->fDisconnect = true;
             return true;
         }
@@ -1307,6 +1308,7 @@ void CConnman::DisconnectNodes()
             for (CNode* pnode : m_nodes) {
                 if (!pnode->fDisconnect) {
                     LogPrint(BCLog::NET, "Network not active, dropping peer=%d\n", pnode->GetId());
+                    statsClient.inc("peers.disconnect", 1.0f);
                     pnode->fDisconnect = true;
                 }
             }
@@ -2958,6 +2960,7 @@ bool CConnman::DisconnectNode(const std::string& strNode)
     LOCK(m_nodes_mutex);
     if (CNode* pnode = FindNode(strNode)) {
         LogPrint(BCLog::NET, "disconnect by address%s matched peer=%d; disconnecting\n", (fLogIPs ? strprintf("=%s", strNode) : ""), pnode->GetId());
+        statsClient.inc("peers.disconnect", 1.0f);
         pnode->fDisconnect = true;
         return true;
     }
@@ -2971,6 +2974,7 @@ bool CConnman::DisconnectNode(const CSubNet& subnet)
     for (CNode* pnode : m_nodes) {
         if (subnet.Match(pnode->addr)) {
             LogPrint(BCLog::NET, "disconnect by subnet%s matched peer=%d; disconnecting\n", (fLogIPs ? strprintf("=%s", subnet.ToString()) : ""), pnode->GetId());
+            statsClient.inc("peers.disconnect", 1.0f);
             pnode->fDisconnect = true;
             disconnected = true;
         }
@@ -2989,6 +2993,7 @@ bool CConnman::DisconnectNode(NodeId id)
     for(CNode* pnode : m_nodes) {
         if (id == pnode->GetId()) {
             LogPrint(BCLog::NET, "disconnect by id peer=%d; disconnecting\n", pnode->GetId());
+            statsClient.inc("peers.disconnect", 1.0f);
             pnode->fDisconnect = true;
             return true;
         }

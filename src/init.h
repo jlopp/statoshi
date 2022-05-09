@@ -9,7 +9,6 @@
 #include <any>
 #include <memory>
 #include <string>
-#include <util/system.h>
 #include "statsd_client.h"
 
 extern statsd::StatsdClient statsClient;

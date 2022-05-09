@@ -839,6 +839,7 @@ public:
 
     // Addrman functions
     size_t GetAddressCount() const;
+
     /**
      * Return all or many randomly selected addresses, optionally by network.
      *

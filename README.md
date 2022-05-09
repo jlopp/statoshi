@@ -30,7 +30,3 @@ Other Notes
 -------
 
 A system metrics daemon is available [here](https://github.com/jlopp/bitcoin-utils/blob/master/systemMetricsDaemon.py)
-
-Statoshi also supports running multiple nodes that emit metrics to a single graphite instance.
-In order to facilitate this, you can add a line to bitcoin.conf that will partition each
-metric by the name of the host: statshostname=yourNodeName
