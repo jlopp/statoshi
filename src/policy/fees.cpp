@@ -650,6 +650,12 @@ void CBlockPolicyEstimator::processBlock(unsigned int nBlockHeight,
         LogPrint(BCLog::ESTIMATEFEE, "Blockpolicy first recorded height %u\n", firstRecordedHeight);
     }
 
+    LogPrint(BCLog::ESTIMATEFEE, "Blockpolicy estimates updated by %u of %u block txs, since last block %u of %u tracked, mempool map size %u, max target %u from %s\n",
+             countedTxs, entries.size(), trackedTxs, trackedTxs + untrackedTxs, mapMemPoolTxs.size(),
+             MaxUsableEstimate(), HistoricalBlockSpan() > BlockSpan() ? "historical" : "current");
+
+    trackedTxs = 0;
+    untrackedTxs = 0;
 
     // emit stats for estimated fees
     for (unsigned int i = 1; i <= 1008; i++)
@@ -661,13 +667,6 @@ void CBlockPolicyEstimator::processBlock(unsigned int nBlockHeight,
         else
             statsClient.gauge(feeName, 0);
     }
-
-    LogPrint(BCLog::ESTIMATEFEE, "Blockpolicy estimates updated by %u of %u block txs, since last block %u of %u tracked, mempool map size %u, max target %u from %s\n",
-             countedTxs, entries.size(), trackedTxs, trackedTxs + untrackedTxs, mapMemPoolTxs.size(),
-             MaxUsableEstimate(), HistoricalBlockSpan() > BlockSpan() ? "historical" : "current");
-
-    trackedTxs = 0;
-    untrackedTxs = 0;
 }
 
 CFeeRate CBlockPolicyEstimator::estimateFee(int confTarget) const
@@ -825,8 +824,7 @@ double CBlockPolicyEstimator::estimateConservativeFee(unsigned int doubleTarget,
  */
 CFeeRate CBlockPolicyEstimator::estimateSmartFee(int confTarget, FeeCalculation *feeCalc, bool conservative) const
 {
-    LOCK(m_cs_fee_estimator);
-
+    // remove lock so that we can call this inside of processBlock()
     if (feeCalc) {
         feeCalc->desiredTarget = confTarget;
         feeCalc->returnedTarget = confTarget;
