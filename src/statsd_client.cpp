@@ -35,8 +35,11 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <sys/types.h>
 #include <netinet/in.h>
+#include <util/system.h>
 #include "statsd_client.h"
+#include <fcntl.h>
 
 using namespace std;
 namespace statsd {
@@ -64,53 +67,23 @@ struct _StatsdClientData {
 
     string  ns;
     string  host;
+    string  nodename;
     short   port;
     bool    init;
 
     char    errmsg[1024];
 };
 
-StatsdClient::StatsdClient(const string& host,
-                           int port,
-                           const string& ns,
-                           const bool batching)
-: batching_(batching), exit_(false)
+StatsdClient::StatsdClient(const string& host, int port, const string& ns)
 {
     d = new _StatsdClientData;
     d->sock = -1;
     config(host, port, ns);
     srandom(time(NULL));
-
-    if (batching_) {
-        pthread_mutex_init(&batching_mutex_lock_, nullptr);
-        batching_thread_ = std::thread([this] {
-          while (!exit_) {
-              std::deque<std::string> staged_message_queue;
-
-              pthread_mutex_lock(&batching_mutex_lock_);
-              batching_message_queue_.swap(staged_message_queue);
-              pthread_mutex_unlock(&batching_mutex_lock_);
-
-              while(!staged_message_queue.empty()) {
-                  send_to_daemon(staged_message_queue.front());
-                  staged_message_queue.pop_front();
-              }
-
-              std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-          }
-        });
-    }
 }
 
 StatsdClient::~StatsdClient()
 {
-    if (batching_) {
-        exit_ = true;
-        batching_thread_.join();
-        pthread_mutex_destroy(&batching_mutex_lock_);
-    }
-
-
     // close socket
     if (d->sock >= 0) {
         close(d->sock);
@@ -157,15 +130,17 @@ int StatsdClient::init()
 
         ret = getaddrinfo(d->host.c_str(), NULL, &hints, &result);
         if ( ret ) {
-            close(d->sock);
-            d->sock = -1;
             snprintf(d->errmsg, sizeof(d->errmsg),
-                     "getaddrinfo fail, error=%d, msg=%s", ret, gai_strerror(ret) );
+                    "getaddrinfo fail, error=%d, msg=%s", ret, gai_strerror(ret) );
             return -2;
         }
         struct sockaddr_in* host_addr = (struct sockaddr_in*)result->ai_addr;
         memcpy(&d->server.sin_addr, &host_addr->sin_addr, sizeof(struct in_addr));
         freeaddrinfo(result);
+    }
+
+    if (gArgs.IsArgSet("-statshostname")) {
+        d->nodename = gArgs.GetArg("-statshostname", "");
     }
 
     d->init = true;
@@ -213,11 +188,42 @@ int StatsdClient::timing(const string& key, size_t ms, float sample_rate)
     return send(key, ms, "ms", sample_rate);
 }
 
+int StatsdClient::send(string key, size_t value, const string &type, float sample_rate)
+{
+    if (!should_send(sample_rate)) {
+        return 0;
+    }
+
+    // partition stats by node name if set
+    if (!d->nodename.empty())
+        key = key + "." + d->nodename;
+
+    cleanup(key);
+
+    char buf[256];
+    if ( fequal( sample_rate, 1.0 ) )
+    {
+        snprintf(buf, sizeof(buf), "%s%s:%zd|%s",
+                d->ns.c_str(), key.c_str(), value, type.c_str());
+    }
+    else
+    {
+        snprintf(buf, sizeof(buf), "%s%s:%zd|%s|@%.2f",
+                d->ns.c_str(), key.c_str(), value, type.c_str(), sample_rate);
+    }
+
+    return send(buf);
+}
+
 int StatsdClient::sendDouble(string key, double value, const string &type, float sample_rate)
 {
     if (!should_send(sample_rate)) {
         return 0;
     }
+
+    // partition stats by node name if set
+    if (!d->nodename.empty())
+        key = key + "." + d->nodename;
 
     cleanup(key);
 
@@ -236,49 +242,8 @@ int StatsdClient::sendDouble(string key, double value, const string &type, float
     return send(buf);
 }
 
-int StatsdClient::send(string key, size_t value, const string &type, float sample_rate)
-{
-    if (!should_send(sample_rate)) {
-        return 0;
-    }
-
-    cleanup(key);
-
-    char buf[256];
-    if ( fequal( sample_rate, 1.0 ) )
-    {
-        snprintf(buf, sizeof(buf), "%s%s:%zd|%s",
-                 d->ns.c_str(), key.c_str(), value, type.c_str());
-    }
-    else
-    {
-        snprintf(buf, sizeof(buf), "%s%s:%zd|%s|@%.2f",
-                 d->ns.c_str(), key.c_str(), value, type.c_str(), sample_rate);
-    }
-
-    return send(buf);
-}
-
 int StatsdClient::send(const string &message)
 {
-    if (batching_) {
-        pthread_mutex_lock(&batching_mutex_lock_);
-        if (batching_message_queue_.empty() ||
-            batching_message_queue_.back().length() > max_batching_size) {
-            batching_message_queue_.push_back(message);
-        } else {
-            (*batching_message_queue_.rbegin()).append("\n").append(message);
-        }
-        pthread_mutex_unlock(&batching_mutex_lock_);
-
-        return 0;
-    } else {
-        return send_to_daemon(message);
-    }
-}
-
-
-int StatsdClient::send_to_daemon(const string &message) {
     int ret = init();
     if ( ret )
     {
@@ -287,10 +252,9 @@ int StatsdClient::send_to_daemon(const string &message) {
     ret = sendto(d->sock, message.data(), message.size(), 0, (struct sockaddr *) &d->server, sizeof(d->server));
     if ( ret == -1) {
         snprintf(d->errmsg, sizeof(d->errmsg),
-                 "sendto server fail, host=%s:%d, err=%m", d->host.c_str(), d->port);
+                "sendto server fail, host=%s:%d, err=%m", d->host.c_str(), d->port);
         return -1;
     }
-
     return 0;
 }
 
@@ -300,3 +264,4 @@ const char* StatsdClient::errmsg()
 }
 
 }
+
