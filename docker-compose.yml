@@ -1,0 +1,96 @@
+version: '3.4'
+services:
+
+  statoshi:
+    # Makefile fills PROJECT_NAME to current directory name.
+    # add UID to allow multiple users run this in parallel
+    container_name: ${PROJECT_NAME}_${HOST_UID:-4000}
+    hostname: ${PROJECT_NAME}
+      ## These variables are passed into the container.
+      #environment:
+      #  - TIME=${TIME}
+      #  - PACKAGE_PREFIX=${PACKAGE_PREFIX}
+      #  - ARCH=${ARCH}
+      #  - HOST_USER=${HOST_USER}
+      #  - HOST_UID=${HOST_UID}
+      #  - ALPINE_VERSION=${ALPINE_VERSION}
+      #  - PROJECT_NAME=${PROJECT_NAME}
+      #  - GIT_SERVER=${GIT_SERVER}
+      #  - GIT_PROFILE=${GIT_PROFILE}
+      #  - GIT_REPO_NAME=${GIT_REPO_NAME}
+      #  - BITCOIN_CONF=${BITCOIN_CONF}
+      #  - NETWORK=${NETWORK}
+      #  - DATADIR=${DATADIR}
+      #  - NOCACHE=${NOCACHE}
+      #  - VERBOSE=${VERBOSE}
+      #  - PUBLIC_PORT=${PUBLIC_PORT}
+      #  - NODE_PORT=${NODE_PORT}
+      #  - PASSWORD=${PASSWORD}
+      #  - CMD_ARGUMENTS=${CMD_ARGUMENTS}
+      ## Run with user priviliges by default.
+    user: ${HOST_USER:-nodummy}
+    image: ghcr.io/bitcoincore-dev/statoshi/${ARCH}/root:latest
+    restart: unless-stopped
+    build:
+      context: .
+      # This is the name of the last layer in stats.bitcoincore.dev
+      dockerfile: ${PROJECT_NAME}.dockerfile
+      # These variables are passed to Dockerfile.
+      args:
+        - TIME=${TIME}
+        - PACKAGE_PREFIX=${PACKAGE_PREFIX}
+        - ARCH=${ARCH}
+        - HOST_USER=${HOST_USER}
+        - HOST_UID=${HOST_UID}
+        - ALPINE_VERSION=${ALPINE_VERSION}
+        - PROJECT_NAME=${PROJECT_NAME}
+        - GIT_SERVER=${GIT_SERVER}
+        - GIT_PROFILE=${GIT_PROFILE}
+        - BITCOIN_CONF=${BITCOIN_CONF}
+        - NETWORK=${NETWORK}
+        - DATADIR=${DATADIR}
+        - NOCACHE=${NOCACHE}
+        - VERBOSE=${VERBOSE}
+        - PUBLIC_PORT=${PUBLIC_PORT}
+        - NODE_PORT=${NODE_PORT}
+        - PASSWORD=${PASSWORD}
+        - CMD_ARGUMENTS=${CMD_ARGUMENTS}
+    # Run container as a service. Replace with something useful.
+    #command: ["tail", "-f", "/dev/null"]
+    #command:  ["/usr/local/bin/entrypoint"]
+    # Expose current project folder to container.
+    volumes:
+      - ${HOME:-.}:/home/${HOST_USER}:consistent
+      - ${HOME:-.}/.statoshi:/home/${HOST_USER}/.bitcoin:consistent
+      - ${PWD:-.}:/home/${HOST_USER}/${PROJECT_NAME}:consistent
+      - ${PWD:-.}:/tmp:consistent
+    ports:
+       #hostPORT:imagePORT
+     - "8332:8332"
+     - "${NODE_PORT}:${NODE_PORT}"
+     - "18332:18332"
+     - "18333:18333"
+
+  torproxy:
+    links:
+      - statoshi
+    # Makefile fills PROJECT_NAME to current directory name.
+    # add UID to allow multiple users run this in parallel
+    container_name: ${PROJECT_NAME}_${HOST_UID:-4000}
+    hostname: ${PROJECT_NAME}
+    # These variables are passed into the container.
+    user: ${HOST_USER:-nodummy}
+    image: ${PROJECT_NAME}_torproxy:${HOST_USER:-nodummy}
+    restart: unless-stopped
+    command:  ["/sbin/tini", "--", "/usr/bin/torproxy.sh"]
+    # Expose current project folder to container.
+    volumes:
+      - /etc/tor
+      - /var/lib/tor
+    ports:
+       #hostPORT:imagePORT
+       #we expose tor proxy ports for 'make torproxy'
+     - "8118:8118"
+     - "9050:9050"
+     - "9051:9051"
+
