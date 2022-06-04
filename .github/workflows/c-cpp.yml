@@ -34,6 +34,13 @@ jobs:
       with:
         path: |
           ${{ github.workspace }}/depends
+        key: ${{ runner.os }}-depends
+        restore-keys: |
+          ${{ runner.os }}-depends
+    - uses: actions/cache@v3
+      with:
+        path: |
+          ${{ github.workspace }}/depends
           ${{ github.workspace }}/src/bitcoind
         key: ${{ runner.os }}-bitcoind
         restore-keys: |
