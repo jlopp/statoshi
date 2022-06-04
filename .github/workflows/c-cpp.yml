@@ -1,0 +1,94 @@
+name: C/C++ CI
+
+on:
+  pull_request:
+    branches:       #[ master ]
+      - '*'         # matches every branch that doesn't contain a '/'
+      - '*/*'       # matches every branch containing a single '/'
+      - '**'        # matches every branch
+      - 'master'    # includes master
+      - 'main'      # includes main
+  # Triggers the workflow on push or pull request events but only for the master branch
+  push:
+    #paths:
+    #  - '.github/workflows/automate.yml'
+    #schedule:
+    #  - cron: "*/5 * * * *"
+    branches:       #[ master ]
+      - '*'         # matches every branch that doesn't contain a '/'
+      - '*/*'       # matches every branch containing a single '/'
+      - '**'        # matches every branch
+      - 'master'    # includes master
+      - 'main'      # includes main
+
+  workflow_dispatch:
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    - uses: actions/cache@v3
+      with:
+        path: |
+          ${{ github.workspace }}/src/bitcoind
+        key: ${{ runner.os }}-bitcoind
+        restore-keys: |
+          ${{ runner.os }}-bitcoind-
+    - name: install libs-1
+      run: |
+        sudo \
+        apt-get install --no-install-recommends -y \
+        automake \
+        binutils \
+        bsdmainutils \
+        ca-certificates \
+        cmake \
+        curl \
+        diffoscope \
+        doxygen \
+        g++-multilib \
+        git \
+        libbz2-dev \
+        libcap-dev \
+        libtinfo5 \
+        libtool \
+        lbzip2 \
+        libz-dev \
+        make \
+        nsis \
+        patch \
+        pkg-config \
+        python3 \
+        python3-setuptools \
+        ripgrep \
+        vim \
+        xz-utils
+        # Split cross-compilers out.
+        # apt cant install everything at once
+    - name: install libs-2
+      run: |
+        sudo \
+        apt-get install --no-install-recommends -y \
+        g++-aarch64-linux-gnu \
+        binutils-aarch64-linux-gnu \
+        g++-arm-linux-gnueabihf \
+        binutils-arm-linux-gnueabihf \
+        binutils-riscv64-linux-gnu \
+        g++-riscv64-linux-gnu # \
+        # g++-mingw-w64-x86-64-posix
+    - name: autogen.sh
+      run: |
+        ./autogen.sh
+    - name: make -C depends
+      run:  |
+        make -C depends
+    - name: configure
+      run:  |
+        ./configure
+    - name: make check
+      run: make check
+    - name: make distcheck
+      run: make distcheck
