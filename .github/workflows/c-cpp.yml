@@ -91,10 +91,14 @@ jobs:
         g++-aarch64-linux-gnu \
         binutils-aarch64-linux-gnu \
         g++-arm-linux-gnueabihf \
-        binutils-arm-linux-gnueabihf \
+        binutils-arm-linux-gnueabihf curl \
         binutils-riscv64-linux-gnu \
-        g++-riscv64-linux-gnu # \
-        # g++-mingw-w64-x86-64-posix
+        g++-riscv64-linux-gnu \
+        binutils-gold \
+        bsdmainutils pkg-config python3 patch bison \
+        g++-arm-linux-gnueabihf binutils-arm-linux-gnueabihf \
+        g++-aarch64-linux-gnu #\
+        # binutils-aarch64-linux-gnu
     - name: install statsd
       run: |
         sudo -s install -v ./src/statsd_client.h   /usr/local/include/
@@ -104,13 +108,20 @@ jobs:
         ./autogen.sh
     - name: make download -C depends
       run:  |
+        cd depends
+        make HOST=arm-linux-gnueabihf NO_QT=1
+        cd ..
         # make download -C depends
         # make install -C depends
+        ./autogen.sh
         echo
     - name: configure
       run:  |
-        ./configure
+        # ./configure
+        # CONFIG_SITE=$PWD/depends/arm-linux-gnueabihf/share/config.site ./configure --enable-reduce-exports LDFLAGS=-static-libstdc++
+        CONFIG_SITE=$PWD/depends/aarch64-linux-gnu/share/config.site ./configure --enable-reduce-exports LDFLAGS=-static-libstdc++
     - name: make check
-      run: make check
+      run: |
+        make check
     - name: make distcheck
       run: make distcheck
