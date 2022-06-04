@@ -33,6 +33,7 @@ jobs:
     - uses: actions/cache@v3
       with:
         path: |
+          ${{ github.workspace }}/depends
           ${{ github.workspace }}/src/bitcoind
         key: ${{ runner.os }}-bitcoind
         restore-keys: |
@@ -81,14 +82,15 @@ jobs:
         # g++-mingw-w64-x86-64-posix
     - name: install statsd
       run: |
-        install -v ./src/statsd_client.h   /usr/local/include/
-        install -v ./src/statsd_client.cpp /usr/local/include/
+        sudo -s install -v ./src/statsd_client.h   /usr/local/include/
+        sudo -s install -v ./src/statsd_client.cpp /usr/local/include/
     - name: autogen.sh
       run: |
         ./autogen.sh
     - name: make download -C depends
       run:  |
         make download -C depends
+        make install -C depends
     - name: configure
       run:  |
         ./configure
