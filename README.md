@@ -9,7 +9,7 @@ occurring on the node network. By making this data available, Bitcoin developers
 learn more about node performance, gain operational insight about the network, and 
 the community can be informed about attacks and aberrant behavior in a timely fashion.
 
-There is a live Grafana dashboard at [statoshi.info](http://statoshi.info)
+There is a live Grafana dashboard at [statoshi.info](https://statoshi.info)
 
 License
 -------
@@ -25,7 +25,7 @@ built and tested after each merge from upstream or from a pull request. However,
 it not guaranteed to be completely stable. We do not recommend using Statoshi
 as a Bitcoin wallet.
 
-A guide for Statoshi developers is available [here](https://medium.com/@lopp/statoshi-developer-s-guide-241ac9ab9993#.s1rfi3fv6)
+A guide for Statoshi developers is available [here](https://blog.lopp.net/statoshi-developer-s-guide/)
 
 Other Notes
 -------
