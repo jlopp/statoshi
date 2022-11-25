@@ -43,8 +43,6 @@ Q_IMPORT_PLUGIN(QAndroidPlatformIntegrationPlugin)
 #endif
 #endif
 
-using node::NodeContext;
-
 const std::function<void(const std::string&)> G_TEST_LOG_FUN{};
 
 const std::function<std::vector<const char*>()> G_TEST_COMMAND_LINE_ARGUMENTS{};
@@ -58,9 +56,10 @@ int main(int argc, char* argv[])
     // regtest params.
     //
     // All tests must use their own testing setup (if needed).
-    {
+    fs::create_directories([] {
         BasicTestingSetup dummy{CBaseChainParams::REGTEST};
-    }
+        return gArgs.GetDataDirNet() / "blocks";
+    }());
 
     std::unique_ptr<interfaces::Init> init = interfaces::MakeGuiInit(argc, argv);
     gArgs.ForceSetArg("-listen", "0");

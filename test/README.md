@@ -95,11 +95,13 @@ Run all possible tests with
 test/functional/test_runner.py --extended
 ```
 
-In order to run backwards compatibility tests, download the previous node binaries:
+In order to run backwards compatibility tests, first run:
 
 ```
-test/get_previous_releases.py -b v23.0 v22.0 v0.21.0 v0.20.1 v0.19.1 v0.18.1 v0.17.2 v0.16.3 v0.15.2 v0.14.3
+test/get_previous_releases.py -b
 ```
+
+to download the necessary previous release binaries.
 
 By default, up to 4 tests will be run in parallel by test_runner. To specify
 how many jobs to run, append `--jobs=n`
@@ -270,8 +272,8 @@ gdb /home/example/bitcoind <pid>
 Note: gdb attach step may require ptrace_scope to be modified, or `sudo` preceding the `gdb`.
 See this link for considerations: https://www.kernel.org/doc/Documentation/security/Yama.txt
 
-Often while debugging rpc calls from functional tests, the test might reach timeout before
-process can return a response. Use `--timeout-factor 0` to disable all rpc timeouts for that partcular
+Often while debugging RPC calls in functional tests, the test might time out before the
+process can return a response. Use `--timeout-factor 0` to disable all RPC timeouts for that particular
 functional test. Ex: `test/functional/wallet_hd.py --timeout-factor 0`.
 
 ##### Profiling
@@ -327,7 +329,7 @@ test/lint/lint-files.py
 You can run all the shell-based lint tests by running:
 
 ```
-test/lint/lint-all.py
+test/lint/all-lint.py
 ```
 
 # Writing functional tests

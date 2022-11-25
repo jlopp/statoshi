@@ -53,7 +53,7 @@ static RPCHelpMan setmocktime()
     LOCK(cs_main);
 
     RPCTypeCheck(request.params, {UniValue::VNUM});
-    const int64_t time{request.params[0].get_int64()};
+    const int64_t time{request.params[0].getInt<int64_t>()};
     if (time < 0) {
         throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Mocktime cannot be negative: %s.", time));
     }
@@ -65,7 +65,7 @@ static RPCHelpMan setmocktime()
         }
     }
 
-    return NullUniValue;
+    return UniValue::VNULL;
 },
     };
 }
@@ -85,7 +85,7 @@ static RPCHelpMan invokedisallowedsyscall()
                 throw std::runtime_error("invokedisallowedsyscall is used for testing only.");
             }
             TestDisallowedSandboxCall();
-            return NullUniValue;
+            return UniValue::VNULL;
         },
     };
 }
@@ -108,7 +108,7 @@ static RPCHelpMan mockscheduler()
 
     // check params are valid values
     RPCTypeCheck(request.params, {UniValue::VNUM});
-    int64_t delta_seconds = request.params[0].get_int64();
+    int64_t delta_seconds = request.params[0].getInt<int64_t>();
     if (delta_seconds <= 0 || delta_seconds > 3600) {
         throw std::runtime_error("delta_time must be between 1 and 3600 seconds (1 hr)");
     }
@@ -118,7 +118,7 @@ static RPCHelpMan mockscheduler()
     CHECK_NONFATAL(node_context->scheduler);
     node_context->scheduler->MockForward(std::chrono::seconds(delta_seconds));
 
-    return NullUniValue;
+    return UniValue::VNULL;
 },
     };
 }

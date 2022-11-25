@@ -9,8 +9,7 @@
 #include <config/bitcoin-config.h>
 #endif
 
-#include <attributes.h>
-#include <compat.h>
+#include <compat/compat.h>
 #include <crypto/siphash.h>
 #include <prevector.h>
 #include <random.h>
@@ -111,6 +110,8 @@ static constexpr size_t ADDR_INTERNAL_SIZE = 10;
 
 /// SAM 3.1 and earlier do not support specifying ports and force the port to 0.
 static constexpr uint16_t I2P_SAM31_PORT{0};
+
+std::string OnionToString(Span<const uint8_t> addr);
 
 /**
  * Network address.
@@ -556,8 +557,8 @@ class CServiceHash
 {
 public:
     CServiceHash()
-        : m_salt_k0{GetRand(std::numeric_limits<uint64_t>::max())},
-          m_salt_k1{GetRand(std::numeric_limits<uint64_t>::max())}
+        : m_salt_k0{GetRand<uint64_t>()},
+          m_salt_k1{GetRand<uint64_t>()}
     {
     }
 

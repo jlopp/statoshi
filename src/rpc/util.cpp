@@ -12,6 +12,7 @@
 #include <util/check.h>
 #include <util/strencodings.h>
 #include <util/string.h>
+#include <util/system.h>
 #include <util/translation.h>
 
 #include <tuple>
@@ -49,7 +50,8 @@ void RPCTypeCheck(const UniValue& params,
 void RPCTypeCheckArgument(const UniValue& value, const UniValueType& typeExpected)
 {
     if (!typeExpected.typeAny && value.type() != typeExpected.type) {
-        throw JSONRPCError(RPC_TYPE_ERROR, strprintf("Expected type %s, got %s", uvTypeName(typeExpected.type), uvTypeName(value.type())));
+        throw JSONRPCError(RPC_TYPE_ERROR,
+                           strprintf("JSON value of type %s is not of expected type %s", uvTypeName(value.type()), uvTypeName(typeExpected.type)));
     }
 }
 
@@ -63,11 +65,8 @@ void RPCTypeCheckObj(const UniValue& o,
         if (!fAllowNull && v.isNull())
             throw JSONRPCError(RPC_TYPE_ERROR, strprintf("Missing %s", t.first));
 
-        if (!(t.second.typeAny || v.type() == t.second.type || (fAllowNull && v.isNull()))) {
-            std::string err = strprintf("Expected type %s for %s, got %s",
-                uvTypeName(t.second.type), t.first, uvTypeName(v.type()));
-            throw JSONRPCError(RPC_TYPE_ERROR, err);
-        }
+        if (!(t.second.typeAny || v.type() == t.second.type || (fAllowNull && v.isNull())))
+            throw JSONRPCError(RPC_TYPE_ERROR, strprintf("JSON value of type %s for field %s is not of expected type %s", uvTypeName(v.type()),  t.first, uvTypeName(t.second.type)));
     }
 
     if (fStrict)
@@ -97,7 +96,7 @@ CAmount AmountFromValue(const UniValue& value, int decimals)
 
 uint256 ParseHashV(const UniValue& v, std::string strName)
 {
-    std::string strHex(v.get_str());
+    const std::string& strHex(v.get_str());
     if (64 != strHex.length())
         throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("%s must be of length %d (not %d, for '%s')", strName, 64, strHex.length(), strHex));
     if (!IsHex(strHex)) // Note: IsHex("") is false
@@ -267,7 +266,7 @@ CTxDestination AddAndGetMultisigDestination(const int required, const std::vecto
 class DescribeAddressVisitor
 {
 public:
-    explicit DescribeAddressVisitor() {}
+    explicit DescribeAddressVisitor() = default;
 
     UniValue operator()(const CNoDestination& dest) const
     {
@@ -337,7 +336,7 @@ UniValue DescribeAddress(const CTxDestination& dest)
 
 unsigned int ParseConfirmTarget(const UniValue& value, unsigned int max_target)
 {
-    const int target{value.get_int()};
+    const int target{value.getInt<int>()};
     const unsigned int unsigned_target{static_cast<unsigned int>(target)};
     if (target < 1 || unsigned_target > max_target) {
         throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Invalid conf_target, must be between %u and %u", 1, max_target));
@@ -416,8 +415,8 @@ struct Sections {
         case RPCArg::Type::BOOL: {
             if (outer_type == OuterType::NONE) return; // Nothing more to do for non-recursive types on first recursion
             auto left = indent;
-            if (arg.m_type_str.size() != 0 && push_name) {
-                left += "\"" + arg.GetName() + "\": " + arg.m_type_str.at(0);
+            if (arg.m_opts.type_str.size() != 0 && push_name) {
+                left += "\"" + arg.GetName() + "\": " + arg.m_opts.type_str.at(0);
             } else {
                 left += push_name ? arg.ToStringObj(/*oneline=*/false) : arg.ToString(/*oneline=*/false);
             }
@@ -581,7 +580,9 @@ UniValue RPCHelpMan::HandleRequest(const JSONRPCRequest& request) const
         throw std::runtime_error(ToString());
     }
     const UniValue ret = m_fun(*this, request);
-    CHECK_NONFATAL(std::any_of(m_results.m_results.begin(), m_results.m_results.end(), [ret](const RPCResult& res) { return res.MatchesType(ret); }));
+    if (gArgs.GetBoolArg("-rpcdoccheck", DEFAULT_RPC_DOC_CHECK)) {
+        CHECK_NONFATAL(std::any_of(m_results.m_results.begin(), m_results.m_results.end(), [&ret](const RPCResult& res) { return res.MatchesType(ret); }));
+    }
     return ret;
 }
 
@@ -614,7 +615,7 @@ std::string RPCHelpMan::ToString() const
     ret += m_name;
     bool was_optional{false};
     for (const auto& arg : m_args) {
-        if (arg.m_hidden) break; // Any arg that follows is also hidden
+        if (arg.m_opts.hidden) break; // Any arg that follows is also hidden
         const bool optional = arg.IsOptional();
         ret += " ";
         if (optional) {
@@ -635,7 +636,7 @@ std::string RPCHelpMan::ToString() const
     Sections sections;
     for (size_t i{0}; i < m_args.size(); ++i) {
         const auto& arg = m_args.at(i);
-        if (arg.m_hidden) break; // Any arg that follows is also hidden
+        if (arg.m_opts.hidden) break; // Any arg that follows is also hidden
 
         if (i == 0) ret += "\nArguments:\n";
 
@@ -700,8 +701,8 @@ std::string RPCArg::ToDescriptionString() const
 {
     std::string ret;
     ret += "(";
-    if (m_type_str.size() != 0) {
-        ret += m_type_str.at(1);
+    if (m_opts.type_str.size() != 0) {
+        ret += m_opts.type_str.at(1);
     } else {
         switch (m_type) {
         case Type::STR_HEX:
@@ -987,7 +988,7 @@ std::string RPCArg::ToStringObj(const bool oneline) const
 
 std::string RPCArg::ToString(const bool oneline) const
 {
-    if (oneline && !m_oneline_description.empty()) return m_oneline_description;
+    if (oneline && !m_opts.oneline_description.empty()) return m_opts.oneline_description;
 
     switch (m_type) {
     case Type::STR_HEX:
@@ -1023,11 +1024,11 @@ std::string RPCArg::ToString(const bool oneline) const
 static std::pair<int64_t, int64_t> ParseRange(const UniValue& value)
 {
     if (value.isNum()) {
-        return {0, value.get_int64()};
+        return {0, value.getInt<int64_t>()};
     }
     if (value.isArray() && value.size() == 2 && value[0].isNum() && value[1].isNum()) {
-        int64_t low = value[0].get_int64();
-        int64_t high = value[1].get_int64();
+        int64_t low = value[0].getInt<int64_t>();
+        int64_t high = value[1].getInt<int64_t>();
         if (low > high) throw JSONRPCError(RPC_INVALID_PARAMETER, "Range specified as [begin,end] must not have begin after end");
         return {low, high};
     }

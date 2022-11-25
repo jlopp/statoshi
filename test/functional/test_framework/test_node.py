@@ -102,6 +102,7 @@ class TestNode():
             "-debug",
             "-debugexclude=libevent",
             "-debugexclude=leveldb",
+            "-debugexclude=rand",
             "-uacomment=testnode%d" % i,
         ]
         if use_valgrind:
@@ -118,6 +119,8 @@ class TestNode():
             self.args.append("-logthreadnames")
         if self.version_is_at_least(219900):
             self.args.append("-logsourcelocations")
+        if self.version_is_at_least(239000):
+            self.args.append("-loglevel=trace")
 
         self.cli = TestNodeCLI(bitcoin_cli, self.datadir)
         self.use_cli = use_cli
@@ -423,7 +426,7 @@ class TestNode():
         self._raise_assertion_error('Expected messages "{}" does not partially match log:\n\n{}\n\n'.format(str(expected_msgs), print_log))
 
     @contextlib.contextmanager
-    def wait_for_debug_log(self, expected_msgs, timeout=60, ignore_case=False):
+    def wait_for_debug_log(self, expected_msgs, timeout=60):
         """
         Block until we see a particular debug log message fragment or until we exceed the timeout.
         Return:
@@ -431,18 +434,17 @@ class TestNode():
         """
         time_end = time.time() + timeout * self.timeout_factor
         prev_size = self.debug_log_bytes()
-        re_flags = re.MULTILINE | (re.IGNORECASE if ignore_case else 0)
 
         yield
 
         while True:
             found = True
-            with open(self.debug_log_path, encoding='utf-8') as dl:
+            with open(self.debug_log_path, "rb") as dl:
                 dl.seek(prev_size)
                 log = dl.read()
 
             for expected_msg in expected_msgs:
-                if re.search(re.escape(expected_msg), log, flags=re_flags) is None:
+                if expected_msg not in log:
                     found = False
 
             if found:
@@ -617,12 +619,16 @@ class TestNode():
 
         return p2p_conn
 
-    def add_outbound_p2p_connection(self, p2p_conn, *, p2p_idx, connection_type="outbound-full-relay", **kwargs):
+    def add_outbound_p2p_connection(self, p2p_conn, *, wait_for_verack=True, p2p_idx, connection_type="outbound-full-relay", **kwargs):
         """Add an outbound p2p connection from node. Must be an
         "outbound-full-relay", "block-relay-only", "addr-fetch" or "feeler" connection.
 
         This method adds the p2p connection to the self.p2ps list and returns
         the connection to the caller.
+
+        p2p_idx must be different for simultaneously connected peers. When reusing it for the next peer
+        after disconnecting the previous one, it is necessary to wait for the disconnect to finish to avoid
+        a race condition.
         """
 
         def addconnection_callback(address, port):
@@ -639,8 +645,9 @@ class TestNode():
             p2p_conn.wait_for_connect()
             self.p2ps.append(p2p_conn)
 
-            p2p_conn.wait_for_verack()
-            p2p_conn.sync_with_ping()
+            if wait_for_verack:
+                p2p_conn.wait_for_verack()
+                p2p_conn.sync_with_ping()
 
         return p2p_conn
 
@@ -649,7 +656,8 @@ class TestNode():
         return len([peer for peer in self.getpeerinfo() if peer['subver'] == P2P_SUBVERSION])
 
     def disconnect_p2ps(self):
-        """Close all p2p connections to the node."""
+        """Close all p2p connections to the node.
+        Use only after each p2p has sent a version message to ensure the wait works."""
         for p in self.p2ps:
             p.peer_disconnect()
         del self.p2ps[:]

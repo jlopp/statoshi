@@ -18,11 +18,10 @@ export COMMIT_RANGE
 test/lint/git-subtree-check.sh src/crypto/ctaes
 test/lint/git-subtree-check.sh src/secp256k1
 test/lint/git-subtree-check.sh src/minisketch
-test/lint/git-subtree-check.sh src/univalue
 test/lint/git-subtree-check.sh src/leveldb
 test/lint/git-subtree-check.sh src/crc32c
 test/lint/check-doc.py
-test/lint/lint-all.py
+test/lint/all-lint.py
 
 if [ "$CIRRUS_REPO_FULL_NAME" = "bitcoin/bitcoin" ] && [ "$CIRRUS_PR" = "" ] ; then
     # Sanity check only the last few commits to get notified of missing sigs,
@@ -32,6 +31,8 @@ if [ "$CIRRUS_REPO_FULL_NAME" = "bitcoin/bitcoin" ] && [ "$CIRRUS_PR" = "" ] ; t
     git log HEAD~10 -1 --format='%H' > ./contrib/verify-commits/trusted-sha512-root-commit
     git log HEAD~10 -1 --format='%H' > ./contrib/verify-commits/trusted-git-root
     mapfile -t KEYS < contrib/verify-commits/trusted-keys
+    git config user.email "ci@ci.ci"
+    git config user.name "ci"
     ${CI_RETRY_EXE} gpg --keyserver hkps://keys.openpgp.org --recv-keys "${KEYS[@]}" &&
     ./contrib/verify-commits/verify-commits.py;
 fi

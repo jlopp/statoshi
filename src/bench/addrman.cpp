@@ -43,7 +43,7 @@ static void CreateAddresses()
 
         CAddress ret(CService(addr, port), NODE_NETWORK);
 
-        ret.nTime = GetAdjustedTime();
+        ret.nTime = Now<NodeSeconds>();
 
         return ret;
     };
@@ -133,7 +133,7 @@ static void AddrManAddThenGood(benchmark::Bench& bench)
     });
 }
 
-BENCHMARK(AddrManAdd);
-BENCHMARK(AddrManSelect);
-BENCHMARK(AddrManGetAddr);
-BENCHMARK(AddrManAddThenGood);
+BENCHMARK(AddrManAdd, benchmark::PriorityLevel::HIGH);
+BENCHMARK(AddrManSelect, benchmark::PriorityLevel::HIGH);
+BENCHMARK(AddrManGetAddr, benchmark::PriorityLevel::HIGH);
+BENCHMARK(AddrManAddThenGood, benchmark::PriorityLevel::HIGH);

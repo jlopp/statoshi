@@ -9,16 +9,18 @@
 #ifndef BITCOIN_UTIL_STRENCODINGS_H
 #define BITCOIN_UTIL_STRENCODINGS_H
 
-#include <attributes.h>
 #include <span.h>
 #include <util/string.h>
 
 #include <charconv>
+#include <cstddef>
 #include <cstdint>
-#include <iterator>
 #include <limits>
 #include <optional>
 #include <string>
+#include <string_view>
+#include <system_error>
+#include <type_traits>
 #include <vector>
 
 /** Used by SanitizeString() */
@@ -55,7 +57,9 @@ enum class ByteUnit : uint64_t {
 * @return           A new string without unsafe chars
 */
 std::string SanitizeString(std::string_view str, int rule = SAFE_CHARS_DEFAULT);
-std::vector<unsigned char> ParseHex(std::string_view str);
+/** Parse the hex string into bytes (uint8_t or std::byte). Ignores whitespace. */
+template <typename Byte = uint8_t>
+std::vector<Byte> ParseHex(std::string_view str);
 signed char HexDigit(char c);
 /* Returns true if each character in str is a hex character, and has an even
  * number of hex digits.*/
@@ -84,7 +88,16 @@ std::string EncodeBase32(Span<const unsigned char> input, bool pad = true);
  */
 std::string EncodeBase32(std::string_view str, bool pad = true);
 
-void SplitHostPort(std::string_view in, uint16_t& portOut, std::string& hostOut);
+/**
+ * Splits socket address string into host string and port value.
+ * Validates port value.
+ *
+ * @param[in] in        The socket address string to split.
+ * @param[out] portOut  Port-portion of the input, if found and parsable.
+ * @param[out] hostOut  Host-portion of the input, if found.
+ * @return              true if port-portion is absent or within its allowed range, otherwise false
+ */
+bool SplitHostPort(std::string_view in, uint16_t& portOut, std::string& hostOut);
 
 // LocaleIndependentAtoi is provided for backwards compatibility reasons.
 //

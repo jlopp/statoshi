@@ -98,7 +98,7 @@ bool CNetAddr::SetNetFromBIP155Network(uint8_t possible_bip155_net, size_t addre
  *
  * @note This address is considered invalid by CNetAddr::IsValid()
  */
-CNetAddr::CNetAddr() {}
+CNetAddr::CNetAddr() = default;
 
 void CNetAddr::SetIP(const CNetAddr& ipIn)
 {
@@ -588,7 +588,7 @@ static std::string IPv6ToString(Span<const uint8_t> a, uint32_t scope_id)
     return r;
 }
 
-static std::string OnionToString(Span<const uint8_t> addr)
+std::string OnionToString(Span<const uint8_t> addr)
 {
     uint8_t checksum[torv3::CHECKSUM_LEN];
     torv3::Checksum(addr, checksum);

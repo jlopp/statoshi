@@ -14,15 +14,18 @@ import sys
 EXPECTED_CIRCULAR_DEPENDENCIES = (
     "chainparamsbase -> util/system -> chainparamsbase",
     "node/blockstorage -> validation -> node/blockstorage",
-    "index/coinstatsindex -> node/coinstats -> index/coinstatsindex",
-    "policy/fees -> txmempool -> policy/fees",
+    "node/utxo_snapshot -> validation -> node/utxo_snapshot",
     "qt/addresstablemodel -> qt/walletmodel -> qt/addresstablemodel",
     "qt/recentrequeststablemodel -> qt/walletmodel -> qt/recentrequeststablemodel",
     "qt/sendcoinsdialog -> qt/walletmodel -> qt/sendcoinsdialog",
     "qt/transactiontablemodel -> qt/walletmodel -> qt/transactiontablemodel",
     "wallet/fees -> wallet/wallet -> wallet/fees",
     "wallet/wallet -> wallet/walletdb -> wallet/wallet",
-    "node/coinstats -> validation -> node/coinstats",
+    "kernel/coinstats -> validation -> kernel/coinstats",
+    "kernel/mempool_persist -> validation -> kernel/mempool_persist",
+
+    # Temporary, removed in followup https://github.com/bitcoin/bitcoin/pull/24230
+    "index/base -> node/context -> net_processing -> index/blockfilterindex -> index/base",
 )
 
 CODE_DIR = "src"

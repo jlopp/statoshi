@@ -3,17 +3,17 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include <span.h>
 #include <util/strencodings.h>
-#include <util/string.h>
 
-#include <tinyformat.h>
-
-#include <algorithm>
 #include <array>
-#include <cstdlib>
+#include <cassert>
 #include <cstring>
 #include <limits>
 #include <optional>
+#include <ostream>
+#include <string>
+#include <vector>
 
 static const std::string CHARS_ALPHA_NUM = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 
@@ -77,10 +77,10 @@ bool IsHexNumber(std::string_view str)
     return str.size() > 0;
 }
 
-std::vector<unsigned char> ParseHex(std::string_view str)
+template <typename Byte>
+std::vector<Byte> ParseHex(std::string_view str)
 {
-    // convert hex dump to vector
-    std::vector<unsigned char> vch;
+    std::vector<Byte> vch;
     auto it = str.begin();
     while (it != str.end() && it + 1 != str.end()) {
         if (IsSpace(*it)) {
@@ -90,13 +90,16 @@ std::vector<unsigned char> ParseHex(std::string_view str)
         auto c1 = HexDigit(*(it++));
         auto c2 = HexDigit(*(it++));
         if (c1 < 0 || c2 < 0) break;
-        vch.push_back(uint8_t(c1 << 4) | c2);
+        vch.push_back(Byte(c1 << 4) | Byte(c2));
     }
     return vch;
 }
+template std::vector<std::byte> ParseHex(std::string_view);
+template std::vector<uint8_t> ParseHex(std::string_view);
 
-void SplitHostPort(std::string_view in, uint16_t& portOut, std::string& hostOut)
+bool SplitHostPort(std::string_view in, uint16_t& portOut, std::string& hostOut)
 {
+    bool valid = false;
     size_t colon = in.find_last_of(':');
     // if a : is found, and it either follows a [...], or no other : is in the string, treat it as port separator
     bool fHaveColon = colon != in.npos;
@@ -107,13 +110,18 @@ void SplitHostPort(std::string_view in, uint16_t& portOut, std::string& hostOut)
         if (ParseUInt16(in.substr(colon + 1), &n)) {
             in = in.substr(0, colon);
             portOut = n;
+            valid = (portOut != 0);
         }
+    } else {
+        valid = true;
     }
     if (in.size() > 0 && in[0] == '[' && in[in.size() - 1] == ']') {
         hostOut = in.substr(1, in.size() - 2);
     } else {
         hostOut = in;
     }
+
+    return valid;
 }
 
 std::string EncodeBase64(Span<const unsigned char> input)
