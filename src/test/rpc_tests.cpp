@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2021 The Bitcoin Core developers
+// Copyright (c) 2012-2022 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -17,11 +17,48 @@
 
 #include <boost/test/unit_test.hpp>
 
+static UniValue JSON(std::string_view json)
+{
+    UniValue value;
+    BOOST_CHECK(value.read(json.data(), json.size()));
+    return value;
+}
+
+class HasJSON
+{
+public:
+    explicit HasJSON(std::string json) : m_json(std::move(json)) {}
+    bool operator()(const UniValue& value) const
+    {
+        std::string json{value.write()};
+        BOOST_CHECK_EQUAL(json, m_json);
+        return json == m_json;
+    };
+
+private:
+    const std::string m_json;
+};
+
 class RPCTestingSetup : public TestingSetup
 {
 public:
+    UniValue TransformParams(const UniValue& params, std::vector<std::string> arg_names) const;
     UniValue CallRPC(std::string args);
 };
+
+UniValue RPCTestingSetup::TransformParams(const UniValue& params, std::vector<std::string> arg_names) const
+{
+    UniValue transformed_params;
+    CRPCTable table;
+    CRPCCommand command{"category", "method", [&](const JSONRPCRequest& request, UniValue&, bool) -> bool { transformed_params = request.params; return true; }, arg_names, /*unique_id=*/0};
+    table.appendCommand("method", &command);
+    JSONRPCRequest request;
+    request.strMethod = "method";
+    request.params = params;
+    if (RPCIsInWarmup(nullptr)) SetRPCWarmupFinished();
+    table.execute(request);
+    return transformed_params;
+}
 
 UniValue RPCTestingSetup::CallRPC(std::string args)
 {
@@ -38,12 +75,39 @@ UniValue RPCTestingSetup::CallRPC(std::string args)
         return result;
     }
     catch (const UniValue& objError) {
-        throw std::runtime_error(find_value(objError, "message").get_str());
+        throw std::runtime_error(objError.find_value("message").get_str());
     }
 }
 
 
 BOOST_FIXTURE_TEST_SUITE(rpc_tests, RPCTestingSetup)
+
+BOOST_AUTO_TEST_CASE(rpc_namedparams)
+{
+    const std::vector<std::string> arg_names{"arg1", "arg2", "arg3", "arg4", "arg5"};
+
+    // Make sure named arguments are transformed into positional arguments in correct places separated by nulls
+    BOOST_CHECK_EQUAL(TransformParams(JSON(R"({"arg2": 2, "arg4": 4})"), arg_names).write(), "[null,2,null,4]");
+
+    // Make sure named argument specified multiple times raises an exception
+    BOOST_CHECK_EXCEPTION(TransformParams(JSON(R"({"arg2": 2, "arg2": 4})"), arg_names), UniValue,
+                          HasJSON(R"({"code":-8,"message":"Parameter arg2 specified multiple times"})"));
+
+    // Make sure named and positional arguments can be combined.
+    BOOST_CHECK_EQUAL(TransformParams(JSON(R"({"arg5": 5, "args": [1, 2], "arg4": 4})"), arg_names).write(), "[1,2,null,4,5]");
+
+    // Make sure a unknown named argument raises an exception
+    BOOST_CHECK_EXCEPTION(TransformParams(JSON(R"({"arg2": 2, "unknown": 6})"), arg_names), UniValue,
+                          HasJSON(R"({"code":-8,"message":"Unknown named parameter unknown"})"));
+
+    // Make sure an overlap between a named argument and positional argument raises an exception
+    BOOST_CHECK_EXCEPTION(TransformParams(JSON(R"({"args": [1,2,3], "arg4": 4, "arg2": 2})"), arg_names), UniValue,
+                          HasJSON(R"({"code":-8,"message":"Parameter arg2 specified twice both as positional and named argument"})"));
+
+    // Make sure extra positional arguments can be passed through to the method implementation, as long as they don't overlap with named arguments.
+    BOOST_CHECK_EQUAL(TransformParams(JSON(R"({"args": [1,2,3,4,5,6,7,8,9,10]})"), arg_names).write(), "[1,2,3,4,5,6,7,8,9,10]");
+    BOOST_CHECK_EQUAL(TransformParams(JSON(R"([1,2,3,4,5,6,7,8,9,10])"), arg_names).write(), "[1,2,3,4,5,6,7,8,9,10]");
+}
 
 BOOST_AUTO_TEST_CASE(rpc_rawparams)
 {
@@ -66,9 +130,9 @@ BOOST_AUTO_TEST_CASE(rpc_rawparams)
     BOOST_CHECK_THROW(CallRPC("decoderawtransaction DEADBEEF"), std::runtime_error);
     std::string rawtx = "0100000001a15d57094aa7a21a28cb20b59aab8fc7d1149a3bdbcddba9c622e4f5f6a99ece010000006c493046022100f93bb0e7d8db7bd46e40132d1f8242026e045f03a0efe71bbb8e3f475e970d790221009337cd7f1f929f00cc6ff01f03729b069a7c21b59b1736ddfee5db5946c5da8c0121033b9b137ee87d5a812d6f506efdd37f0affa7ffc310711c06c7f3e097c9447c52ffffffff0100e1f505000000001976a9140389035a9225b3839e2bbf32d826a1e222031fd888ac00000000";
     BOOST_CHECK_NO_THROW(r = CallRPC(std::string("decoderawtransaction ")+rawtx));
-    BOOST_CHECK_EQUAL(find_value(r.get_obj(), "size").getInt<int>(), 193);
-    BOOST_CHECK_EQUAL(find_value(r.get_obj(), "version").getInt<int>(), 1);
-    BOOST_CHECK_EQUAL(find_value(r.get_obj(), "locktime").getInt<int>(), 0);
+    BOOST_CHECK_EQUAL(r.get_obj().find_value("size").getInt<int>(), 193);
+    BOOST_CHECK_EQUAL(r.get_obj().find_value("version").getInt<int>(), 1);
+    BOOST_CHECK_EQUAL(r.get_obj().find_value("locktime").getInt<int>(), 0);
     BOOST_CHECK_THROW(CallRPC(std::string("decoderawtransaction ")+rawtx+" extra"), std::runtime_error);
     BOOST_CHECK_NO_THROW(r = CallRPC(std::string("decoderawtransaction ")+rawtx+" false"));
     BOOST_CHECK_THROW(r = CallRPC(std::string("decoderawtransaction ")+rawtx+" false extra"), std::runtime_error);
@@ -85,20 +149,20 @@ BOOST_AUTO_TEST_CASE(rpc_togglenetwork)
     UniValue r;
 
     r = CallRPC("getnetworkinfo");
-    bool netState = find_value(r.get_obj(), "networkactive").get_bool();
+    bool netState = r.get_obj().find_value("networkactive").get_bool();
     BOOST_CHECK_EQUAL(netState, true);
 
     BOOST_CHECK_NO_THROW(CallRPC("setnetworkactive false"));
     r = CallRPC("getnetworkinfo");
-    int numConnection = find_value(r.get_obj(), "connections").getInt<int>();
+    int numConnection = r.get_obj().find_value("connections").getInt<int>();
     BOOST_CHECK_EQUAL(numConnection, 0);
 
-    netState = find_value(r.get_obj(), "networkactive").get_bool();
+    netState = r.get_obj().find_value("networkactive").get_bool();
     BOOST_CHECK_EQUAL(netState, false);
 
     BOOST_CHECK_NO_THROW(CallRPC("setnetworkactive true"));
     r = CallRPC("getnetworkinfo");
-    netState = find_value(r.get_obj(), "networkactive").get_bool();
+    netState = r.get_obj().find_value("networkactive").get_bool();
     BOOST_CHECK_EQUAL(netState, true);
 }
 
@@ -116,9 +180,9 @@ BOOST_AUTO_TEST_CASE(rpc_rawsign)
     std::string privkey1 = "\"KzsXybp9jX64P5ekX1KUxRQ79Jht9uzW7LorgwE65i5rWACL6LQe\"";
     std::string privkey2 = "\"Kyhdf5LuKTRx4ge69ybABsiUAWjVRK4XGxAKk2FQLp2HjGMy87Z4\"";
     r = CallRPC(std::string("signrawtransactionwithkey ")+notsigned+" [] "+prevout);
-    BOOST_CHECK(find_value(r.get_obj(), "complete").get_bool() == false);
+    BOOST_CHECK(r.get_obj().find_value("complete").get_bool() == false);
     r = CallRPC(std::string("signrawtransactionwithkey ")+notsigned+" ["+privkey1+","+privkey2+"] "+prevout);
-    BOOST_CHECK(find_value(r.get_obj(), "complete").get_bool() == true);
+    BOOST_CHECK(r.get_obj().find_value("complete").get_bool() == true);
 }
 
 BOOST_AUTO_TEST_CASE(rpc_createraw_op_return)
@@ -225,6 +289,10 @@ BOOST_AUTO_TEST_CASE(json_parse_errors)
 {
     // Valid
     BOOST_CHECK_EQUAL(ParseNonRFCJSONValue("1.0").get_real(), 1.0);
+    BOOST_CHECK_EQUAL(ParseNonRFCJSONValue("true").get_bool(), true);
+    BOOST_CHECK_EQUAL(ParseNonRFCJSONValue("[false]")[0].get_bool(), false);
+    BOOST_CHECK_EQUAL(ParseNonRFCJSONValue("{\"a\": true}")["a"].get_bool(), true);
+    BOOST_CHECK_EQUAL(ParseNonRFCJSONValue("{\"1\": \"true\"}")["1"].get_str(), "true");
     // Valid, with leading or trailing whitespace
     BOOST_CHECK_EQUAL(ParseNonRFCJSONValue(" 1.0").get_real(), 1.0);
     BOOST_CHECK_EQUAL(ParseNonRFCJSONValue("1.0 ").get_real(), 1.0);
@@ -237,6 +305,11 @@ BOOST_AUTO_TEST_CASE(json_parse_errors)
     // Invalid, trailing garbage
     BOOST_CHECK_THROW(ParseNonRFCJSONValue("1.0sds"), std::runtime_error);
     BOOST_CHECK_THROW(ParseNonRFCJSONValue("1.0]"), std::runtime_error);
+    // Invalid, keys have to be names
+    BOOST_CHECK_THROW(ParseNonRFCJSONValue("{1: \"true\"}"), std::runtime_error);
+    BOOST_CHECK_THROW(ParseNonRFCJSONValue("{true: 1}"), std::runtime_error);
+    BOOST_CHECK_THROW(ParseNonRFCJSONValue("{[1]: 1}"), std::runtime_error);
+    BOOST_CHECK_THROW(ParseNonRFCJSONValue("{{\"a\": \"a\"}: 1}"), std::runtime_error);
     // BTC addresses should fail parsing
     BOOST_CHECK_THROW(ParseNonRFCJSONValue("175tWpb8K1S7NmH4Zx6rewF9WQrcZv245W"), std::runtime_error);
     BOOST_CHECK_THROW(ParseNonRFCJSONValue("3J98t1WpEZ73CNmQviecrnyiWrnqRhWNL"), std::runtime_error);
@@ -252,7 +325,7 @@ BOOST_AUTO_TEST_CASE(rpc_ban)
     BOOST_CHECK_NO_THROW(r = CallRPC(std::string("listbanned")));
     UniValue ar = r.get_array();
     UniValue o1 = ar[0].get_obj();
-    UniValue adr = find_value(o1, "address");
+    UniValue adr = o1.find_value("address");
     BOOST_CHECK_EQUAL(adr.get_str(), "127.0.0.0/32");
     BOOST_CHECK_NO_THROW(CallRPC(std::string("setban 127.0.0.0 remove")));
     BOOST_CHECK_NO_THROW(r = CallRPC(std::string("listbanned")));
@@ -263,8 +336,8 @@ BOOST_AUTO_TEST_CASE(rpc_ban)
     BOOST_CHECK_NO_THROW(r = CallRPC(std::string("listbanned")));
     ar = r.get_array();
     o1 = ar[0].get_obj();
-    adr = find_value(o1, "address");
-    int64_t banned_until{find_value(o1, "banned_until").getInt<int64_t>()};
+    adr = o1.find_value("address");
+    int64_t banned_until{o1.find_value("banned_until").getInt<int64_t>()};
     BOOST_CHECK_EQUAL(adr.get_str(), "127.0.0.0/24");
     BOOST_CHECK_EQUAL(banned_until, 9907731200); // absolute time check
 
@@ -278,11 +351,11 @@ BOOST_AUTO_TEST_CASE(rpc_ban)
     BOOST_CHECK_NO_THROW(r = CallRPC(std::string("listbanned")));
     ar = r.get_array();
     o1 = ar[0].get_obj();
-    adr = find_value(o1, "address");
-    banned_until = find_value(o1, "banned_until").getInt<int64_t>();
-    const int64_t ban_created{find_value(o1, "ban_created").getInt<int64_t>()};
-    const int64_t ban_duration{find_value(o1, "ban_duration").getInt<int64_t>()};
-    const int64_t time_remaining{find_value(o1, "time_remaining").getInt<int64_t>()};
+    adr = o1.find_value("address");
+    banned_until = o1.find_value("banned_until").getInt<int64_t>();
+    const int64_t ban_created{o1.find_value("ban_created").getInt<int64_t>()};
+    const int64_t ban_duration{o1.find_value("ban_duration").getInt<int64_t>()};
+    const int64_t time_remaining{o1.find_value("time_remaining").getInt<int64_t>()};
     BOOST_CHECK_EQUAL(adr.get_str(), "127.0.0.0/24");
     BOOST_CHECK_EQUAL(banned_until, time_remaining_expected + now.count());
     BOOST_CHECK_EQUAL(ban_duration, banned_until - ban_created);
@@ -312,7 +385,7 @@ BOOST_AUTO_TEST_CASE(rpc_ban)
     BOOST_CHECK_NO_THROW(r = CallRPC(std::string("listbanned")));
     ar = r.get_array();
     o1 = ar[0].get_obj();
-    adr = find_value(o1, "address");
+    adr = o1.find_value("address");
     BOOST_CHECK_EQUAL(adr.get_str(), "fe80::202:b3ff:fe1e:8329/128");
 
     BOOST_CHECK_NO_THROW(CallRPC(std::string("clearbanned")));
@@ -320,7 +393,7 @@ BOOST_AUTO_TEST_CASE(rpc_ban)
     BOOST_CHECK_NO_THROW(r = CallRPC(std::string("listbanned")));
     ar = r.get_array();
     o1 = ar[0].get_obj();
-    adr = find_value(o1, "address");
+    adr = o1.find_value("address");
     BOOST_CHECK_EQUAL(adr.get_str(), "2001:db8::/30");
 
     BOOST_CHECK_NO_THROW(CallRPC(std::string("clearbanned")));
@@ -328,7 +401,7 @@ BOOST_AUTO_TEST_CASE(rpc_ban)
     BOOST_CHECK_NO_THROW(r = CallRPC(std::string("listbanned")));
     ar = r.get_array();
     o1 = ar[0].get_obj();
-    adr = find_value(o1, "address");
+    adr = o1.find_value("address");
     BOOST_CHECK_EQUAL(adr.get_str(), "2001:4d48:ac57:400:cacf:e9ff:fe1d:9c63/128");
 }
 

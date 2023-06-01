@@ -1,10 +1,10 @@
-// Copyright (c) 2020-2021 The Bitcoin Core developers
+// Copyright (c) 2020-2022 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <addrman.h>
 #include <chainparams.h>
-#include <chainparamsbase.h>
+#include <common/args.h>
 #include <net.h>
 #include <netaddress.h>
 #include <protocol.h>
@@ -13,7 +13,6 @@
 #include <test/fuzz/util.h>
 #include <test/fuzz/util/net.h>
 #include <test/util/setup_common.h>
-#include <util/system.h>
 #include <util/translation.h>
 
 #include <cstdint>
@@ -125,7 +124,6 @@ FUZZ_TARGET_INIT(connman, initialize_connman)
     std::vector<CNodeStats> stats;
     connman.GetNodeStats(stats);
     (void)connman.GetOutboundTargetBytesLeft();
-    (void)connman.GetReceiveFloodSize();
     (void)connman.GetTotalBytesRecv();
     (void)connman.GetTotalBytesSent();
     (void)connman.GetTryNewOutboundPeer();
