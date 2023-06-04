@@ -387,6 +387,8 @@ public:
     Mutex cs_vRecv;
 
     uint64_t nRecvBytes GUARDED_BY(cs_vRecv){0};
+    mapMsgTypeSize mapSendBytesPerMsgType GUARDED_BY(cs_vSend);
+    mapMsgTypeSize mapRecvBytesPerMsgType GUARDED_BY(cs_vRecv);
 
     std::atomic<std::chrono::seconds> m_last_send{0s};
     std::atomic<std::chrono::seconds> m_last_recv{0s};
@@ -636,9 +638,6 @@ private:
     // Our address, as reported by the peer
     CService addrLocal GUARDED_BY(m_addr_local_mutex);
     mutable Mutex m_addr_local_mutex;
-
-    mapMsgTypeSize mapSendBytesPerMsgType GUARDED_BY(cs_vSend);
-    mapMsgTypeSize mapRecvBytesPerMsgType GUARDED_BY(cs_vRecv);
 
     /**
      * If an I2P session is created per connection (for outbound transient I2P

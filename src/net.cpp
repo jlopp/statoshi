@@ -2578,7 +2578,7 @@ CConnman::~CConnman()
 
 size_t CConnman::GetAddressCount() const
 {
-    return addrman.size();
+    return addrman.Size();
 }
 
 std::vector<CAddress> CConnman::GetAddresses(size_t max_addresses, size_t max_pct, std::optional<Network> network) const
