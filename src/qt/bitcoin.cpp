@@ -16,6 +16,8 @@
 #include <interfaces/handler.h>
 #include <interfaces/init.h>
 #include <interfaces/node.h>
+#include <logging.h>
+#include <node/context.h>
 #include <node/interface_ui.h>
 #include <noui.h>
 #include <qt/bitcoingui.h>
@@ -397,9 +399,7 @@ void BitcoinApplication::initializeResult(bool success, interfaces::BlockAndHead
 {
     qDebug() << __func__ << ": Initialization result: " << success;
 
-    // Set exit result.
-    returnValue = success ? EXIT_SUCCESS : EXIT_FAILURE;
-    if(success) {
+    if (success) {
         delete m_splash;
         m_splash = nullptr;
 
@@ -407,18 +407,21 @@ void BitcoinApplication::initializeResult(bool success, interfaces::BlockAndHead
         qInfo() << "Platform customization:" << platformStyle->getName();
         clientModel = new ClientModel(node(), optionsModel);
         window->setClientModel(clientModel, &tip_info);
+
+        // If '-min' option passed, start window minimized (iconified) or minimized to tray
+        bool start_minimized = gArgs.GetBoolArg("-min", false);
 #ifdef ENABLE_WALLET
         if (WalletModel::isWalletEnabled()) {
             m_wallet_controller = new WalletController(*clientModel, platformStyle, this);
-            window->setWalletController(m_wallet_controller);
+            window->setWalletController(m_wallet_controller, /*show_loading_minimized=*/start_minimized);
             if (paymentServer) {
                 paymentServer->setOptionsModel(optionsModel);
             }
         }
 #endif // ENABLE_WALLET
 
-        // If -min option passed, start window minimized (iconified) or minimized to tray
-        if (!gArgs.GetBoolArg("-min", false)) {
+        // Show or minimize window
+        if (!start_minimized) {
             window->show();
         } else if (clientModel->getOptionsModel()->getMinimizeToTray() && window->hasTrayIcon()) {
             // do nothing as the window is managed by the tray icon
@@ -544,6 +547,34 @@ int GuiMain(int argc, char* argv[])
         return EXIT_FAILURE;
     }
 
+    // Error out when loose non-argument tokens are encountered on command line
+    // However, allow BIP-21 URIs only if no options follow
+    bool payment_server_token_seen = false;
+    for (int i = 1; i < argc; i++) {
+        QString arg(argv[i]);
+        bool invalid_token = !arg.startsWith("-");
+#ifdef ENABLE_WALLET
+        if (arg.startsWith(BITCOIN_IPC_PREFIX, Qt::CaseInsensitive)) {
+            invalid_token &= false;
+            payment_server_token_seen = true;
+        }
+#endif
+        if (payment_server_token_seen && arg.startsWith("-")) {
+            InitError(Untranslated(strprintf("Options ('%s') cannot follow a BIP-21 payment URI", argv[i])));
+            QMessageBox::critical(nullptr, PACKAGE_NAME,
+                                  // message cannot be translated because translations have not been initialized
+                                  QString::fromStdString("Options ('%1') cannot follow a BIP-21 payment URI").arg(QString::fromStdString(argv[i])));
+            return EXIT_FAILURE;
+        }
+        if (invalid_token) {
+            InitError(Untranslated(strprintf("Command line contains unexpected token '%s', see bitcoin-qt -h for a list of options.", argv[i])));
+            QMessageBox::critical(nullptr, PACKAGE_NAME,
+                                  // message cannot be translated because translations have not been initialized
+                                  QString::fromStdString("Command line contains unexpected token '%1', see bitcoin-qt -h for a list of options.").arg(QString::fromStdString(argv[i])));
+            return EXIT_FAILURE;
+        }
+    }
+
     // Now that the QApplication is setup and we have parsed our parameters, we can set the platform style
     app.setupPlatformStyle();
 
@@ -653,7 +684,6 @@ int GuiMain(int argc, char* argv[])
         app.InitPruneSetting(prune_MiB);
     }
 
-    int rv = EXIT_SUCCESS;
     try
     {
         app.createWindow(networkStyle.data());
@@ -666,10 +696,9 @@ int GuiMain(int argc, char* argv[])
             WinShutdownMonitor::registerShutdownBlockReason(QObject::tr("%1 didn't yet exit safely…").arg(PACKAGE_NAME), (HWND)app.getMainWinId());
 #endif
             app.exec();
-            rv = app.getReturnValue();
         } else {
             // A dialog with detailed error will have been shown by InitError()
-            rv = EXIT_FAILURE;
+            return EXIT_FAILURE;
         }
     } catch (const std::exception& e) {
         PrintExceptionContinue(&e, "Runaway exception");
@@ -678,5 +707,5 @@ int GuiMain(int argc, char* argv[])
         PrintExceptionContinue(nullptr, "Runaway exception");
         app.handleRunawayException(QString::fromStdString(app.node().getWarnings().translated));
     }
-    return rv;
+    return app.node().getExitStatus();
 }

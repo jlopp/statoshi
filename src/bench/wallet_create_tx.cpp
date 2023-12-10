@@ -70,7 +70,7 @@ void generateFakeBlock(const CChainParams& params,
 
     // notify wallet
     const auto& pindex = WITH_LOCK(::cs_main, return context.chainman->ActiveChain().Tip());
-    wallet.blockConnected(kernel::MakeBlockInfo(pindex, &block));
+    wallet.blockConnected(ChainstateRole::NORMAL, kernel::MakeBlockInfo(pindex, &block));
 }
 
 struct PreSelectInputs {
@@ -83,6 +83,8 @@ static void WalletCreateTx(benchmark::Bench& bench, const OutputType output_type
 {
     const auto test_setup = MakeNoLogFileContext<const TestingSetup>();
 
+    // Set clock to genesis block, so the descriptors/keys creation time don't interfere with the blocks scanning process.
+    SetMockTime(test_setup->m_node.chainman->GetParams().GenesisBlock().nTime);
     CWallet wallet{test_setup->m_node.chain.get(), "", CreateMockableWalletDatabase()};
     {
         LOCK(wallet.cs_wallet);
@@ -92,13 +94,14 @@ static void WalletCreateTx(benchmark::Bench& bench, const OutputType output_type
     }
 
     // Generate destinations
-    CScript dest = GetScriptForDestination(getNewDestination(wallet, output_type));
+    const auto dest{getNewDestination(wallet, output_type)};
 
     // Generate chain; each coinbase will have two outputs to fill-up the wallet
     const auto& params = Params();
+    const CScript coinbase_out{GetScriptForDestination(dest)};
     unsigned int chain_size = 5000; // 5k blocks means 10k UTXO for the wallet (minus 200 due COINBASE_MATURITY)
     for (unsigned int i = 0; i < chain_size; ++i) {
-        generateFakeBlock(params, test_setup->m_node, wallet, dest);
+        generateFakeBlock(params, test_setup->m_node, wallet, coinbase_out);
     }
 
     // Check available balance
@@ -136,6 +139,8 @@ static void WalletCreateTx(benchmark::Bench& bench, const OutputType output_type
 static void AvailableCoins(benchmark::Bench& bench, const std::vector<OutputType>& output_type)
 {
     const auto test_setup = MakeNoLogFileContext<const TestingSetup>();
+    // Set clock to genesis block, so the descriptors/keys creation time don't interfere with the blocks scanning process.
+    SetMockTime(test_setup->m_node.chainman->GetParams().GenesisBlock().nTime);
     CWallet wallet{test_setup->m_node.chain.get(), "", CreateMockableWalletDatabase()};
     {
         LOCK(wallet.cs_wallet);
