@@ -3831,6 +3831,9 @@ void CConnman::PushMessage(CNode* pnode, CSerializedNetMsg&& msg)
         CaptureMessage(pnode->addr, msg.m_type, msg.data, /*is_incoming=*/false);
     }
 
+    statsClient.count("bandwidth.message." + SanitizeString(msg.m_type.c_str()) + ".bytesSent", nMessageSize, 1.0f);
+    statsClient.inc("message.sent." + SanitizeString(msg.m_type.c_str()), 1.0f);
+
     TRACE6(net, outbound_message,
         pnode->GetId(),
         pnode->m_addr_name.c_str(),
@@ -3867,9 +3870,6 @@ void CConnman::PushMessage(CNode* pnode, CSerializedNetMsg&& msg)
         }
     }
     if (nBytesSent) RecordBytesSent(nBytesSent);
-
-    statsClient.count("bandwidth.message." + SanitizeString(msg.m_type.c_str()) + ".bytesSent", nBytesSent, 1.0f);
-    statsClient.inc("message.sent." + SanitizeString(msg.m_type.c_str()), 1.0f);
 }
 
 bool CConnman::ForNode(NodeId id, std::function<bool(CNode* pnode)> func)
