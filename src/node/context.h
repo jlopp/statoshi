@@ -20,6 +20,7 @@ class BanMan;
 class BaseIndex;
 class CBlockPolicyEstimator;
 class CConnman;
+class ValidationSignals;
 class CScheduler;
 class CTxMemPool;
 class ChainstateManager;
@@ -50,6 +51,8 @@ struct NodeContext {
     std::unique_ptr<kernel::Context> kernel;
     //! Init interface for initializing current process and connecting to other processes.
     interfaces::Init* init{nullptr};
+    //! Interrupt object used to track whether node shutdown was requested.
+    util::SignalInterrupt* shutdown{nullptr};
     std::unique_ptr<AddrMan> addrman;
     std::unique_ptr<CConnman> connman;
     std::unique_ptr<CTxMemPool> mempool;
@@ -68,7 +71,10 @@ struct NodeContext {
     interfaces::WalletLoader* wallet_loader{nullptr};
     std::unique_ptr<CScheduler> scheduler;
     std::function<void()> rpc_interruption_point = [] {};
+    //! Issues blocking calls about sync status, errors and warnings
     std::unique_ptr<KernelNotifications> notifications;
+    //! Issues calls about blocks and transactions
+    std::unique_ptr<ValidationSignals> validation_signals;
     std::atomic<int> exit_status{EXIT_SUCCESS};
 
     //! Declare default constructor and destructor that are not inline, so code

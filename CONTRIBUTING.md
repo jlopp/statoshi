@@ -66,9 +66,10 @@ Discussion about codebase improvements happens in GitHub issues and pull
 requests.
 
 The developer
-[mailing list](https://lists.linuxfoundation.org/mailman/listinfo/bitcoin-dev)
+[mailing list](https://groups.google.com/g/bitcoindev)
 should be used to discuss complicated or controversial consensus or P2P protocol changes before working on
 a patch set.
+Archives can be found on [https://gnusha.org/pi/bitcoindev/](https://gnusha.org/pi/bitcoindev/).
 
 
 Contributor Workflow
@@ -417,11 +418,8 @@ Backporting
 
 Security and bug fixes can be backported from `master` to release
 branches.
-If the backport is non-trivial, it may be appropriate to open an
-additional PR to backport the change, but only after the original PR
-has been merged.
-Otherwise, backports will be done in batches and
-the maintainers will use the proper `Needs backport (...)` labels
+Maintainers will do backports in batches and
+use the proper `Needs backport (...)` labels
 when needed (the original author does not need to worry about it).
 
 A backport should contain the following metadata in the commit body:

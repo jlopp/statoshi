@@ -9,12 +9,15 @@
 
 #include <atomic>
 #include <cstdint>
-#include <string>
 
 class ArgsManager;
 class CBlockIndex;
 enum class SynchronizationState;
 struct bilingual_str;
+
+namespace util {
+class SignalInterrupt;
+} // namespace util
 
 namespace node {
 
@@ -23,7 +26,7 @@ static constexpr int DEFAULT_STOPATHEIGHT{0};
 class KernelNotifications : public kernel::Notifications
 {
 public:
-    KernelNotifications(std::atomic<int>& exit_status) : m_exit_status{exit_status} {}
+    KernelNotifications(util::SignalInterrupt& shutdown, std::atomic<int>& exit_status) : m_shutdown(shutdown), m_exit_status{exit_status} {}
 
     [[nodiscard]] kernel::InterruptResult blockTip(SynchronizationState state, CBlockIndex& index) override;
 
@@ -33,15 +36,16 @@ public:
 
     void warning(const bilingual_str& warning) override;
 
-    void flushError(const std::string& debug_message) override;
+    void flushError(const bilingual_str& message) override;
 
-    void fatalError(const std::string& debug_message, const bilingual_str& user_message = {}) override;
+    void fatalError(const bilingual_str& message) override;
 
     //! Block height after which blockTip notification will return Interrupted{}, if >0.
     int m_stop_at_height{DEFAULT_STOPATHEIGHT};
     //! Useful for tests, can be set to false to avoid shutdown on fatal error.
     bool m_shutdown_on_fatal_error{true};
 private:
+    util::SignalInterrupt& m_shutdown;
     std::atomic<int>& m_exit_status;
 };
 

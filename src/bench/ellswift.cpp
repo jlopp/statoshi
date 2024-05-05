@@ -11,15 +11,13 @@ static void EllSwiftCreate(benchmark::Bench& bench)
 {
     ECC_Start();
 
-    CKey key;
-    key.MakeNewKey(true);
-
+    CKey key = GenerateRandomKey();
     uint256 entropy = GetRandHash();
 
     bench.batch(1).unit("pubkey").run([&] {
         auto ret = key.EllSwiftCreate(MakeByteSpan(entropy));
         /* Use the first 32 bytes of the ellswift encoded public key as next private key. */
-        key.Set(UCharCast(ret.data()), UCharCast(ret.data()) + 32, true);
+        key.Set(ret.data(), ret.data() + 32, true);
         assert(key.IsValid());
         /* Use the last 32 bytes of the ellswift encoded public key as next entropy. */
         std::copy(ret.begin() + 32, ret.begin() + 64, MakeWritableByteSpan(entropy).begin());

@@ -188,9 +188,9 @@ void run_ellswift_tests(void) {
             CHECK(ret == ((testcase->enc_bitmap >> c) & 1));
             if (ret) {
                 secp256k1_fe x2;
-                CHECK(check_fe_equal(&t, &testcase->encs[c]));
+                CHECK(fe_equal(&t, &testcase->encs[c]));
                 secp256k1_ellswift_xswiftec_var(&x2, &testcase->u, &testcase->encs[c]);
-                CHECK(check_fe_equal(&testcase->x, &x2));
+                CHECK(fe_equal(&testcase->x, &x2));
             }
         }
     }
@@ -203,7 +203,7 @@ void run_ellswift_tests(void) {
         CHECK(ret);
         ret = secp256k1_pubkey_load(CTX, &ge, &pubkey);
         CHECK(ret);
-        CHECK(check_fe_equal(&testcase->x, &ge.x));
+        CHECK(fe_equal(&testcase->x, &ge.x));
         CHECK(secp256k1_fe_is_odd(&ge.y) == testcase->odd_y);
     }
     for (i = 0; (unsigned)i < sizeof(ellswift_xdh_tests_bip324) / sizeof(ellswift_xdh_tests_bip324[0]); ++i) {
@@ -237,7 +237,7 @@ void run_ellswift_tests(void) {
         secp256k1_ellswift_decode(CTX, &pubkey2, ell64);
         secp256k1_pubkey_load(CTX, &g2, &pubkey2);
         /* Compare with original. */
-        ge_equals_ge(&g, &g2);
+        CHECK(secp256k1_ge_eq_var(&g, &g2));
     }
     /* Verify the behavior of secp256k1_ellswift_create */
     for (i = 0; i < 400 * COUNT; i++) {
@@ -259,7 +259,7 @@ void run_ellswift_tests(void) {
         secp256k1_ellswift_decode(CTX, &pub, ell64);
         secp256k1_pubkey_load(CTX, &dec, &pub);
         secp256k1_ecmult(&res, NULL, &secp256k1_scalar_zero, &sec);
-        ge_equals_gej(&dec, &res);
+        CHECK(secp256k1_gej_eq_ge_var(&res, &dec));
     }
     /* Verify that secp256k1_ellswift_xdh computes the right shared X coordinate. */
     for (i = 0; i < 800 * COUNT; i++) {
@@ -285,12 +285,12 @@ void run_ellswift_tests(void) {
         ret = secp256k1_ellswift_xdh(CTX, share32, ell64, ell64, sec32, i & 1, &ellswift_xdh_hash_x32, NULL);
         CHECK(ret);
         (void)secp256k1_fe_set_b32_limit(&share_x, share32); /* no overflow is possible */
-        secp256k1_fe_verify(&share_x);
+        SECP256K1_FE_VERIFY(&share_x);
         /* Compute seckey*pubkey directly. */
         secp256k1_ecmult(&resj, &decj, &sec, NULL);
         secp256k1_ge_set_gej(&res, &resj);
         /* Compare. */
-        CHECK(check_fe_equal(&res.x, &share_x));
+        CHECK(fe_equal(&res.x, &share_x));
     }
     /* Verify the joint behavior of secp256k1_ellswift_xdh */
     for (i = 0; i < 200 * COUNT; i++) {

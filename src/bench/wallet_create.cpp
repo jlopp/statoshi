@@ -2,6 +2,10 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php.
 
+#if defined(HAVE_CONFIG_H)
+#include <config/bitcoin-config.h>
+#endif
+
 #include <bench/bench.h>
 #include <node/context.h>
 #include <random.h>
@@ -34,7 +38,7 @@ static void WalletCreate(benchmark::Bench& bench, bool encrypted)
 
     fs::path wallet_path = test_setup->m_path_root / strprintf("test_wallet_%d", random.rand32()).c_str();
     bench.run([&] {
-        auto wallet = CreateWallet(context, wallet_path.u8string(), /*load_on_start=*/std::nullopt, options, status, error_string, warnings);
+        auto wallet = CreateWallet(context, wallet_path.utf8string(), /*load_on_start=*/std::nullopt, options, status, error_string, warnings);
         assert(status == DatabaseStatus::SUCCESS);
         assert(wallet != nullptr);
 

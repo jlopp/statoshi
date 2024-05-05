@@ -23,6 +23,7 @@ implicit-integer-sign-change:secp256k1/
 implicit-signed-integer-truncation:*/include/c++/
 implicit-signed-integer-truncation:leveldb/
 implicit-signed-integer-truncation:secp256k1/
+implicit-signed-integer-truncation,implicit-integer-sign-change:secp256k1_modinv64_posdivsteps_62_var
 implicit-unsigned-integer-truncation:*/include/c++/
 implicit-unsigned-integer-truncation:leveldb/
 implicit-unsigned-integer-truncation:secp256k1/
@@ -50,16 +51,18 @@ unsigned-integer-overflow:CCoinsViewCache::Uncache
 unsigned-integer-overflow:CompressAmount
 unsigned-integer-overflow:DecompressAmount
 unsigned-integer-overflow:crypto/
+unsigned-integer-overflow:getchaintxstats*
 unsigned-integer-overflow:MurmurHash3
 unsigned-integer-overflow:CBlockPolicyEstimator::processBlockTx
 unsigned-integer-overflow:TxConfirmStats::EstimateMedianVal
 unsigned-integer-overflow:prevector.h
-unsigned-integer-overflow:script/interpreter.cpp
+unsigned-integer-overflow:EvalScript
 unsigned-integer-overflow:xoroshiro128plusplus.h
 implicit-integer-sign-change:CBlockPolicyEstimator::processBlockTx
 implicit-integer-sign-change:SetStdinEcho
 implicit-integer-sign-change:compressor.h
 implicit-integer-sign-change:crypto/
+implicit-integer-sign-change:getchaintxstats*
 implicit-integer-sign-change:TxConfirmStats::removeTx
 implicit-integer-sign-change:prevector.h
 implicit-integer-sign-change:verify_flags
@@ -69,7 +72,6 @@ implicit-signed-integer-truncation:crypto/
 implicit-unsigned-integer-truncation:crypto/
 shift-base:arith_uint256.cpp
 shift-base:crypto/
-shift-base:ROTL32
 shift-base:streams.h
 shift-base:FormatHDKeypath
 shift-base:xoroshiro128plusplus.h

@@ -15,7 +15,7 @@ void MockedDescriptorConverter::Init() {
         // an extended one.
         if (IdIsCompPubKey(i) || IdIsUnCompPubKey(i) || IdIsXOnlyPubKey(i) || IdIsConstPrivKey(i)) {
             CKey privkey;
-            privkey.Set(UCharCast(key_data.begin()), UCharCast(key_data.end()), !IdIsUnCompPubKey(i));
+            privkey.Set(key_data.begin(), key_data.end(), !IdIsUnCompPubKey(i));
             if (IdIsCompPubKey(i) || IdIsUnCompPubKey(i)) {
                 CPubKey pubkey{privkey.GetPubKey()};
                 keys_str[i] = HexStr(pubkey);
@@ -69,4 +69,18 @@ std::optional<std::string> MockedDescriptorConverter::GetDescriptor(std::string_
     }
 
     return desc;
+}
+
+bool HasDeepDerivPath(const FuzzBufferType& buff, const int max_depth)
+{
+    auto depth{0};
+    for (const auto& ch: buff) {
+        if (ch == ',') {
+            // A comma is always present between two key expressions, so we use that as a delimiter.
+            depth = 0;
+        } else if (ch == '/') {
+            if (++depth > max_depth) return true;
+        }
+    }
+    return false;
 }

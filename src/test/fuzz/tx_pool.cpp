@@ -6,6 +6,7 @@
 #include <node/context.h>
 #include <node/mempool_args.h>
 #include <node/miner.h>
+#include <policy/v3_policy.h>
 #include <test/fuzz/FuzzedDataProvider.h>
 #include <test/fuzz/fuzz.h>
 #include <test/fuzz/util.h>
@@ -49,7 +50,7 @@ void initialize_tx_pool()
                               g_outpoints_coinbase_init_immature;
         outpoints.push_back(prevout);
     }
-    SyncWithValidationInterfaceQueue();
+    g_setup->m_node.validation_signals->SyncWithValidationInterfaceQueue();
 }
 
 struct TransactionsDelta final : public CValidationInterface {
@@ -101,12 +102,10 @@ void Finish(FuzzedDataProvider& fuzzed_data_provider, MockedTxPool& tx_pool, Cha
     if (!info_all.empty()) {
         const auto& tx_to_remove = *PickValue(fuzzed_data_provider, info_all).tx;
         WITH_LOCK(tx_pool.cs, tx_pool.removeRecursive(tx_to_remove, MemPoolRemovalReason::BLOCK /* dummy */));
-        std::vector<uint256> all_txids;
-        tx_pool.queryHashes(all_txids);
-        assert(all_txids.size() < info_all.size());
+        assert(tx_pool.size() < info_all.size());
         WITH_LOCK(::cs_main, tx_pool.check(chainstate.CoinsTip(), chainstate.m_chain.Height() + 1));
     }
-    SyncWithValidationInterfaceQueue();
+    g_setup->m_node.validation_signals->SyncWithValidationInterfaceQueue();
 }
 
 void MockTime(FuzzedDataProvider& fuzzed_data_provider, const Chainstate& chainstate)
@@ -140,7 +139,6 @@ void CheckATMPInvariants(const MempoolAcceptResult& res, bool txid_in_mempool, b
         Assert(wtxid_in_mempool);
         Assert(res.m_state.IsValid());
         Assert(!res.m_state.IsInvalid());
-        Assert(res.m_replaced_transactions);
         Assert(res.m_vsize);
         Assert(res.m_base_fees);
         Assert(res.m_effective_feerate);
@@ -155,7 +153,6 @@ void CheckATMPInvariants(const MempoolAcceptResult& res, bool txid_in_mempool, b
         Assert(res.m_state.IsInvalid());
 
         const bool is_reconsiderable{res.m_state.GetResult() == TxValidationResult::TX_RECONSIDERABLE};
-        Assert(!res.m_replaced_transactions);
         Assert(!res.m_vsize);
         Assert(!res.m_base_fees);
         // Fee information is provided if the failure is TX_RECONSIDERABLE.
@@ -229,7 +226,7 @@ FUZZ_TARGET(tx_pool_standard, .init = initialize_tx_pool)
         // Create transaction to add to the mempool
         const CTransactionRef tx = [&] {
             CMutableTransaction tx_mut;
-            tx_mut.nVersion = CTransaction::CURRENT_VERSION;
+            tx_mut.nVersion = fuzzed_data_provider.ConsumeBool() ? 3 : CTransaction::CURRENT_VERSION;
             tx_mut.nLockTime = fuzzed_data_provider.ConsumeBool() ? 0 : fuzzed_data_provider.ConsumeIntegral<uint32_t>();
             const auto num_in = fuzzed_data_provider.ConsumeIntegralInRange<int>(1, outpoints_rbf.size());
             const auto num_out = fuzzed_data_provider.ConsumeIntegralInRange<int>(1, outpoints_rbf.size() * 2);
@@ -286,13 +283,13 @@ FUZZ_TARGET(tx_pool_standard, .init = initialize_tx_pool)
         std::set<CTransactionRef> removed;
         std::set<CTransactionRef> added;
         auto txr = std::make_shared<TransactionsDelta>(removed, added);
-        RegisterSharedValidationInterface(txr);
+        node.validation_signals->RegisterSharedValidationInterface(txr);
         const bool bypass_limits = fuzzed_data_provider.ConsumeBool();
 
         // Make sure ProcessNewPackage on one transaction works.
         // The result is not guaranteed to be the same as what is returned by ATMP.
         const auto result_package = WITH_LOCK(::cs_main,
-                                    return ProcessNewPackage(chainstate, tx_pool, {tx}, true));
+                                    return ProcessNewPackage(chainstate, tx_pool, {tx}, true, /*client_maxfeerate=*/{}));
         // If something went wrong due to a package-specific policy, it might not return a
         // validation result for the transaction.
         if (result_package.m_state.GetResult() != PackageValidationResult::PCKG_POLICY) {
@@ -304,8 +301,8 @@ FUZZ_TARGET(tx_pool_standard, .init = initialize_tx_pool)
 
         const auto res = WITH_LOCK(::cs_main, return AcceptToMemoryPool(chainstate, tx, GetTime(), bypass_limits, /*test_accept=*/false));
         const bool accepted = res.m_result_type == MempoolAcceptResult::ResultType::VALID;
-        SyncWithValidationInterfaceQueue();
-        UnregisterSharedValidationInterface(txr);
+        node.validation_signals->SyncWithValidationInterfaceQueue();
+        node.validation_signals->UnregisterSharedValidationInterface(txr);
 
         bool txid_in_mempool = tx_pool.exists(GenTxid::Txid(tx->GetHash()));
         bool wtxid_in_mempool = tx_pool.exists(GenTxid::Wtxid(tx->GetWitnessHash()));
@@ -315,6 +312,7 @@ FUZZ_TARGET(tx_pool_standard, .init = initialize_tx_pool)
         if (accepted) {
             Assert(added.size() == 1); // For now, no package acceptance
             Assert(tx == *added.begin());
+            CheckMempoolV3Invariants(tx_pool);
         } else {
             // Do not consider rejected transaction removed
             removed.erase(tx);
@@ -407,6 +405,7 @@ FUZZ_TARGET(tx_pool, .init = initialize_tx_pool)
         const bool accepted = res.m_result_type == MempoolAcceptResult::ResultType::VALID;
         if (accepted) {
             txids.push_back(tx->GetHash());
+            CheckMempoolV3Invariants(tx_pool);
         }
     }
     Finish(fuzzed_data_provider, tx_pool, chainstate);

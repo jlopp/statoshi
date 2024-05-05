@@ -16,10 +16,38 @@ result is cached and it prevents issues when the image changes.
 test runner
 ===========
 
-To run the checks in the test runner outside the docker, use:
+To run all the lint checks in the test runner outside the docker you first need
+to install the rust toolchain using your package manager of choice or
+[rustup](https://www.rust-lang.org/tools/install).
+
+Then you can use:
 
 ```sh
-( cd ./test/lint/test_runner/ && cargo fmt && cargo clippy && cargo run )
+( cd ./test/lint/test_runner/ && cargo fmt && cargo clippy && RUST_BACKTRACE=1 cargo run )
+```
+
+#### Dependencies
+
+| Lint test | Dependency |
+|-----------|:----------:|
+| [`lint-python.py`](lint/lint-python.py) | [flake8](https://gitlab.com/pycqa/flake8)
+| [`lint-python.py`](lint/lint-python.py) | [lief](https://github.com/lief-project/LIEF)
+| [`lint-python.py`](lint/lint-python.py) | [mypy](https://github.com/python/mypy)
+| [`lint-python.py`](lint/lint-python.py) | [pyzmq](https://github.com/zeromq/pyzmq)
+| [`lint-python-dead-code.py`](lint/lint-python-dead-code.py) | [vulture](https://github.com/jendrikseipp/vulture)
+| [`lint-shell.py`](lint/lint-shell.py) | [ShellCheck](https://github.com/koalaman/shellcheck)
+| [`lint-spelling.py`](lint/lint-spelling.py) | [codespell](https://github.com/codespell-project/codespell)
+
+In use versions and install instructions are available in the [CI setup](../../ci/lint/04_install.sh).
+
+Please be aware that on Linux distributions all dependencies are usually available as packages, but could be outdated.
+
+#### Running the tests
+
+Individual tests can be run by directly calling the test script, e.g.:
+
+```
+test/lint/lint-files.py
 ```
 
 check-doc.py
@@ -60,6 +88,6 @@ To do so, add the upstream repository as remote:
 git remote add --fetch secp256k1 https://github.com/bitcoin-core/secp256k1.git
 ```
 
-all-lint.py
-===========
-Calls other scripts with the `lint-` prefix.
+lint_ignore_dirs.py
+===================
+Add list of common directories to ignore when running tests

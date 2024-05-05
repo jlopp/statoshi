@@ -12,7 +12,6 @@
 #include <common/args.h>
 #include <common/init.h>
 #include <common/system.h>
-#include <common/url.h>
 #include <compat/compat.h>
 #include <init.h>
 #include <interfaces/chain.h>
@@ -20,7 +19,6 @@
 #include <node/context.h>
 #include <node/interface_ui.h>
 #include <noui.h>
-#include <shutdown.h>
 #include <util/check.h>
 #include <util/exception.h>
 #include <util/strencodings.h>
@@ -36,7 +34,6 @@
 using node::NodeContext;
 
 const std::function<std::string(const char*)> G_TRANSLATION_FUN = nullptr;
-UrlDecodeFn* const URL_DECODE = urlDecode;
 
 #if HAVE_DECL_FORK
 
@@ -272,9 +269,7 @@ MAIN_FUNCTION
     if (ProcessInitCommands(args)) return EXIT_SUCCESS;
 
     // Start application
-    if (AppInit(node)) {
-        WaitForShutdown();
-    } else {
+    if (!AppInit(node) || !Assert(node.shutdown)->wait()) {
         node.exit_status = EXIT_FAILURE;
     }
     Interrupt(node);

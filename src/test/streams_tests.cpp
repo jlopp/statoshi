@@ -29,7 +29,14 @@ BOOST_AUTO_TEST_CASE(xor_file)
         BOOST_CHECK_EXCEPTION(xor_file.ignore(1), std::ios_base::failure, HasReason{"AutoFile::ignore: file handle is nullpt"});
     }
     {
-        AutoFile xor_file{raw_file("wbx"), xor_pat};
+#ifdef __MINGW64__
+        // Our usage of mingw-w64 and the msvcrt runtime does not support
+        // the x modifier for the _wfopen().
+        const char* mode = "wb";
+#else
+        const char* mode = "wbx";
+#endif
+        AutoFile xor_file{raw_file(mode), xor_pat};
         xor_file << test1 << test2;
     }
     {
@@ -136,8 +143,8 @@ BOOST_AUTO_TEST_CASE(streams_vector_reader)
     BOOST_CHECK_EQUAL(reader.size(), 5U);
     BOOST_CHECK(!reader.empty());
 
-    // Read a single byte as a signed char.
-    signed char b;
+    // Read a single byte as a int8_t.
+    int8_t b;
     reader >> b;
     BOOST_CHECK_EQUAL(b, -1);
     BOOST_CHECK_EQUAL(reader.size(), 4U);

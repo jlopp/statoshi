@@ -1,6 +1,6 @@
 # OpenBSD Build Guide
 
-**Updated for OpenBSD [7.3](https://www.openbsd.org/73.html)**
+**Updated for OpenBSD [7.5](https://www.openbsd.org/75.html)**
 
 This guide describes how to build bitcoind, command-line utilities, and GUI on OpenBSD.
 
@@ -43,6 +43,8 @@ BerkeleyDB is only required to support legacy wallets.
 It is recommended to use Berkeley DB 4.8. You cannot use the BerkeleyDB library
 from ports. However you can build it yourself, [using depends](/depends).
 
+Refer to [depends/README.md](/depends/README.md) for detailed instructions.
+
 ```bash
 gmake -C depends NO_BOOST=1 NO_LIBEVENT=1 NO_QT=1 NO_SQLITE=1 NO_NATPMP=1 NO_UPNP=1 NO_ZMQ=1 NO_USDT=1
 ...
@@ -61,7 +63,7 @@ export BDB_PREFIX="/path/to/bitcoin/depends/x86_64-unknown-openbsd"
 Bitcoin Core includes a GUI built with the cross-platform Qt Framework. To compile the GUI, Qt 5 is required.
 
 ```bash
-pkg_add qt5
+pkg_add qtbase qttools
 ```
 
 ## Building Bitcoin Core

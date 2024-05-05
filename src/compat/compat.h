@@ -6,10 +6,6 @@
 #ifndef BITCOIN_COMPAT_COMPAT_H
 #define BITCOIN_COMPAT_COMPAT_H
 
-#if defined(HAVE_CONFIG_H)
-#include <config/bitcoin-config.h>
-#endif
-
 // Windows defines FD_SETSIZE to 64 (see _fd_types.h in mingw-w64),
 // which is too small for our usage, but allows us to redefine it safely.
 // We redefine it to be 1024, to match glibc, see typesizes.h.
@@ -34,6 +30,13 @@
 #include <sys/socket.h>  // IWYU pragma: export
 #include <sys/types.h>   // IWYU pragma: export
 #include <unistd.h>      // IWYU pragma: export
+#endif
+
+// Windows does not have `sa_family_t` - it defines `sockaddr::sa_family` as `u_short`.
+// Thus define `sa_family_t` on Windows too so that the rest of the code can use `sa_family_t`.
+// See https://learn.microsoft.com/en-us/windows/win32/api/winsock/ns-winsock-sockaddr#syntax
+#ifdef WIN32
+typedef u_short sa_family_t;
 #endif
 
 // We map Linux / BSD error functions and codes, to the equivalent

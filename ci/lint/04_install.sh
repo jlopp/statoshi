@@ -10,10 +10,11 @@ export PATH=$PWD/ci/retry:$PATH
 
 ${CI_RETRY_EXE} apt-get update
 # Lint dependencies:
+# - automake pkg-config libtool (for lint_includes_build_config)
 # - curl/xz-utils (to install shellcheck)
 # - git (used in many lint scripts)
 # - gpg (used by verify-commits)
-${CI_RETRY_EXE} apt-get install -y curl xz-utils git gpg
+${CI_RETRY_EXE} apt-get install -y automake pkg-config libtool curl xz-utils git gpg
 
 PYTHON_PATH="/python_build"
 if [ ! -d "${PYTHON_PATH}/bin" ]; then
@@ -45,7 +46,7 @@ if [ ! -d "${LINT_RUNNER_PATH}" ]; then
 fi
 
 ${CI_RETRY_EXE} pip3 install \
-  codespell==2.2.5 \
+  codespell==2.2.6 \
   flake8==6.1.0 \
   lief==0.13.2 \
   mypy==1.4.1 \

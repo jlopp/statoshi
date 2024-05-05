@@ -24,7 +24,6 @@ std::unique_ptr<CWallet> CreateSyncedWallet(interfaces::Chain& chain, CChain& cc
         LOCK2(wallet->cs_wallet, ::cs_main);
         wallet->SetLastBlockProcessed(cchain.Height(), cchain.Tip()->GetBlockHash());
     }
-    wallet->LoadWallet();
     {
         LOCK(wallet->cs_wallet);
         wallet->SetWalletFlag(WALLET_FLAG_DESCRIPTORS);
@@ -72,7 +71,8 @@ std::shared_ptr<CWallet> TestLoadWallet(WalletContext& context)
 
 void TestUnloadWallet(std::shared_ptr<CWallet>&& wallet)
 {
-    SyncWithValidationInterfaceQueue();
+    // Calls SyncWithValidationInterfaceQueue
+    wallet->chain().waitForNotificationsIfTipChanged({});
     wallet->m_chain_notifications_handler.reset();
     UnloadWallet(std::move(wallet));
 }

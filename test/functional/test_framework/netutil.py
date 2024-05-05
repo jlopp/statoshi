@@ -4,7 +4,7 @@
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 """Linux network utilities.
 
-Roughly based on http://voorloopnul.com/blog/a-python-netstat-in-less-than-100-lines-of-code/ by Ricardo Pascal
+Roughly based on https://web.archive.org/web/20190424172231/http://voorloopnul.com/blog/a-python-netstat-in-less-than-100-lines-of-code/ by Ricardo Pascal
 """
 
 import sys
@@ -158,3 +158,12 @@ def test_ipv6_local():
     except socket.error:
         have_ipv6 = False
     return have_ipv6
+
+def test_unix_socket():
+    '''Return True if UNIX sockets are available on this platform.'''
+    try:
+        socket.AF_UNIX
+    except AttributeError:
+        return False
+    else:
+        return True

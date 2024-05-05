@@ -39,7 +39,7 @@ llvm_config_prog=$(shell $(SHELL) $(.SHELLFLAGS) "command -v llvm-config")
 llvm_lib_dir=$(shell $(llvm_config_prog) --libdir)
 endif
 
-cctools_TOOLS=AR RANLIB STRIP NM LIBTOOL OTOOL INSTALL_NAME_TOOL DSYMUTIL
+cctools_TOOLS=AR RANLIB STRIP NM OTOOL DSYMUTIL
 
 # Make-only lowercase function
 lc = $(subst A,a,$(subst B,b,$(subst C,c,$(subst D,d,$(subst E,e,$(subst F,f,$(subst G,g,$(subst H,h,$(subst I,i,$(subst J,j,$(subst K,k,$(subst L,l,$(subst M,m,$(subst N,n,$(subst O,o,$(subst P,p,$(subst Q,q,$(subst R,r,$(subst S,s,$(subst T,t,$(subst U,u,$(subst V,v,$(subst W,w,$(subst X,x,$(subst Y,y,$(subst Z,z,$1))))))))))))))))))))))))))
@@ -79,34 +79,33 @@ $(foreach TOOL,$(cctools_TOOLS),$(eval darwin_$(TOOL) = $$(build_prefix)/bin/$$(
 darwin_CC=env -u C_INCLUDE_PATH -u CPLUS_INCLUDE_PATH \
               -u OBJC_INCLUDE_PATH -u OBJCPLUS_INCLUDE_PATH -u CPATH \
               -u LIBRARY_PATH \
-            $(clang_prog) --target=$(host) -mmacosx-version-min=$(OSX_MIN_VERSION) \
-              -B$(build_prefix)/bin -mlinker-version=$(LD64_VERSION) \
+              $(clang_prog) --target=$(host) \
+              -B$(build_prefix)/bin \
               -isysroot$(OSX_SDK) -nostdlibinc \
               -iwithsysroot/usr/include -iframeworkwithsysroot/System/Library/Frameworks
 
 darwin_CXX=env -u C_INCLUDE_PATH -u CPLUS_INCLUDE_PATH \
                -u OBJC_INCLUDE_PATH -u OBJCPLUS_INCLUDE_PATH -u CPATH \
                -u LIBRARY_PATH \
-             $(clangxx_prog) --target=$(host) -mmacosx-version-min=$(OSX_MIN_VERSION) \
-               -B$(build_prefix)/bin -mlinker-version=$(LD64_VERSION) \
+               $(clangxx_prog) --target=$(host) \
+               -B$(build_prefix)/bin \
                -isysroot$(OSX_SDK) -nostdlibinc \
                -iwithsysroot/usr/include/c++/v1 \
                -iwithsysroot/usr/include -iframeworkwithsysroot/System/Library/Frameworks
 
-darwin_CFLAGS=-pipe -std=$(C_STANDARD)
-darwin_CXXFLAGS=-pipe -std=$(CXX_STANDARD)
+darwin_CFLAGS=-pipe -std=$(C_STANDARD) -mmacosx-version-min=$(OSX_MIN_VERSION)
+darwin_CXXFLAGS=-pipe -std=$(CXX_STANDARD) -mmacosx-version-min=$(OSX_MIN_VERSION)
 darwin_LDFLAGS=-Wl,-platform_version,macos,$(OSX_MIN_VERSION),$(OSX_SDK_VERSION)
 
-ifneq ($(LTO),)
-darwin_CFLAGS += -flto
-darwin_CXXFLAGS += -flto
-darwin_LDFLAGS += -flto
+ifneq ($(build_os),darwin)
+darwin_CFLAGS += -mlinker-version=$(LD64_VERSION)
+darwin_CXXFLAGS += -mlinker-version=$(LD64_VERSION)
 endif
 
 darwin_release_CFLAGS=-O2
 darwin_release_CXXFLAGS=$(darwin_release_CFLAGS)
 
-darwin_debug_CFLAGS=-O1
+darwin_debug_CFLAGS=-O1 -g
 darwin_debug_CXXFLAGS=$(darwin_debug_CFLAGS)
 
 darwin_cmake_system=Darwin

@@ -78,10 +78,6 @@ if test "@host_os@" = darwin; then
   BREW=no
 fi
 
-if test -z "$enable_lto" && test -n "@lto@"; then
-  enable_lto=yes
-fi
-
 if test -z "$enable_hardening" && test -n "@no_harden@"; then
   enable_hardening=no
 fi
@@ -89,9 +85,7 @@ fi
 PKG_CONFIG="$(which pkg-config) --static"
 
 PKG_CONFIG_PATH="${depends_prefix}/share/pkgconfig:${depends_prefix}/lib/pkgconfig"
-if test -z "@allow_host_packages@"; then
-  PKG_CONFIG_LIBDIR="${depends_prefix}/lib/pkgconfig"
-fi
+PKG_CONFIG_LIBDIR="${depends_prefix}/lib/pkgconfig"
 
 CPPFLAGS="-I${depends_prefix}/include/ ${CPPFLAGS}"
 LDFLAGS="-L${depends_prefix}/lib ${LDFLAGS}"
@@ -127,11 +121,6 @@ if test "@host_os@" = darwin; then
   if test -n "@OTOOL@"; then
     OTOOL="@OTOOL@"
     ac_cv_path_OTOOL="${OTOOL}"
-  fi
-
-  if test -n "@INSTALL_NAME_TOOL@"; then
-    INSTALL_NAME_TOOL="@INSTALL_NAME_TOOL@"
-    ac_cv_path_INSTALL_NAME_TOOL="${INSTALL_NAME_TOOL}"
   fi
 
   if test -n "@DSYMUTIL@"; then

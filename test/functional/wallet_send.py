@@ -9,10 +9,6 @@ from itertools import product
 
 from test_framework.authproxy import JSONRPCException
 from test_framework.descriptors import descsum_create
-from test_framework.messages import (
-    ser_compact_size,
-    WITNESS_SCALE_FACTOR,
-)
 from test_framework.test_framework import BitcoinTestFramework
 from test_framework.util import (
     assert_equal,
@@ -21,7 +17,10 @@ from test_framework.util import (
     assert_raises_rpc_error,
     count_bytes,
 )
-from test_framework.wallet_util import generate_keypair
+from test_framework.wallet_util import (
+    calculate_input_weight,
+    generate_keypair,
+)
 
 
 class WalletSendTest(BitcoinTestFramework):
@@ -30,10 +29,11 @@ class WalletSendTest(BitcoinTestFramework):
 
     def set_test_params(self):
         self.num_nodes = 2
-        # whitelist all peers to speed up tx relay / mempool sync
+        # whitelist peers to speed up tx relay / mempool sync
+        self.noban_tx_relay = True
         self.extra_args = [
-            ["-whitelist=127.0.0.1","-walletrbf=1"],
-            ["-whitelist=127.0.0.1","-walletrbf=1"],
+            ["-walletrbf=1"],
+            ["-walletrbf=1"]
         ]
         getcontext().prec = 8 # Satoshi precision for Decimal
 
@@ -542,12 +542,9 @@ class WalletSendTest(BitcoinTestFramework):
                 input_idx = i
                 break
         psbt_in = dec["inputs"][input_idx]
-        # Calculate the input weight
-        # (prevout + sequence + length of scriptSig + scriptsig + 1 byte buffer) * WITNESS_SCALE_FACTOR + num scriptWitness stack items + (length of stack item + stack item) * N stack items + 1 byte buffer
-        len_scriptsig = len(psbt_in["final_scriptSig"]["hex"]) // 2 if "final_scriptSig" in psbt_in else 0
-        len_scriptsig += len(ser_compact_size(len_scriptsig)) + 1
-        len_scriptwitness = (sum([(len(x) // 2) + len(ser_compact_size(len(x) // 2)) for x in psbt_in["final_scriptwitness"]]) + len(psbt_in["final_scriptwitness"]) + 1) if "final_scriptwitness" in psbt_in else 0
-        input_weight = ((40 + len_scriptsig) * WITNESS_SCALE_FACTOR) + len_scriptwitness
+        scriptsig_hex = psbt_in["final_scriptSig"]["hex"] if "final_scriptSig" in psbt_in else ""
+        witness_stack_hex = psbt_in["final_scriptwitness"] if "final_scriptwitness" in psbt_in else None
+        input_weight = calculate_input_weight(scriptsig_hex, witness_stack_hex)
 
         # Input weight error conditions
         assert_raises_rpc_error(
@@ -558,6 +555,7 @@ class WalletSendTest(BitcoinTestFramework):
             options={"inputs": [ext_utxo], "input_weights": [{"txid": ext_utxo["txid"], "vout": ext_utxo["vout"], "weight": 1000}]}
         )
 
+        target_fee_rate_sat_vb = 10
         # Funding should also work when input weights are provided
         res = self.test_send(
             from_wallet=ext_wallet,
@@ -567,14 +565,17 @@ class WalletSendTest(BitcoinTestFramework):
             add_inputs=True,
             psbt=True,
             include_watching=True,
-            fee_rate=10
+            fee_rate=target_fee_rate_sat_vb
         )
         signed = ext_wallet.walletprocesspsbt(res["psbt"])
         signed = ext_fund.walletprocesspsbt(res["psbt"])
         assert signed["complete"]
         testres = self.nodes[0].testmempoolaccept([signed["hex"]])[0]
         assert_equal(testres["allowed"], True)
-        assert_fee_amount(testres["fees"]["base"], testres["vsize"], Decimal(0.0001))
+        actual_fee_rate_sat_vb = Decimal(testres["fees"]["base"]) * Decimal(1e8) / Decimal(testres["vsize"])
+        # Due to ECDSA signatures not always being the same length, the actual fee rate may be slightly different
+        # but rounded to nearest integer, it should be the same as the target fee rate
+        assert_equal(round(actual_fee_rate_sat_vb), target_fee_rate_sat_vb)
 
 if __name__ == '__main__':
     WalletSendTest().main()

@@ -18,6 +18,7 @@ from test_framework.util import (
     assert_equal,
     assert_fee_amount,
     assert_raises_rpc_error,
+    fill_mempool,
 )
 from test_framework.wallet import (
     DEFAULT_FEE,
@@ -29,7 +30,8 @@ class RPCPackagesTest(BitcoinTestFramework):
     def set_test_params(self):
         self.num_nodes = 1
         self.setup_clean_chain = True
-        self.extra_args = [["-whitelist=noban@127.0.0.1"]] # noban speeds up tx relay
+        # whitelist peers to speed up tx relay / mempool sync
+        self.noban_tx_relay = True
 
     def assert_testres_equal(self, package_hex, testres_expected):
         """Shuffle package_hex and assert that the testmempoolaccept result matches testres_expected. This should only
@@ -81,6 +83,8 @@ class RPCPackagesTest(BitcoinTestFramework):
         self.test_conflicting()
         self.test_rbf()
         self.test_submitpackage()
+        self.test_maxfeerate_submitpackage()
+        self.test_maxburn_submitpackage()
 
     def test_independent(self, coin):
         self.log.info("Test multiple independent transactions in a package")
@@ -355,6 +359,90 @@ class RPCPackagesTest(BitcoinTestFramework):
         sec_wtxid = bad_child.getwtxid()
         assert_equal(res["tx-results"][sec_wtxid]["error"], "version")
         peer.wait_for_broadcast([first_wtxid])
+
+    def test_maxfeerate_submitpackage(self):
+        node = self.nodes[0]
+        # clear mempool
+        deterministic_address = node.get_deterministic_priv_key().address
+        self.generatetoaddress(node, 1, deterministic_address)
+
+        self.log.info("Submitpackage maxfeerate arg testing")
+        chained_txns = self.wallet.create_self_transfer_chain(chain_length=2)
+        minrate_btc_kvb = min([chained_txn["fee"] / chained_txn["tx"].get_vsize() * 1000 for chained_txn in chained_txns])
+        chain_hex = [t["hex"] for t in chained_txns]
+        pkg_result = node.submitpackage(chain_hex, maxfeerate=minrate_btc_kvb - Decimal("0.00000001"))
+
+        # First tx failed in single transaction evaluation, so package message is generic
+        assert_equal(pkg_result["package_msg"], "transaction failed")
+        assert_equal(pkg_result["tx-results"][chained_txns[0]["wtxid"]]["error"], "max feerate exceeded")
+        assert_equal(pkg_result["tx-results"][chained_txns[1]["wtxid"]]["error"], "bad-txns-inputs-missingorspent")
+        assert_equal(node.getrawmempool(), [])
+
+        # Make chain of two transactions where parent doesn't make minfee threshold
+        # but child is too high fee
+        # Lower mempool limit to make it easier to fill_mempool
+        self.restart_node(0, extra_args=[
+            "-datacarriersize=100000",
+            "-maxmempool=5",
+            "-persistmempool=0",
+        ])
+        self.wallet.rescan_utxos()
+
+        fill_mempool(self, node, self.wallet)
+
+        minrelay = node.getmempoolinfo()["minrelaytxfee"]
+        parent = self.wallet.create_self_transfer(
+            fee_rate=minrelay,
+            confirmed_only=True,
+        )
+
+        child = self.wallet.create_self_transfer(
+            fee_rate=DEFAULT_FEE,
+            utxo_to_spend=parent["new_utxo"],
+        )
+
+        pkg_result = node.submitpackage([parent["hex"], child["hex"]], maxfeerate=DEFAULT_FEE - Decimal("0.00000001"))
+
+        # Child is connected even though parent is invalid and still reports fee exceeded
+        # this implies sub-package evaluation of both entries together.
+        assert_equal(pkg_result["package_msg"], "transaction failed")
+        assert "mempool min fee not met" in pkg_result["tx-results"][parent["wtxid"]]["error"]
+        assert_equal(pkg_result["tx-results"][child["wtxid"]]["error"], "max feerate exceeded")
+        assert parent["txid"] not in node.getrawmempool()
+        assert child["txid"] not in node.getrawmempool()
+
+        # Reset maxmempool, datacarriersize, reset dynamic mempool minimum feerate, and empty mempool.
+        self.restart_node(0)
+        self.wallet.rescan_utxos()
+
+        assert_equal(node.getrawmempool(), [])
+
+    def test_maxburn_submitpackage(self):
+        node = self.nodes[0]
+
+        assert_equal(node.getrawmempool(), [])
+
+        self.log.info("Submitpackage maxburnamount arg testing")
+        chained_txns_burn = self.wallet.create_self_transfer_chain(
+            chain_length=2,
+            utxo_to_spend=self.wallet.get_utxo(confirmed_only=True),
+        )
+        chained_burn_hex = [t["hex"] for t in chained_txns_burn]
+
+        tx = tx_from_hex(chained_burn_hex[1])
+        tx.vout[-1].scriptPubKey = b'a' * 10001 # scriptPubKey bigger than 10k IsUnspendable
+        chained_burn_hex = [chained_burn_hex[0], tx.serialize().hex()]
+        # burn test is run before any package evaluation; nothing makes it in and we get broader exception
+        assert_raises_rpc_error(-25, "Unspendable output exceeds maximum configured by user", node.submitpackage, chained_burn_hex, 0, chained_txns_burn[1]["new_utxo"]["value"] - Decimal("0.00000001"))
+        assert_equal(node.getrawmempool(), [])
+
+        minrate_btc_kvb_burn = min([chained_txn_burn["fee"] / chained_txn_burn["tx"].get_vsize() * 1000 for chained_txn_burn in chained_txns_burn])
+
+        # Relax the restrictions for both and send it; parent gets through as own subpackage
+        pkg_result = node.submitpackage(chained_burn_hex, maxfeerate=minrate_btc_kvb_burn, maxburnamount=chained_txns_burn[1]["new_utxo"]["value"])
+        assert "error" not in pkg_result["tx-results"][chained_txns_burn[0]["wtxid"]]
+        assert_equal(pkg_result["tx-results"][tx.getwtxid()]["error"], "scriptpubkey")
+        assert_equal(node.getrawmempool(), [chained_txns_burn[0]["txid"]])
 
 if __name__ == "__main__":
     RPCPackagesTest().main()

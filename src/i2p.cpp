@@ -115,7 +115,7 @@ static CNetAddr DestB64ToAddr(const std::string& dest)
 namespace sam {
 
 Session::Session(const fs::path& private_key_file,
-                 const CService& control_host,
+                 const Proxy& control_host,
                  CThreadInterrupt* interrupt)
     : m_private_key_file{private_key_file},
       m_control_host{control_host},
@@ -124,7 +124,7 @@ Session::Session(const fs::path& private_key_file,
 {
 }
 
-Session::Session(const CService& control_host, CThreadInterrupt* interrupt)
+Session::Session(const Proxy& control_host, CThreadInterrupt* interrupt)
     : m_control_host{control_host},
       m_interrupt{interrupt},
       m_transient{true}
@@ -217,6 +217,7 @@ bool Session::Connect(const CService& to, Connection& conn, bool& proxy_error)
     // Refuse connecting to arbitrary ports. We don't specify any destination port to the SAM proxy
     // when connecting (SAM 3.1 does not use ports) and it forces/defaults it to I2P_SAM31_PORT.
     if (to.GetPort() != I2P_SAM31_PORT) {
+        Log("Error connecting to %s, connection refused due to arbitrary port %s", to.ToStringAddrPort(), to.GetPort());
         proxy_error = false;
         return false;
     }
@@ -326,14 +327,10 @@ Session::Reply Session::SendRequestAndGetReply(const Sock& sock,
 
 std::unique_ptr<Sock> Session::Hello() const
 {
-    auto sock = CreateSock(m_control_host);
+    auto sock = m_control_host.Connect();
 
     if (!sock) {
-        throw std::runtime_error("Cannot create socket");
-    }
-
-    if (!ConnectSocketDirectly(m_control_host, *sock, nConnectTimeout, true)) {
-        throw std::runtime_error(strprintf("Cannot connect to %s", m_control_host.ToStringAddrPort()));
+        throw std::runtime_error(strprintf("Cannot connect to %s", m_control_host.ToString()));
     }
 
     SendRequestAndGetReply(*sock, "HELLO VERSION MIN=3.1 MAX=3.1");
@@ -392,7 +389,7 @@ Binary Session::MyDestination() const
     }
 
     memcpy(&cert_len, &m_private_key.at(CERT_LEN_POS), sizeof(cert_len));
-    cert_len = be16toh(cert_len);
+    cert_len = be16toh_internal(cert_len);
 
     const size_t dest_len = DEST_LEN_BASE + cert_len;
 
@@ -417,7 +414,7 @@ void Session::CreateIfNotCreatedAlready()
     const auto session_type = m_transient ? "transient" : "persistent";
     const auto session_id = GetRandHash().GetHex().substr(0, 10); // full is overkill, too verbose in the logs
 
-    Log("Creating %s SAM session %s with %s", session_type, session_id, m_control_host.ToStringAddrPort());
+    Log("Creating %s SAM session %s with %s", session_type, session_id, m_control_host.ToString());
 
     auto sock = Hello();
 
@@ -427,7 +424,7 @@ void Session::CreateIfNotCreatedAlready()
         const Reply& reply = SendRequestAndGetReply(
             *sock,
             strprintf("SESSION CREATE STYLE=STREAM ID=%s DESTINATION=TRANSIENT SIGNATURE_TYPE=7 "
-                      "inbound.quantity=1 outbound.quantity=1",
+                      "i2cp.leaseSetEncType=4,0 inbound.quantity=1 outbound.quantity=1",
                       session_id));
 
         m_private_key = DecodeI2PBase64(reply.Get("DESTINATION"));
@@ -445,7 +442,7 @@ void Session::CreateIfNotCreatedAlready()
 
         SendRequestAndGetReply(*sock,
                                strprintf("SESSION CREATE STYLE=STREAM ID=%s DESTINATION=%s "
-                                         "inbound.quantity=3 outbound.quantity=3",
+                                         "i2cp.leaseSetEncType=4,0 inbound.quantity=3 outbound.quantity=3",
                                          session_id,
                                          private_key_b64));
     }

@@ -615,7 +615,7 @@ void CBlockPolicyEstimator::processTransaction(const NewMempoolTransactionInfo& 
     // - the node is not behind
     // - the transaction is not dependent on any other transactions in the mempool
     // - it's not part of a package.
-    const bool validForFeeEstimation = !tx.m_from_disconnected_block && !tx.m_submitted_in_package && tx.m_chainstate_is_current && tx.m_has_no_mempool_parents;
+    const bool validForFeeEstimation = !tx.m_mempool_limit_bypassed && !tx.m_submitted_in_package && tx.m_chainstate_is_current && tx.m_has_no_mempool_parents;
 
     // Only want to be updating estimates when our blockchain is synced,
     // otherwise we'll miscalculate how many blocks its taking to get included.
@@ -1067,7 +1067,7 @@ void CBlockPolicyEstimator::FlushUnconfirmed()
         _removeTx(mi->first, false); // this calls erase() on mapMemPoolTxs
     }
     const auto endclear{SteadyClock::now()};
-    LogPrint(BCLog::ESTIMATEFEE, "Recorded %u unconfirmed txs from mempool in %gs\n", num_entries, Ticks<SecondsDouble>(endclear - startclear));
+    LogPrint(BCLog::ESTIMATEFEE, "Recorded %u unconfirmed txs from mempool in %.3fs\n", num_entries, Ticks<SecondsDouble>(endclear - startclear));
 }
 
 std::chrono::hours CBlockPolicyEstimator::GetFeeEstimatorFileAge()

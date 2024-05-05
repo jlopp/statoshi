@@ -3,6 +3,10 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#if defined(HAVE_CONFIG_H)
+#include <config/bitcoin-config.h>
+#endif
+
 #include <core_io.h>
 #include <key_io.h>
 #include <rpc/server.h>
@@ -69,6 +73,7 @@ static RPCHelpMan getwalletinfo()
                         {RPCResult::Type::BOOL, "descriptors", "whether this wallet uses descriptors for scriptPubKey management"},
                         {RPCResult::Type::BOOL, "external_signer", "whether this wallet is configured to use an external signer such as a hardware wallet"},
                         {RPCResult::Type::BOOL, "blank", "Whether this wallet intentionally does not contain any keys, scripts, or descriptors"},
+                        {RPCResult::Type::NUM_TIME, "birthtime", /*optional=*/true, "The start time for blocks scanning. It could be modified by (re)importing any descriptor with an earlier timestamp."},
                         RESULT_LAST_PROCESSED_BLOCK,
                     }},
                 },
@@ -132,6 +137,9 @@ static RPCHelpMan getwalletinfo()
     obj.pushKV("descriptors", pwallet->IsWalletFlagSet(WALLET_FLAG_DESCRIPTORS));
     obj.pushKV("external_signer", pwallet->IsWalletFlagSet(WALLET_FLAG_EXTERNAL_SIGNER));
     obj.pushKV("blank", pwallet->IsWalletFlagSet(WALLET_FLAG_BLANK_WALLET));
+    if (int64_t birthtime = pwallet->GetBirthTime(); birthtime != UNKNOWN_TIME) {
+        obj.pushKV("birthtime", birthtime);
+    }
 
     AppendLastProcessedBlock(obj, *pwallet);
     return obj;
@@ -165,7 +173,7 @@ static RPCHelpMan listwalletdir()
     UniValue wallets(UniValue::VARR);
     for (const auto& path : ListDatabases(GetWalletDir())) {
         UniValue wallet(UniValue::VOBJ);
-        wallet.pushKV("name", path.u8string());
+        wallet.pushKV("name", path.utf8string());
         wallets.push_back(wallet);
     }
 
@@ -744,13 +752,13 @@ RPCHelpMan simulaterawtransaction()
 static RPCHelpMan migratewallet()
 {
     return RPCHelpMan{"migratewallet",
-        "EXPERIMENTAL warning: This call may not work as expected and may be changed in future releases\n"
         "\nMigrate the wallet to a descriptor wallet.\n"
         "A new wallet backup will need to be made.\n"
         "\nThe migration process will create a backup of the wallet before migrating. This backup\n"
         "file will be named <wallet name>-<timestamp>.legacy.bak and can be found in the directory\n"
         "for this wallet. In the event of an incorrect migration, the backup can be restored using restorewallet."
-        "\nEncrypted wallets must have the passphrase provided as an argument to this call.",
+        "\nEncrypted wallets must have the passphrase provided as an argument to this call.\n"
+        "\nThis RPC may take a long time to complete. Increasing the RPC client timeout is recommended.",
         {
             {"wallet_name", RPCArg::Type::STR, RPCArg::DefaultHint{"the wallet name from the RPC endpoint"}, "The name of the wallet to migrate. If provided both here and in the RPC endpoint, the two must be identical."},
             {"passphrase", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "The wallet passphrase"},
@@ -802,10 +810,221 @@ static RPCHelpMan migratewallet()
             if (res->solvables_wallet) {
                 r.pushKV("solvables_name", res->solvables_wallet->GetName());
             }
-            r.pushKV("backup_path", res->backup_path.u8string());
+            r.pushKV("backup_path", res->backup_path.utf8string());
 
             return r;
         },
+    };
+}
+
+RPCHelpMan gethdkeys()
+{
+    return RPCHelpMan{
+        "gethdkeys",
+        "\nList all BIP 32 HD keys in the wallet and which descriptors use them.\n",
+        {
+            {"options", RPCArg::Type::OBJ_NAMED_PARAMS, RPCArg::Optional::OMITTED, "", {
+                {"active_only", RPCArg::Type::BOOL, RPCArg::Default{false}, "Show the keys for only active descriptors"},
+                {"private", RPCArg::Type::BOOL, RPCArg::Default{false}, "Show private keys"}
+            }},
+        },
+        RPCResult{RPCResult::Type::ARR, "", "", {
+            {
+                {RPCResult::Type::OBJ, "", "", {
+                    {RPCResult::Type::STR, "xpub", "The extended public key"},
+                    {RPCResult::Type::BOOL, "has_private", "Whether the wallet has the private key for this xpub"},
+                    {RPCResult::Type::STR, "xprv", /*optional=*/true, "The extended private key if \"private\" is true"},
+                    {RPCResult::Type::ARR, "descriptors", "Array of descriptor objects that use this HD key",
+                    {
+                        {RPCResult::Type::OBJ, "", "", {
+                            {RPCResult::Type::STR, "desc", "Descriptor string representation"},
+                            {RPCResult::Type::BOOL, "active", "Whether this descriptor is currently used to generate new addresses"},
+                        }},
+                    }},
+                }},
+            }
+        }},
+        RPCExamples{
+            HelpExampleCli("gethdkeys", "") + HelpExampleRpc("gethdkeys", "")
+            + HelpExampleCliNamed("gethdkeys", {{"active_only", "true"}, {"private", "true"}}) + HelpExampleRpcNamed("gethdkeys", {{"active_only", "true"}, {"private", "true"}})
+        },
+        [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
+        {
+            const std::shared_ptr<const CWallet> wallet = GetWalletForJSONRPCRequest(request);
+            if (!wallet) return UniValue::VNULL;
+
+            if (!wallet->IsWalletFlagSet(WALLET_FLAG_DESCRIPTORS)) {
+                throw JSONRPCError(RPC_WALLET_ERROR, "gethdkeys is not available for non-descriptor wallets");
+            }
+
+            LOCK(wallet->cs_wallet);
+
+            UniValue options{request.params[0].isNull() ? UniValue::VOBJ : request.params[0]};
+            const bool active_only{options.exists("active_only") ? options["active_only"].get_bool() : false};
+            const bool priv{options.exists("private") ? options["private"].get_bool() : false};
+            if (priv) {
+                EnsureWalletIsUnlocked(*wallet);
+            }
+
+
+            std::set<ScriptPubKeyMan*> spkms;
+            if (active_only) {
+                spkms = wallet->GetActiveScriptPubKeyMans();
+            } else {
+                spkms = wallet->GetAllScriptPubKeyMans();
+            }
+
+            std::map<CExtPubKey, std::set<std::tuple<std::string, bool, bool>>> wallet_xpubs;
+            std::map<CExtPubKey, CExtKey> wallet_xprvs;
+            for (auto* spkm : spkms) {
+                auto* desc_spkm{dynamic_cast<DescriptorScriptPubKeyMan*>(spkm)};
+                CHECK_NONFATAL(desc_spkm);
+                LOCK(desc_spkm->cs_desc_man);
+                WalletDescriptor w_desc = desc_spkm->GetWalletDescriptor();
+
+                // Retrieve the pubkeys from the descriptor
+                std::set<CPubKey> desc_pubkeys;
+                std::set<CExtPubKey> desc_xpubs;
+                w_desc.descriptor->GetPubKeys(desc_pubkeys, desc_xpubs);
+                for (const CExtPubKey& xpub : desc_xpubs) {
+                    std::string desc_str;
+                    bool ok = desc_spkm->GetDescriptorString(desc_str, false);
+                    CHECK_NONFATAL(ok);
+                    wallet_xpubs[xpub].emplace(desc_str, wallet->IsActiveScriptPubKeyMan(*spkm), desc_spkm->HasPrivKey(xpub.pubkey.GetID()));
+                    if (std::optional<CKey> key = priv ? desc_spkm->GetKey(xpub.pubkey.GetID()) : std::nullopt) {
+                        wallet_xprvs[xpub] = CExtKey(xpub, *key);
+                    }
+                }
+            }
+
+            UniValue response(UniValue::VARR);
+            for (const auto& [xpub, descs] : wallet_xpubs) {
+                bool has_xprv = false;
+                UniValue descriptors(UniValue::VARR);
+                for (const auto& [desc, active, has_priv] : descs) {
+                    UniValue d(UniValue::VOBJ);
+                    d.pushKV("desc", desc);
+                    d.pushKV("active", active);
+                    has_xprv |= has_priv;
+
+                    descriptors.push_back(std::move(d));
+                }
+                UniValue xpub_info(UniValue::VOBJ);
+                xpub_info.pushKV("xpub", EncodeExtPubKey(xpub));
+                xpub_info.pushKV("has_private", has_xprv);
+                if (priv) {
+                    xpub_info.pushKV("xprv", EncodeExtKey(wallet_xprvs.at(xpub)));
+                }
+                xpub_info.pushKV("descriptors", std::move(descriptors));
+
+                response.push_back(std::move(xpub_info));
+            }
+
+            return response;
+        },
+    };
+}
+
+static RPCHelpMan createwalletdescriptor()
+{
+    return RPCHelpMan{"createwalletdescriptor",
+        "Creates the wallet's descriptor for the given address type. "
+        "The address type must be one that the wallet does not already have a descriptor for."
+        + HELP_REQUIRING_PASSPHRASE,
+        {
+            {"type", RPCArg::Type::STR, RPCArg::Optional::NO, "The address type the descriptor will produce. Options are \"legacy\", \"p2sh-segwit\", \"bech32\", and \"bech32m\"."},
+            {"options", RPCArg::Type::OBJ_NAMED_PARAMS, RPCArg::Optional::OMITTED, "", {
+                {"internal", RPCArg::Type::BOOL, RPCArg::DefaultHint{"Both external and internal will be generated unless this parameter is specified"}, "Whether to only make one descriptor that is internal (if parameter is true) or external (if parameter is false)"},
+                {"hdkey", RPCArg::Type::STR, RPCArg::DefaultHint{"The HD key used by all other active descriptors"}, "The HD key that the wallet knows the private key of, listed using 'gethdkeys', to use for this descriptor's key"},
+            }},
+        },
+        RPCResult{
+            RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::ARR, "descs", "The public descriptors that were added to the wallet",
+                    {{RPCResult::Type::STR, "", ""}}
+                }
+            },
+        },
+        RPCExamples{
+            HelpExampleCli("createwalletdescriptor", "bech32m")
+            + HelpExampleRpc("createwalletdescriptor", "bech32m")
+        },
+        [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
+        {
+            std::shared_ptr<CWallet> const pwallet = GetWalletForJSONRPCRequest(request);
+            if (!pwallet) return UniValue::VNULL;
+
+            //  Make sure wallet is a descriptor wallet
+            if (!pwallet->IsWalletFlagSet(WALLET_FLAG_DESCRIPTORS)) {
+                throw JSONRPCError(RPC_WALLET_ERROR, "createwalletdescriptor is not available for non-descriptor wallets");
+            }
+
+            std::optional<OutputType> output_type = ParseOutputType(request.params[0].get_str());
+            if (!output_type) {
+                throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, strprintf("Unknown address type '%s'", request.params[0].get_str()));
+            }
+
+            UniValue options{request.params[1].isNull() ? UniValue::VOBJ : request.params[1]};
+            UniValue internal_only{options["internal"]};
+            UniValue hdkey{options["hdkey"]};
+
+            std::vector<bool> internals;
+            if (internal_only.isNull()) {
+                internals.push_back(false);
+                internals.push_back(true);
+            } else {
+                internals.push_back(internal_only.get_bool());
+            }
+
+            LOCK(pwallet->cs_wallet);
+            EnsureWalletIsUnlocked(*pwallet);
+
+            CExtPubKey xpub;
+            if (hdkey.isNull()) {
+                std::set<CExtPubKey> active_xpubs = pwallet->GetActiveHDPubKeys();
+                if (active_xpubs.size() != 1) {
+                    throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Unable to determine which HD key to use from active descriptors. Please specify with 'hdkey'");
+                }
+                xpub = *active_xpubs.begin();
+            } else {
+                xpub = DecodeExtPubKey(hdkey.get_str());
+                if (!xpub.pubkey.IsValid()) {
+                    throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Unable to parse HD key. Please provide a valid xpub");
+                }
+            }
+
+            std::optional<CKey> key = pwallet->GetKey(xpub.pubkey.GetID());
+            if (!key) {
+                throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, strprintf("Private key for %s is not known", EncodeExtPubKey(xpub)));
+            }
+            CExtKey active_hdkey(xpub, *key);
+
+            std::vector<std::reference_wrapper<DescriptorScriptPubKeyMan>> spkms;
+            WalletBatch batch{pwallet->GetDatabase()};
+            for (bool internal : internals) {
+                WalletDescriptor w_desc = GenerateWalletDescriptor(xpub, *output_type, internal);
+                uint256 w_id = DescriptorID(*w_desc.descriptor);
+                if (!pwallet->GetScriptPubKeyMan(w_id)) {
+                    spkms.emplace_back(pwallet->SetupDescriptorScriptPubKeyMan(batch, active_hdkey, *output_type, internal));
+                }
+            }
+            if (spkms.empty()) {
+                throw JSONRPCError(RPC_WALLET_ERROR, "Descriptor already exists");
+            }
+
+            // Fetch each descspkm from the wallet in order to get the descriptor strings
+            UniValue descs{UniValue::VARR};
+            for (const auto& spkm : spkms) {
+                std::string desc_str;
+                bool ok = spkm.get().GetDescriptorString(desc_str, false);
+                CHECK_NONFATAL(ok);
+                descs.push_back(desc_str);
+            }
+            UniValue out{UniValue::VOBJ};
+            out.pushKV("descs", std::move(descs));
+            return out;
+        }
     };
 }
 
@@ -892,6 +1111,7 @@ Span<const CRPCCommand> GetWalletRPCCommands()
         {"wallet", &bumpfee},
         {"wallet", &psbtbumpfee},
         {"wallet", &createwallet},
+        {"wallet", &createwalletdescriptor},
         {"wallet", &restorewallet},
         {"wallet", &dumpprivkey},
         {"wallet", &dumpwallet},
@@ -899,6 +1119,7 @@ Span<const CRPCCommand> GetWalletRPCCommands()
         {"wallet", &getaddressesbylabel},
         {"wallet", &getaddressinfo},
         {"wallet", &getbalance},
+        {"wallet", &gethdkeys},
         {"wallet", &getnewaddress},
         {"wallet", &getrawchangeaddress},
         {"wallet", &getreceivedbyaddress},

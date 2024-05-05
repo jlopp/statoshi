@@ -100,7 +100,7 @@ public:
     {
         if (size_t(pend - pbegin) != std::tuple_size_v<KeyType>) {
             ClearKeyData();
-        } else if (Check(&pbegin[0])) {
+        } else if (Check(UCharCast(&pbegin[0]))) {
             MakeKeyData();
             memcpy(keydata->data(), (unsigned char*)&pbegin[0], keydata->size());
             fCompressed = fCompressedIn;
@@ -112,8 +112,8 @@ public:
     //! Simple read-only vector-like interface.
     unsigned int size() const { return keydata ? keydata->size() : 0; }
     const std::byte* data() const { return keydata ? reinterpret_cast<const std::byte*>(keydata->data()) : nullptr; }
-    const unsigned char* begin() const { return keydata ? keydata->data() : nullptr; }
-    const unsigned char* end() const { return begin() + size(); }
+    const std::byte* begin() const { return data(); }
+    const std::byte* end() const { return data() + size(); }
 
     //! Check whether this private key is valid.
     bool IsValid() const { return !!keydata; }
@@ -205,6 +205,8 @@ public:
                                        bool initiating) const;
 };
 
+CKey GenerateRandomKey(bool compressed = true) noexcept;
+
 struct CExtKey {
     unsigned char nDepth;
     unsigned char vchFingerprint[4];
@@ -219,6 +221,12 @@ struct CExtKey {
             a.nChild == b.nChild &&
             a.chaincode == b.chaincode &&
             a.key == b.key;
+    }
+
+    CExtKey() = default;
+    CExtKey(const CExtPubKey& xpub, const CKey& key_in) : nDepth(xpub.nDepth), nChild(xpub.nChild), chaincode(xpub.chaincode), key(key_in)
+    {
+        std::copy(xpub.vchFingerprint, xpub.vchFingerprint + sizeof(xpub.vchFingerprint), vchFingerprint);
     }
 
     void Encode(unsigned char code[BIP32_EXTKEY_SIZE]) const;

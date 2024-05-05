@@ -8,6 +8,7 @@
 #include <blockfilter.h>
 #include <common/settings.h>
 #include <primitives/transaction.h> // For CTransactionRef
+#include <util/result.h>
 
 #include <functional>
 #include <memory>
@@ -260,7 +261,7 @@ public:
     virtual void getPackageLimits(unsigned int& limit_ancestor_count, unsigned int& limit_descendant_count) = 0;
 
     //! Check if transaction will pass the mempool's chain limits.
-    virtual bool checkChainLimits(const CTransactionRef& tx) = 0;
+    virtual util::Result<void> checkChainLimits(const CTransactionRef& tx) = 0;
 
     //! Estimate smart fee.
     virtual CFeeRate estimateSmartFee(int num_blocks, bool conservative, FeeCalculation* calc = nullptr) = 0;
@@ -333,9 +334,6 @@ public:
 
     //! Run function after given number of seconds. Cancel any previous calls with same name.
     virtual void rpcRunLater(const std::string& name, std::function<void()> fn, int64_t seconds) = 0;
-
-    //! Current RPC serialization flags.
-    virtual bool rpcSerializationWithoutWitness() = 0;
 
     //! Get settings value.
     virtual common::SettingsValue getSetting(const std::string& arg) = 0;
