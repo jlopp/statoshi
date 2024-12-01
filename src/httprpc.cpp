@@ -11,6 +11,8 @@
 #include <netaddress.h>
 #include <rpc/protocol.h>
 #include <rpc/server.h>
+#include <util/fs.h>
+#include <util/fs_helpers.h>
 #include <util/strencodings.h>
 #include <util/string.h>
 #include <walletinitinterface.h>
@@ -19,9 +21,13 @@
 #include <iterator>
 #include <map>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <vector>
+
+using util::SplitString;
+using util::TrimStringView;
 
 /** WWW-Authenticate to present with 401 Unauthorized response */
 static const char* WWW_AUTH_HEADER_DATA = "Basic realm=\"jsonrpc\"";
@@ -73,8 +79,11 @@ static std::vector<std::vector<std::string>> g_rpcauth;
 static std::map<std::string, std::set<std::string>> g_rpc_whitelist;
 static bool g_rpc_whitelist_default = false;
 
-static void JSONErrorReply(HTTPRequest* req, const UniValue& objError, const UniValue& id)
+static void JSONErrorReply(HTTPRequest* req, UniValue objError, const JSONRPCRequest& jreq)
 {
+    // Sending HTTP errors is a legacy JSON-RPC behavior.
+    Assume(jreq.m_json_version != JSONRPCVersion::V2);
+
     // Send error reply from json-rpc error object
     int nStatus = HTTP_INTERNAL_SERVER_ERROR;
     int code = objError.find_value("code").getInt<int>();
@@ -84,7 +93,7 @@ static void JSONErrorReply(HTTPRequest* req, const UniValue& objError, const Uni
     else if (code == RPC_METHOD_NOT_FOUND)
         nStatus = HTTP_NOT_FOUND;
 
-    std::string strReply = JSONRPCReply(NullUniValue, objError, id);
+    std::string strReply = JSONRPCReplyObj(NullUniValue, std::move(objError), jreq.id, jreq.m_json_version).write() + "\n";
 
     req->WriteHeader("Content-Type", "application/json");
     req->WriteReply(nStatus, strReply);
@@ -185,7 +194,7 @@ static bool HTTPReq_JSONRPC(const std::any& context, HTTPRequest* req)
         // Set the URI
         jreq.URI = req->GetURI();
 
-        std::string strReply;
+        UniValue reply;
         bool user_has_whitelist = g_rpc_whitelist.count(jreq.authUser);
         if (!user_has_whitelist && g_rpc_whitelist_default) {
             LogPrintf("RPC User %s not allowed to call any methods\n", jreq.authUser);
@@ -200,13 +209,23 @@ static bool HTTPReq_JSONRPC(const std::any& context, HTTPRequest* req)
                 req->WriteReply(HTTP_FORBIDDEN);
                 return false;
             }
-            UniValue result = tableRPC.execute(jreq);
 
-            // Send reply
-            strReply = JSONRPCReply(result, NullUniValue, jreq.id);
+            // Legacy 1.0/1.1 behavior is for failed requests to throw
+            // exceptions which return HTTP errors and RPC errors to the client.
+            // 2.0 behavior is to catch exceptions and return HTTP success with
+            // RPC errors, as long as there is not an actual HTTP server error.
+            const bool catch_errors{jreq.m_json_version == JSONRPCVersion::V2};
+            reply = JSONRPCExec(jreq, catch_errors);
+
+            if (jreq.IsNotification()) {
+                // Even though we do execute notifications, we do not respond to them
+                req->WriteReply(HTTP_NO_CONTENT);
+                return true;
+            }
 
         // array of requests
         } else if (valRequest.isArray()) {
+            // Check authorization for each request's method
             if (user_has_whitelist) {
                 for (unsigned int reqIdx = 0; reqIdx < valRequest.size(); reqIdx++) {
                     if (!valRequest[reqIdx].isObject()) {
@@ -223,18 +242,49 @@ static bool HTTPReq_JSONRPC(const std::any& context, HTTPRequest* req)
                     }
                 }
             }
-            strReply = JSONRPCExecBatch(jreq, valRequest.get_array());
+
+            // Execute each request
+            reply = UniValue::VARR;
+            for (size_t i{0}; i < valRequest.size(); ++i) {
+                // Batches never throw HTTP errors, they are always just included
+                // in "HTTP OK" responses. Notifications never get any response.
+                UniValue response;
+                try {
+                    jreq.parse(valRequest[i]);
+                    response = JSONRPCExec(jreq, /*catch_errors=*/true);
+                } catch (UniValue& e) {
+                    response = JSONRPCReplyObj(NullUniValue, std::move(e), jreq.id, jreq.m_json_version);
+                } catch (const std::exception& e) {
+                    response = JSONRPCReplyObj(NullUniValue, JSONRPCError(RPC_PARSE_ERROR, e.what()), jreq.id, jreq.m_json_version);
+                }
+                if (!jreq.IsNotification()) {
+                    reply.push_back(std::move(response));
+                }
+            }
+            // Return no response for an all-notification batch, but only if the
+            // batch request is non-empty. Technically according to the JSON-RPC
+            // 2.0 spec, an empty batch request should also return no response,
+            // However, if the batch request is empty, it means the request did
+            // not contain any JSON-RPC version numbers, so returning an empty
+            // response could break backwards compatibility with old RPC clients
+            // relying on previous behavior. Return an empty array instead of an
+            // empty response in this case to favor being backwards compatible
+            // over complying with the JSON-RPC 2.0 spec in this case.
+            if (reply.size() == 0 && valRequest.size() > 0) {
+                req->WriteReply(HTTP_NO_CONTENT);
+                return true;
+            }
         }
         else
             throw JSONRPCError(RPC_PARSE_ERROR, "Top-level object parse error");
 
         req->WriteHeader("Content-Type", "application/json");
-        req->WriteReply(HTTP_OK, strReply);
-    } catch (const UniValue& objError) {
-        JSONErrorReply(req, objError, jreq.id);
+        req->WriteReply(HTTP_OK, reply.write() + "\n");
+    } catch (UniValue& e) {
+        JSONErrorReply(req, std::move(e), jreq);
         return false;
     } catch (const std::exception& e) {
-        JSONErrorReply(req, JSONRPCError(RPC_PARSE_ERROR, e.what()), jreq.id);
+        JSONErrorReply(req, JSONRPCError(RPC_PARSE_ERROR, e.what()), jreq);
         return false;
     }
     return true;
@@ -244,8 +294,20 @@ static bool InitRPCAuthentication()
 {
     if (gArgs.GetArg("-rpcpassword", "") == "")
     {
-        LogPrintf("Using random cookie authentication.\n");
-        if (!GenerateAuthCookie(&strRPCUserColonPass)) {
+        LogInfo("Using random cookie authentication.\n");
+
+        std::optional<fs::perms> cookie_perms{std::nullopt};
+        auto cookie_perms_arg{gArgs.GetArg("-rpccookieperms")};
+        if (cookie_perms_arg) {
+            auto perm_opt = InterpretPermString(*cookie_perms_arg);
+            if (!perm_opt) {
+                LogInfo("Invalid -rpccookieperms=%s; must be one of 'owner', 'group', or 'all'.\n", *cookie_perms_arg);
+                return false;
+            }
+            cookie_perms = *perm_opt;
+        }
+
+        if (!GenerateAuthCookie(&strRPCUserColonPass, cookie_perms)) {
             return false;
         }
     } else {

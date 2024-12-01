@@ -174,14 +174,14 @@ static void TxInErrorToJSON(const CTxIn& txin, UniValue& vErrorsRet, const std::
     for (unsigned int i = 0; i < txin.scriptWitness.stack.size(); i++) {
         witness.push_back(HexStr(txin.scriptWitness.stack[i]));
     }
-    entry.pushKV("witness", witness);
+    entry.pushKV("witness", std::move(witness));
     entry.pushKV("scriptSig", HexStr(txin.scriptSig));
     entry.pushKV("sequence", (uint64_t)txin.nSequence);
     entry.pushKV("error", strMessage);
-    vErrorsRet.push_back(entry);
+    vErrorsRet.push_back(std::move(entry));
 }
 
-void ParsePrevouts(const UniValue& prevTxsUnival, FillableSigningProvider* keystore, std::map<COutPoint, Coin>& coins)
+void ParsePrevouts(const UniValue& prevTxsUnival, FlatSigningProvider* keystore, std::map<COutPoint, Coin>& coins)
 {
     if (!prevTxsUnival.isNull()) {
         const UniValue& prevTxs = prevTxsUnival.get_array();
@@ -247,11 +247,11 @@ void ParsePrevouts(const UniValue& prevTxsUnival, FillableSigningProvider* keyst
                 // work from witnessScript when possible
                 std::vector<unsigned char> scriptData(!ws.isNull() ? ParseHexV(ws, "witnessScript") : ParseHexV(rs, "redeemScript"));
                 CScript script(scriptData.begin(), scriptData.end());
-                keystore->AddCScript(script);
+                keystore->scripts.emplace(CScriptID(script), script);
                 // Automatically also add the P2WSH wrapped version of the script (to deal with P2SH-P2WSH).
                 // This is done for redeemScript only for compatibility, it is encouraged to use the explicit witnessScript field instead.
                 CScript witness_output_script{GetScriptForDestination(WitnessV0ScriptHash(script))};
-                keystore->AddCScript(witness_output_script);
+                keystore->scripts.emplace(CScriptID(witness_output_script), witness_output_script);
 
                 if (!ws.isNull() && !rs.isNull()) {
                     // if both witnessScript and redeemScript are provided,
@@ -331,6 +331,6 @@ void SignTransactionResultToJSON(CMutableTransaction& mtx, bool complete, const 
         if (result.exists("errors")) {
             vErrors.push_backV(result["errors"].getValues());
         }
-        result.pushKV("errors", vErrors);
+        result.pushKV("errors", std::move(vErrors));
     }
 }

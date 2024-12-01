@@ -37,12 +37,12 @@ void initialize_process_message()
 {
     if (const auto val{std::getenv("LIMIT_TO_MESSAGE_TYPE")}) {
         LIMIT_TO_MESSAGE_TYPE = val;
-        Assert(std::count(getAllNetMessageTypes().begin(), getAllNetMessageTypes().end(), LIMIT_TO_MESSAGE_TYPE)); // Unknown message type passed
+        Assert(std::count(ALL_NET_MESSAGE_TYPES.begin(), ALL_NET_MESSAGE_TYPES.end(), LIMIT_TO_MESSAGE_TYPE)); // Unknown message type passed
     }
 
     static const auto testing_setup = MakeNoLogFileContext<const TestingSetup>(
             /*chain_type=*/ChainType::REGTEST,
-            /*extra_args=*/{"-txreconciliation"});
+            {.extra_args = {"-txreconciliation"}});
     g_setup = testing_setup.get();
     for (int i = 0; i < 2 * COINBASE_MATURITY; i++) {
         MineBlock(g_setup->m_node, CScript() << OP_TRUE);

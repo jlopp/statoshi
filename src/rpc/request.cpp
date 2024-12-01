@@ -5,12 +5,11 @@
 
 #include <rpc/request.h>
 
-#include <util/fs.h>
-
 #include <common/args.h>
 #include <logging.h>
 #include <random.h>
 #include <rpc/protocol.h>
+#include <util/fs.h>
 #include <util/fs_helpers.h>
 #include <util/strencodings.h>
 
@@ -26,6 +25,17 @@
  *
  * 1.0 spec: http://json-rpc.org/wiki/specification
  * 1.2 spec: http://jsonrpc.org/historical/json-rpc-over-http.html
+ *
+ * If the server receives a request with the JSON-RPC 2.0 marker `{"jsonrpc": "2.0"}`
+ * then Bitcoin will respond with a strictly specified response.
+ * It will only return an HTTP error code if an actual HTTP error is encountered
+ * such as the endpoint is not found (404) or the request is not formatted correctly (500).
+ * Otherwise the HTTP code is always OK (200) and RPC errors will be included in the
+ * response body.
+ *
+ * 2.0 spec: https://www.jsonrpc.org/specification
+ *
+ * Also see http://www.simple-is-better.org/rpc/#differences-between-1-0-and-2-0
  */
 
 UniValue JSONRPCRequestObj(const std::string& strMethod, const UniValue& params, const UniValue& id)
@@ -34,25 +44,27 @@ UniValue JSONRPCRequestObj(const std::string& strMethod, const UniValue& params,
     request.pushKV("method", strMethod);
     request.pushKV("params", params);
     request.pushKV("id", id);
+    request.pushKV("jsonrpc", "2.0");
     return request;
 }
 
-UniValue JSONRPCReplyObj(const UniValue& result, const UniValue& error, const UniValue& id)
+UniValue JSONRPCReplyObj(UniValue result, UniValue error, std::optional<UniValue> id, JSONRPCVersion jsonrpc_version)
 {
     UniValue reply(UniValue::VOBJ);
-    if (!error.isNull())
-        reply.pushKV("result", NullUniValue);
-    else
-        reply.pushKV("result", result);
-    reply.pushKV("error", error);
-    reply.pushKV("id", id);
-    return reply;
-}
+    // Add JSON-RPC version number field in v2 only.
+    if (jsonrpc_version == JSONRPCVersion::V2) reply.pushKV("jsonrpc", "2.0");
 
-std::string JSONRPCReply(const UniValue& result, const UniValue& error, const UniValue& id)
-{
-    UniValue reply = JSONRPCReplyObj(result, error, id);
-    return reply.write() + "\n";
+    // Add both result and error fields in v1, even though one will be null.
+    // Omit the null field in v2.
+    if (error.isNull()) {
+        reply.pushKV("result", std::move(result));
+        if (jsonrpc_version == JSONRPCVersion::V1_LEGACY) reply.pushKV("error", NullUniValue);
+    } else {
+        if (jsonrpc_version == JSONRPCVersion::V1_LEGACY) reply.pushKV("result", NullUniValue);
+        reply.pushKV("error", std::move(error));
+    }
+    if (id.has_value()) reply.pushKV("id", std::move(id.value()));
+    return reply;
 }
 
 UniValue JSONRPCError(int code, const std::string& message)
@@ -82,7 +94,7 @@ static fs::path GetAuthCookieFile(bool temp=false)
 
 static bool g_generated_cookie = false;
 
-bool GenerateAuthCookie(std::string *cookie_out)
+bool GenerateAuthCookie(std::string* cookie_out, std::optional<fs::perms> cookie_perms)
 {
     const size_t COOKIE_SIZE = 32;
     unsigned char rand_pwd[COOKIE_SIZE];
@@ -96,7 +108,7 @@ bool GenerateAuthCookie(std::string *cookie_out)
     fs::path filepath_tmp = GetAuthCookieFile(true);
     file.open(filepath_tmp);
     if (!file.is_open()) {
-        LogPrintf("Unable to open cookie authentication file %s for writing\n", fs::PathToString(filepath_tmp));
+        LogInfo("Unable to open cookie authentication file %s for writing\n", fs::PathToString(filepath_tmp));
         return false;
     }
     file << cookie;
@@ -104,11 +116,21 @@ bool GenerateAuthCookie(std::string *cookie_out)
 
     fs::path filepath = GetAuthCookieFile(false);
     if (!RenameOver(filepath_tmp, filepath)) {
-        LogPrintf("Unable to rename cookie authentication file %s to %s\n", fs::PathToString(filepath_tmp), fs::PathToString(filepath));
+        LogInfo("Unable to rename cookie authentication file %s to %s\n", fs::PathToString(filepath_tmp), fs::PathToString(filepath));
         return false;
     }
+    if (cookie_perms) {
+        std::error_code code;
+        fs::permissions(filepath, cookie_perms.value(), fs::perm_options::replace, code);
+        if (code) {
+            LogInfo("Unable to set permissions on cookie authentication file %s\n", fs::PathToString(filepath_tmp));
+            return false;
+        }
+    }
+
     g_generated_cookie = true;
-    LogPrintf("Generated RPC authentication cookie %s\n", fs::PathToString(filepath));
+    LogInfo("Generated RPC authentication cookie %s\n", fs::PathToString(filepath));
+    LogInfo("Permissions used for cookie: %s\n", PermsToSymbolicString(fs::status(filepath).permissions()));
 
     if (cookie_out)
         *cookie_out = cookie;
@@ -171,7 +193,30 @@ void JSONRPCRequest::parse(const UniValue& valRequest)
     const UniValue& request = valRequest.get_obj();
 
     // Parse id now so errors from here on will have the id
-    id = request.find_value("id");
+    if (request.exists("id")) {
+        id = request.find_value("id");
+    } else {
+        id = std::nullopt;
+    }
+
+    // Check for JSON-RPC 2.0 (default 1.1)
+    m_json_version = JSONRPCVersion::V1_LEGACY;
+    const UniValue& jsonrpc_version = request.find_value("jsonrpc");
+    if (!jsonrpc_version.isNull()) {
+        if (!jsonrpc_version.isStr()) {
+            throw JSONRPCError(RPC_INVALID_REQUEST, "jsonrpc field must be a string");
+        }
+        // The "jsonrpc" key was added in the 2.0 spec, but some older documentation
+        // incorrectly included {"jsonrpc":"1.0"} in a request object, so we
+        // maintain that for backwards compatibility.
+        if (jsonrpc_version.get_str() == "1.0") {
+            m_json_version = JSONRPCVersion::V1_LEGACY;
+        } else if (jsonrpc_version.get_str() == "2.0") {
+            m_json_version = JSONRPCVersion::V2;
+        } else {
+            throw JSONRPCError(RPC_INVALID_REQUEST, "JSON-RPC version not supported");
+        }
+    }
 
     // Parse method
     const UniValue& valMethod{request.find_value("method")};

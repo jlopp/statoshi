@@ -20,12 +20,18 @@ class ArgsManager;
 struct bilingual_str;
 
 namespace wallet {
+// BytePrefix compares equality with other byte spans that begin with the same prefix.
+struct BytePrefix {
+    Span<const std::byte> prefix;
+};
+bool operator<(BytePrefix a, Span<const std::byte> b);
+bool operator<(Span<const std::byte> a, BytePrefix b);
 
 class DatabaseCursor
 {
 public:
-    explicit DatabaseCursor() {}
-    virtual ~DatabaseCursor() {}
+    explicit DatabaseCursor() = default;
+    virtual ~DatabaseCursor() = default;
 
     DatabaseCursor(const DatabaseCursor&) = delete;
     DatabaseCursor& operator=(const DatabaseCursor&) = delete;
@@ -50,8 +56,8 @@ private:
     virtual bool HasKey(DataStream&& key) = 0;
 
 public:
-    explicit DatabaseBatch() {}
-    virtual ~DatabaseBatch() {}
+    explicit DatabaseBatch() = default;
+    virtual ~DatabaseBatch() = default;
 
     DatabaseBatch(const DatabaseBatch&) = delete;
     DatabaseBatch& operator=(const DatabaseBatch&) = delete;
@@ -125,7 +131,7 @@ class WalletDatabase
 public:
     /** Create dummy DB handle */
     WalletDatabase() : nUpdateCounter(0) {}
-    virtual ~WalletDatabase() {};
+    virtual ~WalletDatabase() = default;
 
     /** Open the database if it is not already opened. */
     virtual void Open() = 0;
@@ -177,6 +183,8 @@ public:
 enum class DatabaseFormat {
     BERKELEY,
     SQLITE,
+    BERKELEY_RO,
+    BERKELEY_SWAP,
 };
 
 struct DatabaseOptions {
@@ -208,7 +216,7 @@ enum class DatabaseStatus {
 };
 
 /** Recursively list database paths in directory. */
-std::vector<fs::path> ListDatabases(const fs::path& path);
+std::vector<std::pair<fs::path, std::string>> ListDatabases(const fs::path& path);
 
 void ReadDatabaseArgs(const ArgsManager& args, DatabaseOptions& options);
 std::unique_ptr<WalletDatabase> MakeDatabase(const fs::path& path, const DatabaseOptions& options, DatabaseStatus& status, bilingual_str& error);

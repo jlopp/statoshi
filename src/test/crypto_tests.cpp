@@ -1195,7 +1195,7 @@ BOOST_AUTO_TEST_CASE(muhash_tests)
         uint256 res;
         int table[4];
         for (int i = 0; i < 4; ++i) {
-            table[i] = g_insecure_rand_ctx.randbits(3);
+            table[i] = g_insecure_rand_ctx.randbits<3>();
         }
         for (int order = 0; order < 4; ++order) {
             MuHash3072 acc;
@@ -1215,8 +1215,8 @@ BOOST_AUTO_TEST_CASE(muhash_tests)
             }
         }
 
-        MuHash3072 x = FromInt(g_insecure_rand_ctx.randbits(4)); // x=X
-        MuHash3072 y = FromInt(g_insecure_rand_ctx.randbits(4)); // x=X, y=Y
+        MuHash3072 x = FromInt(g_insecure_rand_ctx.randbits<4>()); // x=X
+        MuHash3072 y = FromInt(g_insecure_rand_ctx.randbits<4>()); // x=X, y=Y
         MuHash3072 z; // x=X, y=Y, z=1
         z *= x; // x=X, y=Y, z=X
         z *= y; // x=X, y=Y, z=X*Y
@@ -1235,7 +1235,7 @@ BOOST_AUTO_TEST_CASE(muhash_tests)
     acc *= FromInt(1);
     acc /= FromInt(2);
     acc.Finalize(out);
-    BOOST_CHECK_EQUAL(out, uint256S("10d312b100cbd32ada024a6646e40d3482fcff103668d2625f10002a607d5863"));
+    BOOST_CHECK_EQUAL(out, uint256{"10d312b100cbd32ada024a6646e40d3482fcff103668d2625f10002a607d5863"});
 
     MuHash3072 acc2 = FromInt(0);
     unsigned char tmp[32] = {1, 0};
@@ -1243,7 +1243,7 @@ BOOST_AUTO_TEST_CASE(muhash_tests)
     unsigned char tmp2[32] = {2, 0};
     acc2.Remove(tmp2);
     acc2.Finalize(out);
-    BOOST_CHECK_EQUAL(out, uint256S("10d312b100cbd32ada024a6646e40d3482fcff103668d2625f10002a607d5863"));
+    BOOST_CHECK_EQUAL(out, uint256{"10d312b100cbd32ada024a6646e40d3482fcff103668d2625f10002a607d5863"});
 
     // Test MuHash3072 serialization
     MuHash3072 serchk = FromInt(1); serchk *= FromInt(2);

@@ -43,6 +43,8 @@
 class CChain;
 class ValidationSignals;
 
+struct bilingual_str;
+
 /** Fake height value used in Coin to signify they are only in the memory pool (since 0.8) */
 static const uint32_t MEMPOOL_HEIGHT = 0x7FFFFFFF;
 
@@ -301,7 +303,6 @@ struct TxMempoolInfo
 class CTxMemPool
 {
 protected:
-    const int m_check_ratio; //!< Value n means that 1 times in n we check.
     std::atomic<unsigned int> nTransactionsUpdated{0}; //!< Used by getblocktemplate to trigger CreateNewBlock() invocation
 
     uint64_t totalTxSize GUARDED_BY(cs){0};      //!< sum of all mempool tx's virtual sizes. Differs from serialized tx size since witness data is discounted. Defined in BIP 141.
@@ -328,9 +329,7 @@ public:
 
     static const int ROLLING_FEE_HALFLIFE = 60 * 60 * 12; // public only for testing
 
-    typedef boost::multi_index_container<
-        CTxMemPoolEntry,
-        boost::multi_index::indexed_by<
+    struct CTxMemPoolEntry_Indices final : boost::multi_index::indexed_by<
             // sorted by txid
             boost::multi_index::hashed_unique<mempoolentry_txid, SaltedTxidHasher>,
             // sorted by wtxid
@@ -358,6 +357,10 @@ public:
                 CompareTxMemPoolEntryByAncestorFee
             >
         >
+        {};
+    typedef boost::multi_index_container<
+        CTxMemPoolEntry,
+        CTxMemPoolEntry_Indices
     > indexed_transaction_set;
 
     /**
@@ -365,9 +368,7 @@ public:
      * that are guarded by it.
      *
      * @par Consistency guarantees
-     *
      * By design, it is guaranteed that:
-     *
      * 1. Locking both `cs_main` and `mempool.cs` will give a view of mempool
      *    that is consistent with current chain tip (`ActiveChain()` and
      *    `CoinsTip()`) and is fully populated. Fully populated means that if the
@@ -375,7 +376,6 @@ public:
      *    previously active chain, all the missing transactions will have been
      *    re-added to the mempool and should be present if they meet size and
      *    consistency constraints.
-     *
      * 2. Locking `mempool.cs` without `cs_main` will give a view of a mempool
      *    consistent with some chain that was active since `cs_main` was last
      *    locked, and that is fully populated as described above. It is ok for
@@ -436,27 +436,14 @@ public:
 
     using Options = kernel::MemPoolOptions;
 
-    const int64_t m_max_size_bytes;
-    const std::chrono::seconds m_expiry;
-    const CFeeRate m_incremental_relay_feerate;
-    const CFeeRate m_min_relay_feerate;
-    const CFeeRate m_dust_relay_feerate;
-    const bool m_permit_bare_multisig;
-    const std::optional<unsigned> m_max_datacarrier_bytes;
-    const bool m_require_standard;
-    const bool m_full_rbf;
-    const bool m_persist_v1_dat;
-
-    const Limits m_limits;
-
-    ValidationSignals* const m_signals;
+    const Options m_opts;
 
     /** Create a new CTxMemPool.
      * Sanity checks will be off by default for performance, because otherwise
      * accepting transactions becomes O(N^2) where N is the number of transactions
      * in the pool.
      */
-    explicit CTxMemPool(const Options& opts);
+    explicit CTxMemPool(Options opts, bilingual_str& error);
 
     /**
      * If sanity-checking is turned on, check makes sure the pool is
@@ -625,7 +612,7 @@ public:
      *  would otherwise be half of this, it is set to 0 instead.
      */
     CFeeRate GetMinFee() const {
-        return GetMinFee(m_max_size_bytes);
+        return GetMinFee(m_opts.max_size_bytes);
     }
 
     /** Remove transactions from the mempool until its dynamic size is <= sizelimit.

@@ -27,9 +27,10 @@ import os
 import shutil
 
 from test_framework.test_framework import BitcoinTestFramework
+from test_framework.util import assert_equal
 
 DEFAULT_ASMAP_FILENAME = 'ip_asn.map' # defined in src/init.cpp
-ASMAP = '../../src/test/data/asmap.raw' # path to unit test skeleton asmap
+ASMAP = 'src/test/data/asmap.raw' # path to unit test skeleton asmap
 VERSION = 'fec61fa21a9f46f3b17bdcd660d7f4cd90b966aad3aec593c99b35f0aca15853'
 
 def expected_messages(filename):
@@ -118,13 +119,22 @@ class AsmapTest(BitcoinTestFramework):
         msg = "ASMap Health Check: 4 clearnet peers are mapped to 3 ASNs with 0 peers being unmapped"
         with self.node.assert_debug_log(expected_msgs=[msg]):
             self.start_node(0, extra_args=['-asmap'])
+        raw_addrman = self.node.getrawaddrman()
+        asns = []
+        for _, entries in raw_addrman.items():
+            for _, entry in entries.items():
+                asn = entry['mapped_as']
+                if asn not in asns:
+                    asns.append(asn)
+        assert_equal(len(asns), 3)
         os.remove(self.default_asmap)
 
     def run_test(self):
         self.node = self.nodes[0]
         self.datadir = self.node.chain_path
         self.default_asmap = os.path.join(self.datadir, DEFAULT_ASMAP_FILENAME)
-        self.asmap_raw = os.path.join(os.path.dirname(os.path.realpath(__file__)), ASMAP)
+        base_dir = self.config["environment"]["SRCDIR"]
+        self.asmap_raw = os.path.join(base_dir, ASMAP)
 
         self.test_without_asmap_arg()
         self.test_asmap_with_absolute_path()
@@ -137,4 +147,4 @@ class AsmapTest(BitcoinTestFramework):
 
 
 if __name__ == '__main__':
-    AsmapTest().main()
+    AsmapTest(__file__).main()

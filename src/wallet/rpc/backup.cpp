@@ -2,9 +2,7 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#if defined(HAVE_CONFIG_H)
-#include <config/bitcoin-config.h>
-#endif
+#include <config/bitcoin-config.h> // IWYU pragma: keep
 
 #include <chain.h>
 #include <clientversion.h>
@@ -36,6 +34,7 @@
 
 
 using interfaces::FoundBlock;
+using util::SplitString;
 
 namespace wallet {
 std::string static EncodeDumpString(const std::string &str) {
@@ -458,12 +457,7 @@ RPCHelpMan importpubkey()
         throw JSONRPCError(RPC_WALLET_ERROR, "Wallet is currently rescanning. Abort existing rescan or wait.");
     }
 
-    if (!IsHex(request.params[0].get_str()))
-        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Pubkey must be a hex string");
-    std::vector<unsigned char> data(ParseHex(request.params[0].get_str()));
-    CPubKey pubKey(data);
-    if (!pubKey.IsFullyValid())
-        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Pubkey is not a valid public key");
+    CPubKey pubKey = HexToPubKey(request.params[0].get_str());
 
     {
         LOCK(pwallet->cs_wallet);
@@ -916,6 +910,7 @@ static std::string RecurseImportData(const CScript& script, ImportData& import_d
     case TxoutType::NONSTANDARD:
     case TxoutType::WITNESS_UNKNOWN:
     case TxoutType::WITNESS_V1_TAPROOT:
+    case TxoutType::ANCHOR:
         return "unrecognized script";
     } // no default case, so the compiler can warn about missing cases
     NONFATAL_UNREACHABLE();
@@ -985,15 +980,7 @@ static UniValue ProcessImportLegacy(ImportData& import_data, std::map<CKeyID, CP
         import_data.witnessscript = std::make_unique<CScript>(parsed_witnessscript.begin(), parsed_witnessscript.end());
     }
     for (size_t i = 0; i < pubKeys.size(); ++i) {
-        const auto& str = pubKeys[i].get_str();
-        if (!IsHex(str)) {
-            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Pubkey \"" + str + "\" must be a hex string");
-        }
-        auto parsed_pubkey = ParseHex(str);
-        CPubKey pubkey(parsed_pubkey);
-        if (!pubkey.IsFullyValid()) {
-            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Pubkey \"" + str + "\" is not a valid public key");
-        }
+        CPubKey pubkey = HexToPubKey(pubKeys[i].get_str());
         pubkey_map.emplace(pubkey.GetID(), pubkey);
         ordered_pubkeys.push_back(pubkey.GetID());
     }
@@ -1842,16 +1829,16 @@ RPCHelpMan listdescriptors()
             UniValue range(UniValue::VARR);
             range.push_back(info.range->first);
             range.push_back(info.range->second - 1);
-            spk.pushKV("range", range);
+            spk.pushKV("range", std::move(range));
             spk.pushKV("next", info.next_index);
             spk.pushKV("next_index", info.next_index);
         }
-        descriptors.push_back(spk);
+        descriptors.push_back(std::move(spk));
     }
 
     UniValue response(UniValue::VOBJ);
     response.pushKV("wallet_name", wallet->GetName());
-    response.pushKV("descriptors", descriptors);
+    response.pushKV("descriptors", std::move(descriptors));
 
     return response;
 },

@@ -7,6 +7,7 @@
 from copy import deepcopy
 from decimal import Decimal
 from enum import Enum
+import math
 from typing import (
     Any,
     Optional,
@@ -32,10 +33,13 @@ from test_framework.messages import (
     CTxIn,
     CTxInWitness,
     CTxOut,
+    hash256,
+    ser_compact_size,
+    WITNESS_SCALE_FACTOR,
 )
 from test_framework.script import (
     CScript,
-    LEAF_VERSION_TAPSCRIPT,
+    OP_1,
     OP_NOP,
     OP_RETURN,
     OP_TRUE,
@@ -51,6 +55,7 @@ from test_framework.script_util import (
 from test_framework.util import (
     assert_equal,
     assert_greater_than_or_equal,
+    get_fee,
 )
 from test_framework.wallet_util import generate_keypair
 
@@ -65,7 +70,10 @@ class MiniWalletMode(Enum):
     However, if the transactions need to be modified by the user (e.g. prepending
     scriptSig for testing opcodes that are activated by a soft-fork), or the txs
     should contain an actual signature, the raw modes RAW_OP_TRUE and RAW_P2PK
-    can be useful. Summary of modes:
+    can be useful. In order to avoid mixing of UTXOs between different MiniWallet
+    instances, a tag name can be passed to the default mode, to create different
+    output scripts. Note that the UTXOs from the pre-generated test chain can
+    only be spent if no tag is passed. Summary of modes:
 
                     |      output       |           |  tx is   | can modify |  needs
          mode       |    description    |  address  | standard | scriptSig  | signing
@@ -80,22 +88,25 @@ class MiniWalletMode(Enum):
 
 
 class MiniWallet:
-    def __init__(self, test_node, *, mode=MiniWalletMode.ADDRESS_OP_TRUE):
+    def __init__(self, test_node, *, mode=MiniWalletMode.ADDRESS_OP_TRUE, tag_name=None):
         self._test_node = test_node
         self._utxos = []
         self._mode = mode
 
         assert isinstance(mode, MiniWalletMode)
         if mode == MiniWalletMode.RAW_OP_TRUE:
+            assert tag_name is None
             self._scriptPubKey = bytes(CScript([OP_TRUE]))
         elif mode == MiniWalletMode.RAW_P2PK:
             # use simple deterministic private key (k=1)
+            assert tag_name is None
             self._priv_key = ECKey()
             self._priv_key.set((1).to_bytes(32, 'big'), True)
             pub_key = self._priv_key.get_pubkey()
             self._scriptPubKey = key_to_p2pk_script(pub_key.get_bytes())
         elif mode == MiniWalletMode.ADDRESS_OP_TRUE:
-            self._address, self._internal_key = create_deterministic_address_bcrt1_p2tr_op_true()
+            internal_key = None if tag_name is None else compute_xonly_pubkey(hash256(tag_name.encode()))[0]
+            self._address, self._taproot_info = create_deterministic_address_bcrt1_p2tr_op_true(internal_key)
             self._scriptPubKey = address_to_scriptpubkey(self._address)
 
         # When the pre-mined test framework chain is used, it contains coinbase
@@ -112,13 +123,16 @@ class MiniWallet:
         """Pad a transaction with extra outputs until it reaches a target weight (or higher).
         returns the tx
         """
-        tx.vout.append(CTxOut(nValue=0, scriptPubKey=CScript([OP_RETURN, b'a'])))
+        tx.vout.append(CTxOut(nValue=0, scriptPubKey=CScript([OP_RETURN])))
+        # determine number of needed padding bytes by converting weight difference to vbytes
         dummy_vbytes = (target_weight - tx.get_weight() + 3) // 4
-        tx.vout[-1].scriptPubKey = CScript([OP_RETURN, b'a' * dummy_vbytes])
-        # Lower bound should always be off by at most 3
+        # compensate for the increase of the compact-size encoded script length
+        # (note that the length encoding of the unpadded output script needs one byte)
+        dummy_vbytes -= len(ser_compact_size(dummy_vbytes)) - 1
+        tx.vout[-1].scriptPubKey = CScript([OP_RETURN] + [OP_1] * dummy_vbytes)
+        # Actual weight should be at most 3 higher than target weight
         assert_greater_than_or_equal(tx.get_weight(), target_weight)
-        # Higher bound should always be off by at most 3 + 12 weight (for encoding the length)
-        assert_greater_than_or_equal(target_weight + 15, tx.get_weight())
+        assert_greater_than_or_equal(target_weight + 3, tx.get_weight())
 
     def get_balance(self):
         return sum(u['value'] for u in self._utxos)
@@ -180,7 +194,12 @@ class MiniWallet:
         elif self._mode == MiniWalletMode.ADDRESS_OP_TRUE:
             tx.wit.vtxinwit = [CTxInWitness()] * len(tx.vin)
             for i in tx.wit.vtxinwit:
-                i.scriptWitness.stack = [CScript([OP_TRUE]), bytes([LEAF_VERSION_TAPSCRIPT]) + self._internal_key]
+                assert_equal(len(self._taproot_info.leaves), 1)
+                leaf_info = list(self._taproot_info.leaves.values())[0]
+                i.scriptWitness.stack = [
+                    leaf_info.script,
+                    bytes([leaf_info.version | self._taproot_info.negflag]) + self._taproot_info.internal_pubkey,
+                ]
         else:
             assert False
 
@@ -314,7 +333,7 @@ class MiniWallet:
         tx = CTransaction()
         tx.vin = [CTxIn(COutPoint(int(utxo_to_spend['txid'], 16), utxo_to_spend['vout']), nSequence=seq) for utxo_to_spend, seq in zip(utxos_to_spend, sequence)]
         tx.vout = [CTxOut(amount_per_output, bytearray(self._scriptPubKey)) for _ in range(num_outputs)]
-        tx.nVersion = version
+        tx.version = version
         tx.nLockTime = locktime
 
         self.sign_tx(tx)
@@ -360,6 +379,10 @@ class MiniWallet:
             vsize = Decimal(168)  # P2PK (73 bytes scriptSig + 35 bytes scriptPubKey + 60 bytes other)
         else:
             assert False
+        if target_weight and not fee:  # respect fee_rate if target weight is passed
+            # the actual weight might be off by 3 WUs, so calculate based on that (see self._bulk_tx)
+            max_actual_weight = target_weight + 3
+            fee = get_fee(math.ceil(max_actual_weight / WITNESS_SCALE_FACTOR), fee_rate)
         send_value = utxo_to_spend["value"] - (fee or (fee_rate * vsize / 1000))
 
         # create tx

@@ -23,7 +23,9 @@ bench_bench_bitcoin_SOURCES = \
   bench/ccoins_caching.cpp \
   bench/chacha20.cpp \
   bench/checkblock.cpp \
+  bench/checkblockindex.cpp \
   bench/checkqueue.cpp \
+  bench/cluster_linearize.cpp \
   bench/crypto_hash.cpp \
   bench/data.cpp \
   bench/data.h \
@@ -48,10 +50,12 @@ bench_bench_bitcoin_SOURCES = \
   bench/poly1305.cpp \
   bench/pool.cpp \
   bench/prevector.cpp \
+  bench/random.cpp \
   bench/readblock.cpp \
   bench/rollingbloom.cpp \
   bench/rpc_blockchain.cpp \
   bench/rpc_mempool.cpp \
+  bench/sign_transaction.cpp \
   bench/streams_findbyte.cpp \
   bench/strencodings.cpp \
   bench/util_time.cpp \

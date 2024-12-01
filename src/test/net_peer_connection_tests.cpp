@@ -31,7 +31,7 @@
 
 struct LogIPsTestingSetup : public TestingSetup {
     LogIPsTestingSetup()
-        : TestingSetup{ChainType::MAIN, /*extra_args=*/{"-logips"}} {}
+        : TestingSetup{ChainType::MAIN, {.extra_args = {"-logips"}}} {}
 };
 
 BOOST_FIXTURE_TEST_SUITE(net_peer_connection_tests, LogIPsTestingSetup)
@@ -84,7 +84,7 @@ static void AddPeer(NodeId& id, std::vector<CNode*>& nodes, PeerManager& peerman
 BOOST_AUTO_TEST_CASE(test_addnode_getaddednodeinfo_and_connection_detection)
 {
     auto connman = std::make_unique<ConnmanTestMsg>(0x1337, 0x1337, *m_node.addrman, *m_node.netgroupman, Params());
-    auto peerman = PeerManager::make(*connman, *m_node.addrman, nullptr, *m_node.chainman, *m_node.mempool, {});
+    auto peerman = PeerManager::make(*connman, *m_node.addrman, nullptr, *m_node.chainman, *m_node.mempool, *m_node.warnings, {});
     NodeId id{0};
     std::vector<CNode*> nodes;
 
@@ -107,6 +107,12 @@ BOOST_AUTO_TEST_CASE(test_addnode_getaddednodeinfo_and_connection_detection)
     AddPeer(id, nodes, *peerman, *connman, ConnectionType::OUTBOUND_FULL_RELAY);
     AddPeer(id, nodes, *peerman, *connman, ConnectionType::BLOCK_RELAY, /*onion_peer=*/true);
     AddPeer(id, nodes, *peerman, *connman, ConnectionType::INBOUND);
+
+    // Add a CJDNS peer connection.
+    AddPeer(id, nodes, *peerman, *connman, ConnectionType::INBOUND, /*onion_peer=*/false,
+            /*address=*/"[fc00:3344:5566:7788:9900:aabb:ccdd:eeff]:1234");
+    BOOST_CHECK(nodes.back()->IsInboundConn());
+    BOOST_CHECK_EQUAL(nodes.back()->ConnectedThroughNetwork(), Network::NET_CJDNS);
 
     BOOST_TEST_MESSAGE("Call AddNode() for all the peers");
     for (auto node : connman->TestNodes()) {

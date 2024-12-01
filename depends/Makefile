@@ -101,10 +101,6 @@ host_os+=$(findstring netbsd,$(full_host_os))
 host_os+=$(findstring openbsd,$(full_host_os))
 host_os+=$(findstring mingw32,$(full_host_os))
 
-ifeq (android,$(findstring android,$(full_host_os)))
-host_os:=android
-endif
-
 host_os:=$(strip $(host_os))
 ifeq ($(host_os),)
 host_os=$(full_host_os)
@@ -185,9 +181,6 @@ all_packages = $(packages) $(native_packages)
 
 meta_depends = Makefile config.guess config.sub funcs.mk builders/default.mk hosts/default.mk hosts/$(host_os).mk builders/$(build_os).mk
 
-$(host_arch)_$(host_os)_native_binutils?=$($(host_os)_native_binutils)
-$(host_arch)_$(host_os)_native_toolchain?=$($(host_os)_native_toolchain)
-
 include funcs.mk
 
 final_build_id_long+=$(shell $(build_SHA256SUM) config.site.in)
@@ -217,9 +210,8 @@ $(host_prefix)/.stamp_$(final_build_id): $(native_packages) $(packages)
 #      tool needs to be available in $PATH at all times.
 #
 #   2. If the tool is _**not**_ expected to be available in $PATH at all times
-#      (such as is the case for our native_cctools binutils tools), it needs to
-#      be referred to by its absolute path, such as would be output by the
-#      AC_PATH_{PROG,TOOL} macros.
+#      it needs to be referred to by its absolute path, such as would be output
+#      by the AC_PATH_{PROG,TOOL} macros.
 #
 # Minor note: it is also okay to refer to tools by their absolute path even if
 # we expect them to be available in $PATH at all times, more specificity does
@@ -233,7 +225,7 @@ $(host_prefix)/share/config.site : config.site.in $(host_prefix)/.stamp_$(final_
             -e 's|@RANLIB@|$(host_RANLIB)|' \
             -e 's|@NM@|$(host_NM)|' \
             -e 's|@STRIP@|$(host_STRIP)|' \
-            -e 's|@OTOOL@|$(host_OTOOL)|' \
+            -e 's|@OBJDUMP@|$(host_OBJDUMP)|' \
             -e 's|@DSYMUTIL@|$(host_DSYMUTIL)|' \
             -e 's|@build_os@|$(build_os)|' \
             -e 's|@host_os@|$(host_os)|' \

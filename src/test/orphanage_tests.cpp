@@ -21,17 +21,15 @@ BOOST_FIXTURE_TEST_SUITE(orphanage_tests, TestingSetup)
 class TxOrphanageTest : public TxOrphanage
 {
 public:
-    inline size_t CountOrphans() const EXCLUSIVE_LOCKS_REQUIRED(!m_mutex)
+    inline size_t CountOrphans() const
     {
-        LOCK(m_mutex);
         return m_orphans.size();
     }
 
-    CTransactionRef RandomOrphan() EXCLUSIVE_LOCKS_REQUIRED(!m_mutex)
+    CTransactionRef RandomOrphan()
     {
-        LOCK(m_mutex);
-        std::map<Txid, OrphanTx>::iterator it;
-        it = m_orphans.lower_bound(Txid::FromUint256(InsecureRand256()));
+        std::map<Wtxid, OrphanTx>::iterator it;
+        it = m_orphans.lower_bound(Wtxid::FromUint256(InsecureRand256()));
         if (it == m_orphans.end())
             it = m_orphans.begin();
         return it->second.tx;
@@ -70,6 +68,16 @@ static CTransactionRef MakeTransactionSpending(const std::vector<COutPoint>& out
     return MakeTransactionRef(tx);
 }
 
+// Make another (not necessarily valid) tx with the same txid but different wtxid.
+static CTransactionRef MakeMutation(const CTransactionRef& ptx)
+{
+    CMutableTransaction tx(*ptx);
+    tx.vin[0].scriptWitness.stack.push_back({5});
+    auto mutated_tx = MakeTransactionRef(tx);
+    assert(ptx->GetHash() == mutated_tx->GetHash());
+    return mutated_tx;
+}
+
 static bool EqualTxns(const std::set<CTransactionRef>& set_txns, const std::vector<CTransactionRef>& vec_txns)
 {
     if (vec_txns.size() != set_txns.size()) return false;
@@ -96,13 +104,17 @@ BOOST_AUTO_TEST_CASE(DoS_mapOrphans)
     // ecdsa_signature_parse_der_lax are executed during this test.
     // Specifically branches that run only when an ECDSA
     // signature's R and S values have leading zeros.
-    g_insecure_rand_ctx = FastRandomContext{uint256{33}};
+    g_insecure_rand_ctx.Reseed(uint256{33});
 
     TxOrphanageTest orphanage;
     CKey key;
     MakeNewKeyWithFastRandomContext(key);
     FillableSigningProvider keystore;
     BOOST_CHECK(keystore.AddKey(key));
+
+    // Freeze time for length of test
+    auto now{GetTime<std::chrono::seconds>()};
+    SetMockTime(now);
 
     // 50 orphan transactions:
     for (int i = 0; i < 50; i++)
@@ -162,23 +174,96 @@ BOOST_AUTO_TEST_CASE(DoS_mapOrphans)
         BOOST_CHECK(!orphanage.AddTx(MakeTransactionRef(tx), i));
     }
 
-    // Test EraseOrphansFor:
+    size_t expected_num_orphans = orphanage.CountOrphans();
+
+    // Non-existent peer; nothing should be deleted
+    orphanage.EraseForPeer(/*peer=*/-1);
+    BOOST_CHECK_EQUAL(orphanage.CountOrphans(), expected_num_orphans);
+
+    // Each of first three peers stored
+    // two transactions each.
     for (NodeId i = 0; i < 3; i++)
     {
-        size_t sizeBefore = orphanage.CountOrphans();
         orphanage.EraseForPeer(i);
-        BOOST_CHECK(orphanage.CountOrphans() < sizeBefore);
+        expected_num_orphans -= 2;
+        BOOST_CHECK(orphanage.CountOrphans() == expected_num_orphans);
     }
 
-    // Test LimitOrphanTxSize() function:
+    // Test LimitOrphanTxSize() function, nothing should timeout:
     FastRandomContext rng{/*fDeterministic=*/true};
+    orphanage.LimitOrphans(/*max_orphans=*/expected_num_orphans, rng);
+    BOOST_CHECK_EQUAL(orphanage.CountOrphans(), expected_num_orphans);
+    expected_num_orphans -= 1;
+    orphanage.LimitOrphans(/*max_orphans=*/expected_num_orphans, rng);
+    BOOST_CHECK_EQUAL(orphanage.CountOrphans(), expected_num_orphans);
+    assert(expected_num_orphans > 40);
     orphanage.LimitOrphans(40, rng);
-    BOOST_CHECK(orphanage.CountOrphans() <= 40);
+    BOOST_CHECK_EQUAL(orphanage.CountOrphans(), 40);
     orphanage.LimitOrphans(10, rng);
-    BOOST_CHECK(orphanage.CountOrphans() <= 10);
+    BOOST_CHECK_EQUAL(orphanage.CountOrphans(), 10);
     orphanage.LimitOrphans(0, rng);
-    BOOST_CHECK(orphanage.CountOrphans() == 0);
+    BOOST_CHECK_EQUAL(orphanage.CountOrphans(), 0);
+
+    // Add one more orphan, check timeout logic
+    auto timeout_tx = MakeTransactionSpending(/*outpoints=*/{}, rng);
+    orphanage.AddTx(timeout_tx, 0);
+    orphanage.LimitOrphans(1, rng);
+    BOOST_CHECK_EQUAL(orphanage.CountOrphans(), 1);
+
+    // One second shy of expiration
+    SetMockTime(now + ORPHAN_TX_EXPIRE_TIME - 1s);
+    orphanage.LimitOrphans(1, rng);
+    BOOST_CHECK_EQUAL(orphanage.CountOrphans(), 1);
+
+    // Jump one more second, orphan should be timed out on limiting
+    SetMockTime(now + ORPHAN_TX_EXPIRE_TIME);
+    BOOST_CHECK_EQUAL(orphanage.CountOrphans(), 1);
+    orphanage.LimitOrphans(1, rng);
+    BOOST_CHECK_EQUAL(orphanage.CountOrphans(), 0);
 }
+
+BOOST_AUTO_TEST_CASE(same_txid_diff_witness)
+{
+    FastRandomContext det_rand{true};
+    TxOrphanage orphanage;
+    NodeId peer{0};
+
+    std::vector<COutPoint> empty_outpoints;
+    auto parent = MakeTransactionSpending(empty_outpoints, det_rand);
+
+    // Create children to go into orphanage.
+    auto child_normal = MakeTransactionSpending({{parent->GetHash(), 0}}, det_rand);
+    auto child_mutated = MakeMutation(child_normal);
+
+    const auto& normal_wtxid = child_normal->GetWitnessHash();
+    const auto& mutated_wtxid = child_mutated->GetWitnessHash();
+    BOOST_CHECK(normal_wtxid != mutated_wtxid);
+
+    BOOST_CHECK(orphanage.AddTx(child_normal, peer));
+    // EraseTx fails as transaction by this wtxid doesn't exist.
+    BOOST_CHECK_EQUAL(orphanage.EraseTx(mutated_wtxid), 0);
+    BOOST_CHECK(orphanage.HaveTx(normal_wtxid));
+    BOOST_CHECK(!orphanage.HaveTx(mutated_wtxid));
+
+    // Must succeed. Both transactions should be present in orphanage.
+    BOOST_CHECK(orphanage.AddTx(child_mutated, peer));
+    BOOST_CHECK(orphanage.HaveTx(normal_wtxid));
+    BOOST_CHECK(orphanage.HaveTx(mutated_wtxid));
+
+    // Outpoints map should track all entries: check that both are returned as children of the parent.
+    std::set<CTransactionRef> expected_children{child_normal, child_mutated};
+    BOOST_CHECK(EqualTxns(expected_children, orphanage.GetChildrenFromSamePeer(parent, peer)));
+
+    // Erase by wtxid: mutated first
+    BOOST_CHECK_EQUAL(orphanage.EraseTx(mutated_wtxid), 1);
+    BOOST_CHECK(orphanage.HaveTx(normal_wtxid));
+    BOOST_CHECK(!orphanage.HaveTx(mutated_wtxid));
+
+    BOOST_CHECK_EQUAL(orphanage.EraseTx(normal_wtxid), 1);
+    BOOST_CHECK(!orphanage.HaveTx(normal_wtxid));
+    BOOST_CHECK(!orphanage.HaveTx(mutated_wtxid));
+}
+
 
 BOOST_AUTO_TEST_CASE(get_children)
 {

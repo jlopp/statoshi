@@ -3,9 +3,7 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#if defined(HAVE_CONFIG_H)
-#include <config/bitcoin-config.h>
-#endif
+#include <config/bitcoin-config.h> // IWYU pragma: keep
 
 #include <addrdb.h>
 
@@ -55,7 +53,7 @@ template <typename Data>
 bool SerializeFileDB(const std::string& prefix, const fs::path& path, const Data& data)
 {
     // Generate random temporary filename
-    const uint16_t randv{GetRand<uint16_t>()};
+    const uint16_t randv{FastRandomContext().rand<uint16_t>()};
     std::string tmpfn = strprintf("%s.%04x", prefix, randv);
 
     // open temp output file
@@ -75,7 +73,7 @@ bool SerializeFileDB(const std::string& prefix, const fs::path& path, const Data
         remove(pathTmp);
         return false;
     }
-    if (!FileCommit(fileout.Get())) {
+    if (!fileout.Commit()) {
         fileout.fclose();
         remove(pathTmp);
         LogError("%s: Failed to flush file %s\n", __func__, fs::PathToString(pathTmp));

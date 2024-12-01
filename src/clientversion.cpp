@@ -2,18 +2,18 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#if defined(HAVE_CONFIG_H)
-#include <config/bitcoin-config.h>
-#endif
+#include <config/bitcoin-config.h> // IWYU pragma: keep
 
 #include <clientversion.h>
+#include <util/string.h>
 #include <util/translation.h>
 
 #include <tinyformat.h>
 
-#include <sstream>
 #include <string>
 #include <vector>
+
+using util::Join;
 
 /**
  * Name of client reported in the 'version' message. Report the same name
@@ -66,19 +66,9 @@ std::string FormatFullVersion()
  */
 std::string FormatSubVersion(const std::string& name, int nClientVersion, const std::vector<std::string>& comments)
 {
-    std::ostringstream ss;
-    ss << "/";
-    ss << name << ":" << FormatVersion(nClientVersion);
-    if (!comments.empty())
-    {
-        std::vector<std::string>::const_iterator it(comments.begin());
-        ss << "(" << *it;
-        for(++it; it != comments.end(); ++it)
-            ss << "; " << *it;
-        ss << ")";
-    }
-    ss << "/";
-    return ss.str();
+    std::string comments_str;
+    if (!comments.empty()) comments_str = strprintf("(%s)", Join(comments, "; "));
+    return strprintf("/%s:%s%s/", name, FormatVersion(nClientVersion), comments_str);
 }
 
 std::string CopyrightHolders(const std::string& strPrefix)

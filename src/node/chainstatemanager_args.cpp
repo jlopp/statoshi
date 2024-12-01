@@ -24,7 +24,10 @@
 namespace node {
 util::Result<void> ApplyArgsManOptions(const ArgsManager& args, ChainstateManager::Options& opts)
 {
-    if (auto value{args.GetBoolArg("-checkblockindex")}) opts.check_block_index = *value;
+    if (auto value{args.GetIntArg("-checkblockindex")}) {
+        // Interpret bare -checkblockindex argument as 1 instead of 0.
+        opts.check_block_index = args.GetArg("-checkblockindex")->empty() ? 1 : *value;
+    }
 
     if (auto value{args.GetBoolArg("-checkpoints")}) opts.checkpoints_enabled = *value;
 
@@ -52,6 +55,16 @@ util::Result<void> ApplyArgsManOptions(const ArgsManager& args, ChainstateManage
     // Subtract 1 because the main thread counts towards the par threads.
     opts.worker_threads_num = std::clamp(script_threads - 1, 0, MAX_SCRIPTCHECK_THREADS);
     LogPrintf("Script verification uses %d additional threads\n", opts.worker_threads_num);
+
+    if (auto max_size = args.GetIntArg("-maxsigcachesize")) {
+        // 1. When supplied with a max_size of 0, both the signature cache and
+        //    script execution cache create the minimum possible cache (2
+        //    elements). Therefore, we can use 0 as a floor here.
+        // 2. Multiply first, divide after to avoid integer truncation.
+        size_t clamped_size_each = std::max<int64_t>(*max_size, 0) * (1 << 20) / 2;
+        opts.script_execution_cache_bytes = clamped_size_each;
+        opts.signature_cache_bytes = clamped_size_each;
+    }
 
     return {};
 }

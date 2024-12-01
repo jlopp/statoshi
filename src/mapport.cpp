@@ -2,9 +2,7 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#if defined(HAVE_CONFIG_H)
-#include <config/bitcoin-config.h>
-#endif
+#include <config/bitcoin-config.h> // IWYU pragma: keep
 
 #include <mapport.h>
 
@@ -163,8 +161,11 @@ static bool ProcessUpnp()
     struct UPNPUrls urls;
     struct IGDdatas data;
     int r;
-
+#if MINIUPNPC_API_VERSION <= 17
     r = UPNP_GetValidIGD(devlist, &urls, &data, lanaddr, sizeof(lanaddr));
+#else
+    r = UPNP_GetValidIGD(devlist, &urls, &data, lanaddr, sizeof(lanaddr), nullptr, 0);
+#endif
     if (r == 1)
     {
         if (fDiscover) {

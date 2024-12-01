@@ -2,9 +2,7 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#if defined(HAVE_CONFIG_H)
-#include <config/bitcoin-config.h>
-#endif
+#include <config/bitcoin-config.h> // IWYU pragma: keep
 
 #include <chainparams.h>
 #include <chainparamsbase.h>
@@ -26,6 +24,8 @@
 #include <string>
 #include <tuple>
 
+using util::Join;
+
 const std::function<std::string(const char*)> G_TRANSLATION_FUN = nullptr;
 
 static void SetupWalletToolArgs(ArgsManager& argsman)
@@ -42,6 +42,7 @@ static void SetupWalletToolArgs(ArgsManager& argsman)
     argsman.AddArg("-legacy", "Create legacy wallet. Only for 'create'", ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-format=<format>", "The format of the wallet file to create. Either \"bdb\" or \"sqlite\". Only used with 'createfromdump'", ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-printtoconsole", "Send trace/debug info to console (default: 1 when no -debug is true, 0 otherwise).", ArgsManager::ALLOW_ANY, OptionsCategory::DEBUG_TEST);
+    argsman.AddArg("-withinternalbdb", "Use the internal Berkeley DB parser when dumping a Berkeley DB wallet file (default: false)", ArgsManager::ALLOW_ANY, OptionsCategory::DEBUG_TEST);
 
     argsman.AddCommand("info", "Get wallet info");
     argsman.AddCommand("create", "Create new wallet file");
@@ -68,7 +69,7 @@ static std::optional<int> WalletAppInit(ArgsManager& args, int argc, char* argv[
             strUsage += "\n"
                         "bitcoin-wallet is an offline tool for creating and interacting with " PACKAGE_NAME " wallet files.\n"
                         "By default bitcoin-wallet will act on wallets in the default mainnet wallet directory in the datadir.\n"
-                        "To change the target wallet, use the -datadir, -wallet and -regtest/-signet/-testnet arguments.\n\n"
+                        "To change the target wallet, use the -datadir, -wallet and -regtest/-signet/-testnet/-testnet4 arguments.\n\n"
                         "Usage:\n"
                         "  bitcoin-wallet [options] <command>\n";
             strUsage += "\n" + args.GetHelpMessage();
@@ -130,10 +131,9 @@ MAIN_FUNCTION
         return EXIT_FAILURE;
     }
 
-    ECC_Start();
+    ECC_Context ecc_context{};
     if (!wallet::WalletTool::ExecuteWalletToolFunc(args, command->command)) {
         return EXIT_FAILURE;
     }
-    ECC_Stop();
     return EXIT_SUCCESS;
 }

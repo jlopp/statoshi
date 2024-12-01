@@ -3,9 +3,7 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#if defined(HAVE_CONFIG_H)
-#include <config/bitcoin-config.h>
-#endif
+#include <config/bitcoin-config.h> // IWYU pragma: keep
 
 #include <addrman.h>
 #include <addrman_impl.h>
@@ -175,7 +173,7 @@ void AddrManImpl::Serialize(Stream& s_) const
      */
 
     // Always serialize in the latest version (FILE_FORMAT).
-    ParamsStream s{CAddress::V2_DISK, s_};
+    ParamsStream s{s_, CAddress::V2_DISK};
 
     s << static_cast<uint8_t>(FILE_FORMAT);
 
@@ -240,7 +238,7 @@ void AddrManImpl::Unserialize(Stream& s_)
     s_ >> Using<CustomUintFormatter<1>>(format);
 
     const auto ser_params = (format >= Format::V3_BIP155 ? CAddress::V2_DISK : CAddress::V1_DISK);
-    ParamsStream s{ser_params, s_};
+    ParamsStream s{s_, ser_params};
 
     uint8_t compat;
     s >> compat;
@@ -778,7 +776,7 @@ std::pair<CAddress, NodeSeconds> AddrManImpl::Select_(bool new_only, std::option
         const AddrInfo& info{it_found->second};
 
         // With probability GetChance() * chance_factor, return the entry.
-        if (insecure_rand.randbits(30) < chance_factor * info.GetChance() * (1 << 30)) {
+        if (insecure_rand.randbits<30>() < chance_factor * info.GetChance() * (1 << 30)) {
             LogPrint(BCLog::ADDRMAN, "Selected %s from %s\n", info.ToStringAddrPort(), search_tried ? "tried" : "new");
             return {info, info.m_last_try};
         }

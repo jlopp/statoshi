@@ -14,8 +14,10 @@
 #include <test/util/txmempool.h>
 #include <txmempool.h>
 #include <uint256.h>
+#include <util/check.h>
 #include <util/strencodings.h>
 #include <util/time.h>
+#include <util/translation.h>
 #include <validation.h>
 #include <versionbits.h>
 
@@ -46,7 +48,9 @@ struct MinerTestingSetup : public TestingSetup {
         // pointer is not accessed, when the new one should be accessed
         // instead.
         m_node.mempool.reset();
-        m_node.mempool = std::make_unique<CTxMemPool>(MemPoolOptionsForTest(m_node));
+        bilingual_str error;
+        m_node.mempool = std::make_unique<CTxMemPool>(MemPoolOptionsForTest(m_node), error);
+        Assert(error.empty());
         return *m_node.mempool;
     }
     BlockAssembler AssemblerForTest(CTxMemPool& tx_mempool);
@@ -421,7 +425,7 @@ void MinerTestingSetup::TestBasicMining(const CScript& scriptPubKey, const std::
     std::vector<int> prevheights;
 
     // relative height locked
-    tx.nVersion = 2;
+    tx.version = 2;
     tx.vin.resize(1);
     prevheights.resize(1);
     tx.vin[0].prevout.hash = txFirst[0]->GetHash(); // only 1 transaction
@@ -622,7 +626,7 @@ BOOST_AUTO_TEST_CASE(CreateNewBlock_validity)
             pblock->nVersion = VERSIONBITS_TOP_BITS;
             pblock->nTime = m_node.chainman->ActiveChain().Tip()->GetMedianTimePast()+1;
             CMutableTransaction txCoinbase(*pblock->vtx[0]);
-            txCoinbase.nVersion = 1;
+            txCoinbase.version = 1;
             txCoinbase.vin[0].scriptSig = CScript{} << (m_node.chainman->ActiveChain().Height() + 1) << bi.extranonce;
             txCoinbase.vout.resize(1); // Ignore the (optional) segwit commitment added by CreateNewBlock (as the hardcoded nonces don't account for this)
             txCoinbase.vout[0].scriptPubKey = CScript();

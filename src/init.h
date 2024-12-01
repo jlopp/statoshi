@@ -6,9 +6,7 @@
 #ifndef BITCOIN_INIT_H
 #define BITCOIN_INIT_H
 
-#include <any>
-#include <memory>
-#include <string>
+#include <atomic>
 #include "statsd_client.h"
 
 extern statsd::StatsdClient statsClient;

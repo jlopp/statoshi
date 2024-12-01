@@ -95,7 +95,7 @@ public:
 ValidationSignals::ValidationSignals(std::unique_ptr<util::TaskRunnerInterface> task_runner)
     : m_internals{std::make_unique<ValidationSignalsImpl>(std::move(task_runner))} {}
 
-ValidationSignals::~ValidationSignals() {}
+ValidationSignals::~ValidationSignals() = default;
 
 void ValidationSignals::FlushBackgroundCallbacks()
 {
@@ -181,6 +181,12 @@ void ValidationSignals::UpdatedBlockTip(const CBlockIndex *pindexNew, const CBlo
                           pindexNew->GetBlockHash().ToString(),
                           pindexFork ? pindexFork->GetBlockHash().ToString() : "null",
                           fInitialDownload);
+}
+
+void ValidationSignals::ActiveTipChange(const CBlockIndex& new_tip, bool is_ibd)
+{
+    LOG_EVENT("%s: new block hash=%s block height=%d", __func__, new_tip.GetBlockHash().ToString(), new_tip.nHeight);
+    m_internals->Iterate([&](CValidationInterface& callbacks) { callbacks.ActiveTipChange(new_tip, is_ibd); });
 }
 
 void ValidationSignals::TransactionAddedToMempool(const NewMempoolTransactionInfo& tx, uint64_t mempool_sequence)

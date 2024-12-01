@@ -237,7 +237,7 @@ public:
     template <typename Stream>
     void Serialize(Stream& s) const
     {
-        if (s.GetParams().enc == Encoding::V2) {
+        if (s.template GetParams<SerParams>().enc == Encoding::V2) {
             SerializeV2Stream(s);
         } else {
             SerializeV1Stream(s);
@@ -250,7 +250,7 @@ public:
     template <typename Stream>
     void Unserialize(Stream& s)
     {
-        if (s.GetParams().enc == Encoding::V2) {
+        if (s.template GetParams<SerParams>().enc == Encoding::V2) {
             UnserializeV2Stream(s);
         } else {
             UnserializeV1Stream(s);
@@ -448,7 +448,7 @@ private:
             // Recognize NET_INTERNAL embedded in IPv6, such addresses are not
             // gossiped but could be coming from addrman, when unserializing from
             // disk.
-            if (HasPrefix(m_addr, INTERNAL_IN_IPV6_PREFIX)) {
+            if (util::HasPrefix(m_addr, INTERNAL_IN_IPV6_PREFIX)) {
                 m_net = NET_INTERNAL;
                 memmove(m_addr.data(), m_addr.data() + INTERNAL_IN_IPV6_PREFIX.size(),
                         ADDR_INTERNAL_SIZE);
@@ -456,8 +456,8 @@ private:
                 return;
             }
 
-            if (!HasPrefix(m_addr, IPV4_IN_IPV6_PREFIX) &&
-                !HasPrefix(m_addr, TORV2_IN_IPV6_PREFIX)) {
+            if (!util::HasPrefix(m_addr, IPV4_IN_IPV6_PREFIX) &&
+                !util::HasPrefix(m_addr, TORV2_IN_IPV6_PREFIX)) {
                 return;
             }
 
@@ -567,8 +567,8 @@ class CServiceHash
 {
 public:
     CServiceHash()
-        : m_salt_k0{GetRand<uint64_t>()},
-          m_salt_k1{GetRand<uint64_t>()}
+        : m_salt_k0{FastRandomContext().rand64()},
+          m_salt_k1{FastRandomContext().rand64()}
     {
     }
 

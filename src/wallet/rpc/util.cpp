@@ -149,7 +149,7 @@ void PushParentDescriptors(const CWallet& wallet, const CScript& script_pubkey, 
     for (const auto& desc: wallet.GetWalletDescriptors(script_pubkey)) {
         parent_descs.push_back(desc.descriptor->ToString());
     }
-    entry.pushKV("parent_descs", parent_descs);
+    entry.pushKV("parent_descs", std::move(parent_descs));
 }
 
 void HandleWalletError(const std::shared_ptr<CWallet> wallet, DatabaseStatus& status, bilingual_str& error)
@@ -179,13 +179,13 @@ void HandleWalletError(const std::shared_ptr<CWallet> wallet, DatabaseStatus& st
     }
 }
 
-void AppendLastProcessedBlock(UniValue& entry, const CWallet& wallet) EXCLUSIVE_LOCKS_REQUIRED(wallet.cs_wallet)
+void AppendLastProcessedBlock(UniValue& entry, const CWallet& wallet)
 {
     AssertLockHeld(wallet.cs_wallet);
     UniValue lastprocessedblock{UniValue::VOBJ};
     lastprocessedblock.pushKV("hash", wallet.GetLastBlockHash().GetHex());
     lastprocessedblock.pushKV("height", wallet.GetLastBlockHeight());
-    entry.pushKV("lastprocessedblock", lastprocessedblock);
+    entry.pushKV("lastprocessedblock", std::move(lastprocessedblock));
 }
 
 } // namespace wallet

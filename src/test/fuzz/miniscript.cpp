@@ -47,9 +47,9 @@ struct TestData {
     void Init() {
         unsigned char keydata[32] = {1};
         // All our signatures sign (and are required to sign) this constant message.
-        auto const MESSAGE_HASH{uint256S("f5cd94e18b6fe77dd7aca9e35c2b0c9cbd86356c80a71065")};
+        constexpr uint256 MESSAGE_HASH{"0000000000000000f5cd94e18b6fe77dd7aca9e35c2b0c9cbd86356c80a71065"};
         // We don't pass additional randomness when creating a schnorr signature.
-        auto const EMPTY_AUX{uint256S("")};
+        const auto EMPTY_AUX{uint256::ZERO};
 
         for (size_t i = 0; i < 256; i++) {
             keydata[31] = i;
@@ -308,9 +308,6 @@ const struct KeyComparator {
 
 // A dummy scriptsig to pass to VerifyScript (we always use Segwit v0).
 const CScript DUMMY_SCRIPTSIG;
-
-//! Public key to be used as internal key for dummy Taproot spends.
-const std::vector<unsigned char> NUMS_PK{ParseHex("50929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0")};
 
 //! Construct a miniscript node as a shared_ptr.
 template<typename... Args> NodeRef MakeNodeRef(Args&&... args) {
@@ -1018,7 +1015,7 @@ CScript ScriptPubKey(MsCtx ctx, const CScript& script, TaprootBuilder& builder)
 
     // For Taproot outputs we always use a tree with a single script and a dummy internal key.
     builder.Add(0, script, TAPROOT_LEAF_TAPSCRIPT);
-    builder.Finalize(XOnlyPubKey{NUMS_PK});
+    builder.Finalize(XOnlyPubKey::NUMS_H);
     return GetScriptForDestination(builder.GetOutput());
 }
 
@@ -1201,7 +1198,7 @@ void TestNode(const MsCtx script_ctx, const NodeRef& node, FuzzedDataProvider& p
 
 void FuzzInit()
 {
-    ECC_Start();
+    static ECC_Context ecc_context{};
     TEST_DATA.Init();
 }
 

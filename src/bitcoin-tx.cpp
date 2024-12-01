@@ -2,9 +2,7 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#if defined(HAVE_CONFIG_H)
-#include <config/bitcoin-config.h>
-#endif
+#include <config/bitcoin-config.h> // IWYU pragma: keep
 
 #include <chainparamsbase.h>
 #include <clientversion.h>
@@ -33,6 +31,11 @@
 #include <cstdio>
 #include <functional>
 #include <memory>
+
+using util::SplitString;
+using util::ToString;
+using util::TrimString;
+using util::TrimStringView;
 
 static bool fCreateBlank;
 static std::map<std::string,UniValue> registers;
@@ -205,12 +208,12 @@ static CAmount ExtractAndValidateValue(const std::string& strValue)
 
 static void MutateTxVersion(CMutableTransaction& tx, const std::string& cmdVal)
 {
-    int64_t newVersion;
-    if (!ParseInt64(cmdVal, &newVersion) || newVersion < 1 || newVersion > TX_MAX_STANDARD_VERSION) {
+    uint32_t newVersion;
+    if (!ParseUInt32(cmdVal, &newVersion) || newVersion < 1 || newVersion > TX_MAX_STANDARD_VERSION) {
         throw std::runtime_error("Invalid TX version requested: '" + cmdVal + "'");
     }
 
-    tx.nVersion = (int) newVersion;
+    tx.version = newVersion;
 }
 
 static void MutateTxLocktime(CMutableTransaction& tx, const std::string& cmdVal)
@@ -261,8 +264,8 @@ static void MutateTxAddInput(CMutableTransaction& tx, const std::string& strInpu
         throw std::runtime_error("TX input missing separator");
 
     // extract and validate TXID
-    uint256 txid;
-    if (!ParseHashStr(vStrInputParts[0], txid)) {
+    auto txid{Txid::FromHex(vStrInputParts[0])};
+    if (!txid) {
         throw std::runtime_error("invalid TX input txid");
     }
 
@@ -282,7 +285,7 @@ static void MutateTxAddInput(CMutableTransaction& tx, const std::string& strInpu
     }
 
     // append to transaction input list
-    CTxIn txin(Txid::FromUint256(txid), vout, CScript(), nSequenceIn);
+    CTxIn txin(*txid, vout, CScript(), nSequenceIn);
     tx.vin.push_back(txin);
 }
 
@@ -622,8 +625,8 @@ static void MutateTxSign(CMutableTransaction& tx, const std::string& flagStr)
             if (!prevOut.checkObject(types))
                 throw std::runtime_error("prevtxs internal object typecheck fail");
 
-            uint256 txid;
-            if (!ParseHashStr(prevOut["txid"].get_str(), txid)) {
+            auto txid{Txid::FromHex(prevOut["txid"].get_str())};
+            if (!txid) {
                 throw std::runtime_error("txid must be hexadecimal string (not '" + prevOut["txid"].get_str() + "')");
             }
 
@@ -631,7 +634,7 @@ static void MutateTxSign(CMutableTransaction& tx, const std::string& flagStr)
             if (nOut < 0)
                 throw std::runtime_error("vout cannot be negative");
 
-            COutPoint out(Txid::FromUint256(txid), nOut);
+            COutPoint out(*txid, nOut);
             std::vector<unsigned char> pkData(ParseHexUV(prevOut["scriptPubKey"], "scriptPubKey"));
             CScript scriptPubKey(pkData.begin(), pkData.end());
 
@@ -694,21 +697,10 @@ static void MutateTxSign(CMutableTransaction& tx, const std::string& flagStr)
     tx = mergedTx;
 }
 
-class Secp256k1Init
-{
-public:
-    Secp256k1Init() {
-        ECC_Start();
-    }
-    ~Secp256k1Init() {
-        ECC_Stop();
-    }
-};
-
 static void MutateTx(CMutableTransaction& tx, const std::string& command,
                      const std::string& commandVal)
 {
-    std::unique_ptr<Secp256k1Init> ecc;
+    std::unique_ptr<ECC_Context> ecc;
 
     if (command == "nversion")
         MutateTxVersion(tx, commandVal);
@@ -728,10 +720,10 @@ static void MutateTx(CMutableTransaction& tx, const std::string& command,
     else if (command == "outaddr")
         MutateTxAddOutAddr(tx, commandVal);
     else if (command == "outpubkey") {
-        ecc.reset(new Secp256k1Init());
+        ecc.reset(new ECC_Context());
         MutateTxAddOutPubKey(tx, commandVal);
     } else if (command == "outmultisig") {
-        ecc.reset(new Secp256k1Init());
+        ecc.reset(new ECC_Context());
         MutateTxAddOutMultiSig(tx, commandVal);
     } else if (command == "outscript")
         MutateTxAddOutScript(tx, commandVal);
@@ -739,7 +731,7 @@ static void MutateTx(CMutableTransaction& tx, const std::string& command,
         MutateTxAddOutData(tx, commandVal);
 
     else if (command == "sign") {
-        ecc.reset(new Secp256k1Init());
+        ecc.reset(new ECC_Context());
         MutateTxSign(tx, commandVal);
     }
 
