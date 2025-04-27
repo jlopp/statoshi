@@ -49,10 +49,13 @@ BPF_QUEUE(coin_selection_events, struct event_data, 1024);
 
 int trace_selected_coins(struct pt_regs *ctx) {
     struct event_data data;
+    void *pwallet_name = NULL, *palgo = NULL;
     __builtin_memset(&data, 0, sizeof(data));
     data.type = 1;
-    bpf_usdt_readarg_p(1, ctx, &data.wallet_name, WALLET_NAME_LENGTH);
-    bpf_usdt_readarg_p(2, ctx, &data.algo, ALGO_NAME_LENGTH);
+    bpf_usdt_readarg(1, ctx, &pwallet_name);
+    bpf_probe_read_user_str(&data.wallet_name, WALLET_NAME_LENGTH, pwallet_name);
+    bpf_usdt_readarg(2, ctx, &palgo);
+    bpf_probe_read_user_str(&data.algo, ALGO_NAME_LENGTH, palgo);
     bpf_usdt_readarg(3, ctx, &data.target);
     bpf_usdt_readarg(4, ctx, &data.waste);
     bpf_usdt_readarg(5, ctx, &data.selected_value);
@@ -62,9 +65,11 @@ int trace_selected_coins(struct pt_regs *ctx) {
 
 int trace_normal_create_tx(struct pt_regs *ctx) {
     struct event_data data;
+    void *pwallet_name = NULL;
     __builtin_memset(&data, 0, sizeof(data));
     data.type = 2;
-    bpf_usdt_readarg_p(1, ctx, &data.wallet_name, WALLET_NAME_LENGTH);
+    bpf_usdt_readarg(1, ctx, &pwallet_name);
+    bpf_probe_read_user_str(&data.wallet_name, WALLET_NAME_LENGTH, pwallet_name);
     bpf_usdt_readarg(2, ctx, &data.success);
     bpf_usdt_readarg(3, ctx, &data.fee);
     bpf_usdt_readarg(4, ctx, &data.change_pos);
@@ -74,18 +79,22 @@ int trace_normal_create_tx(struct pt_regs *ctx) {
 
 int trace_attempt_aps(struct pt_regs *ctx) {
     struct event_data data;
+    void *pwallet_name = NULL;
     __builtin_memset(&data, 0, sizeof(data));
     data.type = 3;
-    bpf_usdt_readarg_p(1, ctx, &data.wallet_name, WALLET_NAME_LENGTH);
+    bpf_usdt_readarg(1, ctx, &pwallet_name);
+    bpf_probe_read_user_str(&data.wallet_name, WALLET_NAME_LENGTH, pwallet_name);
     coin_selection_events.push(&data, 0);
     return 0;
 }
 
 int trace_aps_create_tx(struct pt_regs *ctx) {
     struct event_data data;
+    void *pwallet_name = NULL;
     __builtin_memset(&data, 0, sizeof(data));
     data.type = 4;
-    bpf_usdt_readarg_p(1, ctx, &data.wallet_name, WALLET_NAME_LENGTH);
+    bpf_usdt_readarg(1, ctx, &pwallet_name);
+    bpf_probe_read_user_str(&data.wallet_name, WALLET_NAME_LENGTH, pwallet_name);
     bpf_usdt_readarg(2, ctx, &data.use_aps);
     bpf_usdt_readarg(3, ctx, &data.success);
     bpf_usdt_readarg(4, ctx, &data.fee);
@@ -181,7 +190,7 @@ class CoinSelectionTracepointTest(BitcoinTestFramework):
         # 5. aps_create_tx_internal (type 4)
         wallet.sendtoaddress(wallet.getnewaddress(), 10)
         events = self.get_tracepoints([1, 2, 3, 1, 4])
-        success, use_aps, algo, waste, change_pos = self.determine_selection_from_usdt(events)
+        success, use_aps, _algo, _waste, change_pos = self.determine_selection_from_usdt(events)
         assert_equal(success, True)
         assert_greater_than(change_pos, -1)
 
@@ -190,7 +199,7 @@ class CoinSelectionTracepointTest(BitcoinTestFramework):
         # 1. normal_create_tx_internal (type 2)
         assert_raises_rpc_error(-6, "Insufficient funds", wallet.sendtoaddress, wallet.getnewaddress(), 102 * 50)
         events = self.get_tracepoints([2])
-        success, use_aps, algo, waste, change_pos = self.determine_selection_from_usdt(events)
+        success, use_aps, _algo, _waste, change_pos = self.determine_selection_from_usdt(events)
         assert_equal(success, False)
 
         self.log.info("Explicitly enabling APS results in 2 tracepoints")
@@ -200,7 +209,7 @@ class CoinSelectionTracepointTest(BitcoinTestFramework):
         wallet.setwalletflag("avoid_reuse")
         wallet.sendtoaddress(address=wallet.getnewaddress(), amount=10, avoid_reuse=True)
         events = self.get_tracepoints([1, 2])
-        success, use_aps, algo, waste, change_pos = self.determine_selection_from_usdt(events)
+        success, use_aps, _algo, _waste, change_pos = self.determine_selection_from_usdt(events)
         assert_equal(success, True)
         assert_equal(use_aps, None)
 
@@ -213,7 +222,7 @@ class CoinSelectionTracepointTest(BitcoinTestFramework):
         # 5. aps_create_tx_internal (type 4)
         wallet.sendtoaddress(address=wallet.getnewaddress(), amount=wallet.getbalance(), subtractfeefromamount=True, avoid_reuse=False)
         events = self.get_tracepoints([1, 2, 3, 1, 4])
-        success, use_aps, algo, waste, change_pos = self.determine_selection_from_usdt(events)
+        success, use_aps, _algo, _waste, change_pos = self.determine_selection_from_usdt(events)
         assert_equal(success, True)
         assert_equal(change_pos, -1)
 
@@ -223,7 +232,7 @@ class CoinSelectionTracepointTest(BitcoinTestFramework):
         # 2. normal_create_tx_internal (type 2)
         wallet.sendtoaddress(address=wallet.getnewaddress(), amount=wallet.getbalance(), subtractfeefromamount=True)
         events = self.get_tracepoints([1, 2])
-        success, use_aps, algo, waste, change_pos = self.determine_selection_from_usdt(events)
+        success, use_aps, _algo, _waste, change_pos = self.determine_selection_from_usdt(events)
         assert_equal(success, True)
         assert_equal(change_pos, -1)
 

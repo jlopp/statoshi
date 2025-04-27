@@ -105,14 +105,19 @@ class AuthServiceProxy():
         self.__conn.request(method, path, postdata, headers)
         return self._get_response()
 
+    def _json_dumps(self, obj):
+        return json.dumps(obj, default=serialization_fallback, ensure_ascii=self.ensure_ascii)
+
     def get_request(self, *args, **argsn):
         AuthServiceProxy.__id_count += 1
 
-        log.debug("-{}-> {} {}".format(
+        log.debug("-{}-> {} {} {}".format(
             AuthServiceProxy.__id_count,
             self._service_name,
-            json.dumps(args or argsn, default=serialization_fallback, ensure_ascii=self.ensure_ascii),
+            self._json_dumps(args),
+            self._json_dumps(argsn),
         ))
+
         if args and argsn:
             params = dict(args=args, **argsn)
         else:
@@ -123,7 +128,7 @@ class AuthServiceProxy():
                 'id': AuthServiceProxy.__id_count}
 
     def __call__(self, *args, **argsn):
-        postdata = json.dumps(self.get_request(*args, **argsn), default=serialization_fallback, ensure_ascii=self.ensure_ascii)
+        postdata = self._json_dumps(self.get_request(*args, **argsn))
         response, status = self._request('POST', self.__url.path, postdata.encode('utf-8'))
         # For backwards compatibility tests, accept JSON RPC 1.1 responses
         if 'jsonrpc' not in response:
@@ -150,7 +155,7 @@ class AuthServiceProxy():
             return response['result']
 
     def batch(self, rpc_call_list):
-        postdata = json.dumps(list(rpc_call_list), default=serialization_fallback, ensure_ascii=self.ensure_ascii)
+        postdata = self._json_dumps(list(rpc_call_list))
         log.debug("--> " + postdata)
         response, status = self._request('POST', self.__url.path, postdata.encode('utf-8'))
         if status != HTTPStatus.OK:
@@ -188,11 +193,16 @@ class AuthServiceProxy():
                 {'code': -342, 'message': 'non-JSON HTTP response with \'%i %s\' from server' % (http_response.status, http_response.reason)},
                 http_response.status)
 
-        responsedata = http_response.read().decode('utf8')
+        data = http_response.read()
+        try:
+            responsedata = data.decode('utf8')
+        except UnicodeDecodeError as e:
+            raise JSONRPCException({
+                'code': -342, 'message': f'Cannot decode response in utf8 format, content: {data}, exception: {e}'})
         response = json.loads(responsedata, parse_float=decimal.Decimal)
         elapsed = time.time() - req_start_time
         if "error" in response and response["error"] is None:
-            log.debug("<-%s- [%.6f] %s" % (response["id"], elapsed, json.dumps(response["result"], default=serialization_fallback, ensure_ascii=self.ensure_ascii)))
+            log.debug("<-%s- [%.6f] %s" % (response["id"], elapsed, self._json_dumps(response["result"])))
         else:
             log.debug("<-- [%.6f] %s" % (elapsed, responsedata))
         return response, http_response.status

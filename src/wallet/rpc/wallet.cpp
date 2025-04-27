@@ -1,9 +1,9 @@
 // Copyright (c) 2010 Satoshi Nakamoto
-// Copyright (c) 2009-2022 The Bitcoin Core developers
+// Copyright (c) 2009-present The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#include <config/bitcoin-config.h> // IWYU pragma: keep
+#include <bitcoin-build-config.h> // IWYU pragma: keep
 
 #include <core_io.h>
 #include <key_io.h>
@@ -220,7 +220,7 @@ static RPCHelpMan loadwallet()
                 "\nNote that all wallet command-line options used when starting bitcoind will be"
                 "\napplied to the new wallet.\n",
                 {
-                    {"filename", RPCArg::Type::STR, RPCArg::Optional::NO, "The wallet directory or .dat file."},
+                    {"filename", RPCArg::Type::STR, RPCArg::Optional::NO, "The path to the directory of the wallet to be loaded, either absolute or relative to the \"wallets\" directory. The \"wallets\" directory is set by the -walletdir option and defaults to the \"wallets\" folder within the data directory."},
                     {"load_on_startup", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED, "Save wallet name to persistent settings and load on startup. True to add wallet to startup list, false to remove, null to leave unchanged."},
                 },
                 RPCResult{
@@ -234,8 +234,15 @@ static RPCHelpMan loadwallet()
                     }
                 },
                 RPCExamples{
-                    HelpExampleCli("loadwallet", "\"test.dat\"")
-            + HelpExampleRpc("loadwallet", "\"test.dat\"")
+                    "\nLoad wallet from the wallet dir:\n"
+                    + HelpExampleCli("loadwallet", "\"walletname\"")
+                    + HelpExampleRpc("loadwallet", "\"walletname\"")
+                    + "\nLoad wallet using absolute path (Unix):\n"
+                    + HelpExampleCli("loadwallet", "\"/path/to/walletname/\"")
+                    + HelpExampleRpc("loadwallet", "\"/path/to/walletname/\"")
+                    + "\nLoad wallet using absolute path (Windows):\n"
+                    + HelpExampleCli("loadwallet", "\"DriveLetter:\\path\\to\\walletname\\\"")
+                    + HelpExampleRpc("loadwallet", "\"DriveLetter:\\path\\to\\walletname\\\"")
                 },
         [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
 {
@@ -396,9 +403,6 @@ static RPCHelpMan createwallet()
         flags |= WALLET_FLAG_AVOID_REUSE;
     }
     if (self.Arg<bool>("descriptors")) {
-#ifndef USE_SQLITE
-        throw JSONRPCError(RPC_WALLET_ERROR, "Compiled without sqlite support (required for descriptor wallets)");
-#endif
         flags |= WALLET_FLAG_DESCRIPTORS;
     } else {
         if (!context.chain->rpcEnableDeprecated("create_bdb")) {
@@ -1098,7 +1102,7 @@ RPCHelpMan abandontransaction();
 RPCHelpMan rescanblockchain();
 RPCHelpMan abortrescan();
 
-Span<const CRPCCommand> GetWalletRPCCommands()
+std::span<const CRPCCommand> GetWalletRPCCommands()
 {
     static const CRPCCommand commands[]{
         {"rawtransactions", &fundrawtransaction},

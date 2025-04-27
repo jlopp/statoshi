@@ -1,5 +1,4 @@
 (use-modules (gnu packages)
-             (gnu packages autotools)
              ((gnu packages bash) #:select (bash-minimal))
              (gnu packages bison)
              ((gnu packages certs) #:select (nss-certs))
@@ -11,26 +10,27 @@
              (gnu packages gawk)
              (gnu packages gcc)
              ((gnu packages installers) #:select (nsis-x86_64))
-             ((gnu packages linux) #:select (linux-libre-headers-6.1 util-linux))
+             ((gnu packages linux) #:select (linux-libre-headers-6.1))
              (gnu packages llvm)
              (gnu packages mingw)
-             (gnu packages moreutils)
+             (gnu packages ninja)
              (gnu packages pkg-config)
              ((gnu packages python) #:select (python-minimal))
-             ((gnu packages python-build) #:select (python-tomli))
+             ((gnu packages python-build) #:select (python-tomli python-poetry-core))
              ((gnu packages python-crypto) #:select (python-asn1crypto))
              ((gnu packages tls) #:select (openssl))
              ((gnu packages version-control) #:select (git-minimal))
              (guix build-system cmake)
              (guix build-system gnu)
              (guix build-system python)
+             (guix build-system pyproject)
              (guix build-system trivial)
              (guix download)
              (guix gexp)
              (guix git-download)
              ((guix licenses) #:prefix license:)
              (guix packages)
-             ((guix utils) #:select (substitute-keyword-arguments)))
+             ((guix utils) #:select (cc-for-target substitute-keyword-arguments)))
 
 (define-syntax-rule (search-our-patches file-name ...)
   "Return the list of absolute file names corresponding to each
@@ -92,17 +92,7 @@ chain for " target " development."))
       (home-page (package-home-page xgcc))
       (license (package-license xgcc)))))
 
-(define base-gcc
-  (package
-    (inherit gcc-12) ;; 12.3.0
-    (version "12.4.0")
-    (source (origin
-              (method url-fetch)
-              (uri (string-append "mirror://gnu/gcc/gcc-"
-                                  version "/gcc-" version ".tar.xz"))
-              (sha256
-               (base32
-                "0xcida8l2wykvvzvpcrcn649gj0ijn64gwxbplacpg6c0hk6akvh"))))))
+(define base-gcc gcc-13) ;; 13.3.0
 
 (define base-linux-kernel-headers linux-libre-headers-6.1)
 
@@ -393,10 +383,10 @@ specific moment in time, whitelisting and revocation checks.")
       (license license:expat))))
 
 (define-public python-signapple
-  (let ((commit "62155712e7417aba07565c9780a80e452823ae6a"))
+  (let ((commit "85bfcecc33d2773bc09bc318cec0614af2c8e287"))
     (package
       (name "python-signapple")
-      (version (git-version "0.1" "1" commit))
+      (version (git-version "0.2.0" "1" commit))
       (source
        (origin
          (method git-fetch)
@@ -406,13 +396,14 @@ specific moment in time, whitelisting and revocation checks.")
          (file-name (git-file-name name commit))
          (sha256
           (base32
-           "1nm6rm4h4m7kbq729si4cm8rzild62mk4ni8xr5zja7l33fhv3gb"))))
-      (build-system python-build-system)
+           "17yqjll8nw83q6dhgqhkl7w502z5vy9sln8m6mlx0f1c10isg8yg"))))
+      (build-system pyproject-build-system)
       (propagated-inputs
         (list python-asn1crypto
               python-oscrypto
               python-certvalidator
               python-elfesteem))
+      (native-inputs (list python-poetry-core))
       ;; There are no tests, but attempting to run python setup.py test leads to
       ;; problems, just disable the test
       (arguments '(#:tests? #f))
@@ -432,6 +423,7 @@ inspecting signatures in Mach-O binaries.")
             ;; https://gcc.gnu.org/install/configure.html
             (list "--enable-threads=posix",
                   "--enable-default-ssp=yes",
+                  "--disable-gcov",
                   building-on)))))))
 
 (define-public linux-base-gcc
@@ -446,6 +438,8 @@ inspecting signatures in Mach-O binaries.")
                   "--enable-default-ssp=yes",
                   "--enable-default-pie=yes",
                   "--enable-standard-branch-protection=yes",
+                  "--enable-cet=yes",
+                  "--disable-gcov",
                   building-on)))
         ((#:phases phases)
           `(modify-phases ,phases
@@ -460,7 +454,7 @@ inspecting signatures in Mach-O binaries.")
                #t))))))))
 
 (define-public glibc-2.31
-  (let ((commit "8e30f03744837a85e33d84ccd34ed3abe30d37c3"))
+  (let ((commit "7b27c450c34563a28e634cccb399cd415e71ebfe"))
   (package
     (inherit glibc) ;; 2.35
     (version "2.31")
@@ -472,7 +466,7 @@ inspecting signatures in Mach-O binaries.")
               (file-name (git-file-name "glibc" commit))
               (sha256
                (base32
-                "1zi0s9yy5zkisw823vivn7zlj8w6g9p3mm7lmlqiixcxdkz4dbn6"))
+                "017qdpr5id7ddb4lpkzj2li1abvw916m3fc6n7nw28z4h5qbv2n0"))
               (patches (search-our-patches "glibc-guix-prefix.patch"))))
     (arguments
       (substitute-keyword-arguments (package-arguments glibc)
@@ -480,8 +474,11 @@ inspecting signatures in Mach-O binaries.")
           `(append ,flags
             ;; https://www.gnu.org/software/libc/manual/html_node/Configuring-and-compiling.html
             (list "--enable-stack-protector=all",
+                  "--enable-cet",
                   "--enable-bind-now",
                   "--disable-werror",
+                  "--disable-timezone-tools",
+                  "--disable-profile",
                   building-on)))
     ((#:phases phases)
         `(modify-phases ,phases
@@ -497,13 +494,42 @@ inspecting signatures in Mach-O binaries.")
                    (("^install-others =.*$")
                     (string-append "install-others = " out "/etc/rpc\n")))))))))))))
 
+;; The sponge tool from moreutils.
+(define-public sponge
+  (package
+    (name "sponge")
+    (version "0.69")
+    (source (origin
+              (method url-fetch)
+              (uri (string-append
+                    "https://git.joeyh.name/index.cgi/moreutils.git/snapshot/
+                    moreutils-" version ".tar.gz"))
+              (file-name (string-append "moreutils-" version ".tar.gz"))
+              (sha256
+               (base32
+                "1l859qnzccslvxlh5ghn863bkq2vgmqgnik6jr21b9kc6ljmsy8g"))))
+    (build-system gnu-build-system)
+    (arguments
+     (list #:phases
+           #~(modify-phases %standard-phases
+               (delete 'configure)
+               (replace 'install
+                (lambda* (#:key outputs #:allow-other-keys)
+                  (let ((bin (string-append (assoc-ref outputs "out") "/bin")))
+                  (install-file "sponge" bin)))))
+           #:make-flags
+           #~(list "sponge" (string-append "CC=" #$(cc-for-target)))))
+    (home-page "https://joeyh.name/code/moreutils/")
+    (synopsis "Miscellaneous general-purpose command-line tools")
+    (description "Just sponge")
+    (license license:gpl2+)))
+
 (packages->manifest
  (append
   (list ;; The Basics
         bash-minimal
         which
         coreutils-minimal
-        util-linux
         ;; File(system) inspection
         file
         grep
@@ -513,19 +539,16 @@ inspecting signatures in Mach-O binaries.")
         patch
         gawk
         sed
-        moreutils
+        sponge
         ;; Compression and archiving
         tar
         gzip
         xz
         ;; Build tools
-        gcc-toolchain-12
+        gcc-toolchain-13
         cmake-minimal
         gnu-make
-        libtool
-        autoconf-2.71
-        automake
-        pkg-config
+        ninja
         ;; Scripting
         python-minimal ;; (3.10)
         ;; Git
@@ -541,7 +564,8 @@ inspecting signatures in Mach-O binaries.")
                  osslsigncode))
           ((string-contains target "-linux-")
            (list bison
-                 (list gcc-toolchain-12 "static")
+                 pkg-config
+                 (list gcc-toolchain-13 "static")
                  (make-bitcoin-cross-toolchain target)))
           ((string-contains target "darwin")
            (list clang-toolchain-18

@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2022 The Bitcoin Core developers
+// Copyright (c) 2012-present The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -20,6 +20,7 @@
 
 #include <boost/test/unit_test.hpp>
 
+using namespace util::hex_literals;
 using util::ToString;
 
 static const std::string strSecret1 = "5HxWvvfubhXpYYpS3tJkw6fq9jE9j18THftkZjHHfmFiWtmAbrj";
@@ -143,19 +144,22 @@ BOOST_AUTO_TEST_CASE(key_test1)
     BOOST_CHECK(key1.Sign(hashMsg, detsig));
     BOOST_CHECK(key1C.Sign(hashMsg, detsigc));
     BOOST_CHECK(detsig == detsigc);
-    BOOST_CHECK(detsig == ParseHex("304402205dbbddda71772d95ce91cd2d14b592cfbc1dd0aabd6a394b6c2d377bbe59d31d022014ddda21494a4e221f0824f0b8b924c43fa43c0ad57dccdaa11f81a6bd4582f6"));
+    BOOST_CHECK_EQUAL(HexStr(detsig), "304402205dbbddda71772d95ce91cd2d14b592cfbc1dd0aabd6a394b6c2d377bbe59d31d022014ddda21494a4e221f0824f0b8b924c43fa43c0ad57dccdaa11f81a6bd4582f6");
+
     BOOST_CHECK(key2.Sign(hashMsg, detsig));
     BOOST_CHECK(key2C.Sign(hashMsg, detsigc));
     BOOST_CHECK(detsig == detsigc);
-    BOOST_CHECK(detsig == ParseHex("3044022052d8a32079c11e79db95af63bb9600c5b04f21a9ca33dc129c2bfa8ac9dc1cd5022061d8ae5e0f6c1a16bde3719c64c2fd70e404b6428ab9a69566962e8771b5944d"));
+    BOOST_CHECK_EQUAL(HexStr(detsig), "3044022052d8a32079c11e79db95af63bb9600c5b04f21a9ca33dc129c2bfa8ac9dc1cd5022061d8ae5e0f6c1a16bde3719c64c2fd70e404b6428ab9a69566962e8771b5944d");
+
     BOOST_CHECK(key1.SignCompact(hashMsg, detsig));
     BOOST_CHECK(key1C.SignCompact(hashMsg, detsigc));
-    BOOST_CHECK(detsig == ParseHex("1c5dbbddda71772d95ce91cd2d14b592cfbc1dd0aabd6a394b6c2d377bbe59d31d14ddda21494a4e221f0824f0b8b924c43fa43c0ad57dccdaa11f81a6bd4582f6"));
-    BOOST_CHECK(detsigc == ParseHex("205dbbddda71772d95ce91cd2d14b592cfbc1dd0aabd6a394b6c2d377bbe59d31d14ddda21494a4e221f0824f0b8b924c43fa43c0ad57dccdaa11f81a6bd4582f6"));
+    BOOST_CHECK_EQUAL(HexStr(detsig), "1c5dbbddda71772d95ce91cd2d14b592cfbc1dd0aabd6a394b6c2d377bbe59d31d14ddda21494a4e221f0824f0b8b924c43fa43c0ad57dccdaa11f81a6bd4582f6");
+    BOOST_CHECK_EQUAL(HexStr(detsigc), "205dbbddda71772d95ce91cd2d14b592cfbc1dd0aabd6a394b6c2d377bbe59d31d14ddda21494a4e221f0824f0b8b924c43fa43c0ad57dccdaa11f81a6bd4582f6");
+
     BOOST_CHECK(key2.SignCompact(hashMsg, detsig));
     BOOST_CHECK(key2C.SignCompact(hashMsg, detsigc));
-    BOOST_CHECK(detsig == ParseHex("1c52d8a32079c11e79db95af63bb9600c5b04f21a9ca33dc129c2bfa8ac9dc1cd561d8ae5e0f6c1a16bde3719c64c2fd70e404b6428ab9a69566962e8771b5944d"));
-    BOOST_CHECK(detsigc == ParseHex("2052d8a32079c11e79db95af63bb9600c5b04f21a9ca33dc129c2bfa8ac9dc1cd561d8ae5e0f6c1a16bde3719c64c2fd70e404b6428ab9a69566962e8771b5944d"));
+    BOOST_CHECK_EQUAL(HexStr(detsig), "1c52d8a32079c11e79db95af63bb9600c5b04f21a9ca33dc129c2bfa8ac9dc1cd561d8ae5e0f6c1a16bde3719c64c2fd70e404b6428ab9a69566962e8771b5944d");
+    BOOST_CHECK_EQUAL(HexStr(detsigc), "2052d8a32079c11e79db95af63bb9600c5b04f21a9ca33dc129c2bfa8ac9dc1cd561d8ae5e0f6c1a16bde3719c64c2fd70e404b6428ab9a69566962e8771b5944d");
 }
 
 BOOST_AUTO_TEST_CASE(key_signature_tests)
@@ -312,11 +316,11 @@ BOOST_AUTO_TEST_CASE(bip340_test_vectors)
         // In iteration i=0 we tweak with empty Merkle tree.
         for (int i = 0; i < 10; ++i) {
             uint256 merkle_root;
-            if (i) merkle_root = InsecureRand256();
+            if (i) merkle_root = m_rng.rand256();
             auto tweaked = pubkey.CreateTapTweak(i ? &merkle_root : nullptr);
             BOOST_CHECK(tweaked);
             XOnlyPubKey tweaked_key = tweaked->first;
-            aux256 = InsecureRand256();
+            aux256 = m_rng.rand256();
             bool ok = key.SignSchnorr(msg256, sig64, &merkle_root, aux256);
             BOOST_CHECK(ok);
             BOOST_CHECK(tweaked_key.VerifySchnorr(msg256, sig64));
@@ -336,8 +340,8 @@ BOOST_AUTO_TEST_CASE(key_ellswift)
         CKey key = DecodeSecret(secret);
         BOOST_CHECK(key.IsValid());
 
-        uint256 ent32 = InsecureRand256();
-        auto ellswift = key.EllSwiftCreate(AsBytes(Span{ent32}));
+        uint256 ent32 = m_rng.rand256();
+        auto ellswift = key.EllSwiftCreate(std::as_bytes(std::span{ent32}));
 
         CPubKey decoded_pubkey = ellswift.Decode();
         if (!key.IsCompressed()) {
@@ -352,9 +356,9 @@ BOOST_AUTO_TEST_CASE(key_ellswift)
 
 BOOST_AUTO_TEST_CASE(bip341_test_h)
 {
-    std::vector<unsigned char> G_uncompressed = ParseHex("0479be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8");
+    constexpr auto G_uncompressed{"0479be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8"_hex};
     HashWriter hw;
-    hw.write(MakeByteSpan(G_uncompressed));
+    hw.write(G_uncompressed);
     XOnlyPubKey H{hw.GetSHA256()};
     BOOST_CHECK(XOnlyPubKey::NUMS_H == H);
 }
@@ -366,7 +370,7 @@ BOOST_AUTO_TEST_CASE(key_schnorr_tweak_smoke_test)
 
     CKey key;
     key.MakeNewKey(true);
-    uint256 merkle_root = InsecureRand256();
+    uint256 merkle_root = m_rng.rand256();
 
     // secp256k1 functions
     secp256k1_keypair keypair;

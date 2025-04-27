@@ -1,4 +1,4 @@
-// Copyright (c) 2013-2021 The Bitcoin Core developers
+// Copyright (c) 2013-present The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -11,7 +11,7 @@
 
 #include <boost/test/unit_test.hpp>
 
-BOOST_AUTO_TEST_SUITE(hash_tests)
+BOOST_FIXTURE_TEST_SUITE(hash_tests, BasicTestingSetup)
 
 BOOST_AUTO_TEST_CASE(murmurhash3)
 {
@@ -111,7 +111,7 @@ BOOST_AUTO_TEST_CASE(siphash)
     for (uint8_t x=0; x<std::size(siphash_4_2_testvec); ++x)
     {
         BOOST_CHECK_EQUAL(hasher2.Finalize(), siphash_4_2_testvec[x]);
-        hasher2.Write(Span{&x, 1});
+        hasher2.Write(std::span{&x, 1});
     }
     // Check test vectors from spec, eight bytes at a time
     CSipHasher hasher3(0x0706050403020100ULL, 0x0F0E0D0C0B0A0908ULL);
@@ -135,7 +135,7 @@ BOOST_AUTO_TEST_CASE(siphash)
     for (int i = 0; i < 16; ++i) {
         uint64_t k1 = ctx.rand64();
         uint64_t k2 = ctx.rand64();
-        uint256 x = InsecureRand256();
+        uint256 x = m_rng.rand256();
         uint32_t n = ctx.rand32();
         uint8_t nb[4];
         WriteLE32(nb, n);

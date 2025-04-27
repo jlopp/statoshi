@@ -5,26 +5,77 @@
 #ifndef BITCOIN_INTERFACES_MINING_H
 #define BITCOIN_INTERFACES_MINING_H
 
-#include <node/types.h>
-#include <uint256.h>
+#include <consensus/amount.h>       // for CAmount
+#include <interfaces/types.h>       // for BlockRef
+#include <node/types.h>             // for BlockCreateOptions, BlockWaitOptions
+#include <primitives/block.h>       // for CBlock, CBlockHeader
+#include <primitives/transaction.h> // for CTransactionRef
+#include <stdint.h>                 // for int64_t
+#include <uint256.h>                // for uint256
+#include <util/time.h>              // for MillisecondsDouble
 
-#include <memory>
-#include <optional>
+#include <memory>   // for unique_ptr, shared_ptr
+#include <optional> // for optional
+#include <vector>   // for vector
 
 namespace node {
-struct CBlockTemplate;
 struct NodeContext;
 } // namespace node
 
 class BlockValidationState;
-class CBlock;
 class CScript;
 
 namespace interfaces {
 
+//! Block template interface
+class BlockTemplate
+{
+public:
+    virtual ~BlockTemplate() = default;
+
+    virtual CBlockHeader getBlockHeader() = 0;
+    // Block contains a dummy coinbase transaction that should not be used.
+    virtual CBlock getBlock() = 0;
+
+    // Fees per transaction, not including coinbase transaction.
+    virtual std::vector<CAmount> getTxFees() = 0;
+    // Sigop cost per transaction, not including coinbase transaction.
+    virtual std::vector<int64_t> getTxSigops() = 0;
+
+    virtual CTransactionRef getCoinbaseTx() = 0;
+    virtual std::vector<unsigned char> getCoinbaseCommitment() = 0;
+    virtual int getWitnessCommitmentIndex() = 0;
+
+    /**
+     * Compute merkle path to the coinbase transaction
+     *
+     * @return merkle path ordered from the deepest
+     */
+    virtual std::vector<uint256> getCoinbaseMerklePath() = 0;
+
+    /**
+     * Construct and broadcast the block.
+     *
+     * @returns if the block was processed, independent of block validity
+     */
+    virtual bool submitSolution(uint32_t version, uint32_t timestamp, uint32_t nonce, CTransactionRef coinbase) = 0;
+
+    /**
+     * Waits for fees in the next block to rise, a new tip or the timeout.
+     *
+     * @param[in] options   Control the timeout (default forever) and by how much total fees
+     *                      for the next block should rise (default infinite).
+     *
+     * @returns a new BlockTemplate or nothing if the timeout occurs.
+     *
+     * On testnet this will additionally return a template with difficulty 1 if
+     * the tip is more than 20 minutes old.
+     */
+    virtual std::unique_ptr<BlockTemplate> waitNext(const node::BlockWaitOptions options = {}) = 0;
+};
+
 //! Interface giving clients (RPC, Stratum v2 Template Provider in the future)
 //! ability to create block templates.
-
 class Mining
 {
 public:
@@ -36,42 +87,32 @@ public:
     //! Returns whether IBD is still in progress.
     virtual bool isInitialBlockDownload() = 0;
 
-    //! Returns the hash for the tip of this chain
-    virtual std::optional<uint256> getTipHash() = 0;
+    //! Returns the hash and height for the tip of this chain
+    virtual std::optional<BlockRef> getTip() = 0;
+
+    /**
+     * Waits for the connected tip to change. During node initialization, this will
+     * wait until the tip is connected (regardless of `timeout`).
+     *
+     * @param[in] current_tip block hash of the current chain tip. Function waits
+     *                        for the chain tip to differ from this.
+     * @param[in] timeout     how long to wait for a new tip (default is forever)
+     *
+     * @retval BlockRef hash and height of the current chain tip after this call.
+     * @retval std::nullopt if the node is shut down.
+     */
+    virtual std::optional<BlockRef> waitTipChanged(uint256 current_tip, MillisecondsDouble timeout = MillisecondsDouble::max()) = 0;
 
    /**
-     * Construct a new block template
+     * Construct a new block template.
      *
-     * @param[in] script_pub_key the coinbase output
+     * During node initialization, this will wait until the tip is connected.
+     *
      * @param[in] options options for creating the block
-     * @returns a block template
+     * @retval BlockTemplate a block template.
+     * @retval std::nullptr if the node is shut down.
      */
-    virtual std::unique_ptr<node::CBlockTemplate> createNewBlock(const CScript& script_pub_key, const node::BlockCreateOptions& options={}) = 0;
-
-    /**
-     * Processes new block. A valid new block is automatically relayed to peers.
-     *
-     * @param[in]   block The block we want to process.
-     * @param[out]  new_block A boolean which is set to indicate if the block was first received via this call
-     * @returns     If the block was processed, independently of block validity
-     */
-    virtual bool processNewBlock(const std::shared_ptr<const CBlock>& block, bool* new_block) = 0;
-
-    //! Return the number of transaction updates in the mempool,
-    //! used to decide whether to make a new block template.
-    virtual unsigned int getTransactionsUpdated() = 0;
-
-    /**
-     * Check a block is completely valid from start to finish.
-     * Only works on top of our current best block.
-     * Does not check proof-of-work.
-     *
-     * @param[in] block the block to validate
-     * @param[in] check_merkle_root call CheckMerkleRoot()
-     * @param[out] state details of why a block failed to validate
-     * @returns false if it does not build on the current tip, or any of the checks fail
-     */
-    virtual bool testBlockValidity(const CBlock& block, bool check_merkle_root, BlockValidationState& state) = 0;
+    virtual std::unique_ptr<BlockTemplate> createNewBlock(const node::BlockCreateOptions& options = {}) = 0;
 
     //! Get internal node context. Useful for RPC and testing,
     //! but not accessible across processes.

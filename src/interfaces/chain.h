@@ -41,12 +41,6 @@ namespace interfaces {
 class Handler;
 class Wallet;
 
-//! Hash/height pair to help track and identify blocks.
-struct BlockKey {
-    uint256 hash;
-    int height = -1;
-};
-
 //! Helper for findBlock to selectively return pieces of block data. If block is
 //! found, data will be returned by setting specified output variables. If block
 //! is not found, output variables will keep their previous values.
@@ -295,6 +289,9 @@ public:
     //! Check if any block has been pruned.
     virtual bool havePruned() = 0;
 
+    //! Get the current prune height.
+    virtual std::optional<int> getPruneHeight() = 0;
+
     //! Check if the node is ready to broadcast transactions.
     virtual bool isReadyToBroadcast() = 0;
 
@@ -356,15 +353,22 @@ public:
     virtual common::SettingsValue getRwSetting(const std::string& name) = 0;
 
     //! Updates a setting in <datadir>/settings.json.
+    //! Null can be passed to erase the setting. There is intentionally no
+    //! support for writing null values to settings.json.
     //! Depending on the action returned by the update function, this will either
     //! update the setting in memory or write the updated settings to disk.
     virtual bool updateRwSetting(const std::string& name, const SettingsUpdate& update_function) = 0;
 
     //! Replace a setting in <datadir>/settings.json with a new value.
-    virtual bool overwriteRwSetting(const std::string& name, common::SettingsValue& value, bool write = true) = 0;
+    //! Null can be passed to erase the setting.
+    //! This method provides a simpler alternative to updateRwSetting when
+    //! atomically reading and updating the setting is not required.
+    virtual bool overwriteRwSetting(const std::string& name, common::SettingsValue value, SettingsAction action = SettingsAction::WRITE) = 0;
 
     //! Delete a given setting in <datadir>/settings.json.
-    virtual bool deleteRwSettings(const std::string& name, bool write = true) = 0;
+    //! This method provides a simpler alternative to overwriteRwSetting when
+    //! erasing a setting, for ease of use and readability.
+    virtual bool deleteRwSettings(const std::string& name, SettingsAction action = SettingsAction::WRITE) = 0;
 
     //! Synchronously send transactionAddedToMempool notifications about all
     //! current mempool transactions to the specified handler and return after

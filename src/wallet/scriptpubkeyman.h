@@ -221,6 +221,7 @@ public:
     virtual bool Upgrade(int prev_version, int new_version, bilingual_str& error) { return true; }
 
     virtual bool HavePrivateKeys() const { return false; }
+    virtual bool HaveCryptedKeys() const { return false; }
 
     //! The action to do when the DB needs rewrite
     virtual void RewriteDB() {}
@@ -254,9 +255,9 @@ public:
 
     /** Prepends the wallet name in logging output to ease debugging in multi-wallet use cases */
     template <typename... Params>
-    void WalletLogPrintf(const char* fmt, Params... parameters) const
+    void WalletLogPrintf(util::ConstevalFormatString<sizeof...(Params)> wallet_fmt, const Params&... params) const
     {
-        LogPrintf(("%s " + std::string{fmt}).c_str(), m_storage.GetDisplayName(), parameters...);
+        LogInfo("%s %s", m_storage.GetDisplayName(), tfm::format(wallet_fmt, params...));
     };
 
     /** Watch-only address added */
@@ -302,6 +303,10 @@ protected:
     virtual bool AddKeyPubKeyInner(const CKey& key, const CPubKey &pubkey);
     bool AddCryptedKeyInner(const CPubKey &vchPubKey, const std::vector<unsigned char> &vchCryptedSecret);
 
+    // Helper function to retrieve a conservative superset of all output scripts that may be relevant to this LegacyDataSPKM.
+    // It may include scripts that are invalid or not actually watched by this LegacyDataSPKM.
+    // Used only in migration.
+    std::unordered_set<CScript, SaltedSipHasher> GetCandidateScriptPubKeys() const;
 public:
     using ScriptPubKeyMan::ScriptPubKeyMan;
 
@@ -318,6 +323,7 @@ public:
     uint256 GetID() const override { return uint256::ONE; }
     // TODO: Remove IsMine when deleting LegacyScriptPubKeyMan
     isminetype IsMine(const CScript& script) const override;
+    bool CanProvide(const CScript& script, SignatureData& sigdata) override;
 
     // FillableSigningProvider overrides
     bool HaveKey(const CKeyID &address) const override;
@@ -366,8 +372,9 @@ public:
     /** Get the DescriptorScriptPubKeyMans (with private keys) that have the same scriptPubKeys as this LegacyScriptPubKeyMan.
      * Does not modify this ScriptPubKeyMan. */
     std::optional<MigrationData> MigrateToDescriptor();
-    /** Delete all the records ofthis LegacyScriptPubKeyMan from disk*/
+    /** Delete all the records of this LegacyScriptPubKeyMan from disk*/
     bool DeleteRecords();
+    bool DeleteRecordsWithDB(WalletBatch& batch);
 };
 
 // Implements the full legacy wallet behavior
@@ -472,6 +479,7 @@ public:
     bool Upgrade(int prev_version, int new_version, bilingual_str& error) override;
 
     bool HavePrivateKeys() const override;
+    bool HaveCryptedKeys() const override;
 
     void RewriteDB() override;
 
@@ -484,8 +492,6 @@ public:
     std::unique_ptr<CKeyMetadata> GetMetadata(const CTxDestination& dest) const override;
 
     bool CanGetAddresses(bool internal = false) const override;
-
-    bool CanProvide(const CScript& script, SignatureData& sigdata) override;
 
     bool SignTransaction(CMutableTransaction& tx, const std::map<COutPoint, Coin>& coins, int sighash, std::map<int, bilingual_str>& input_errors) const override;
     SigningResult SignMessage(const std::string& message, const PKHash& pkhash, std::string& str_sig) const override;
@@ -519,7 +525,7 @@ public:
 
     bool ImportScripts(const std::set<CScript> scripts, int64_t timestamp) EXCLUSIVE_LOCKS_REQUIRED(cs_KeyStore);
     bool ImportPrivKeys(const std::map<CKeyID, CKey>& privkey_map, const int64_t timestamp) EXCLUSIVE_LOCKS_REQUIRED(cs_KeyStore);
-    bool ImportPubKeys(const std::vector<CKeyID>& ordered_pubkeys, const std::map<CKeyID, CPubKey>& pubkey_map, const std::map<CKeyID, std::pair<CPubKey, KeyOriginInfo>>& key_origins, const bool add_keypool, const bool internal, const int64_t timestamp) EXCLUSIVE_LOCKS_REQUIRED(cs_KeyStore);
+    bool ImportPubKeys(const std::vector<std::pair<CKeyID, bool>>& ordered_pubkeys, const std::map<CKeyID, CPubKey>& pubkey_map, const std::map<CKeyID, std::pair<CPubKey, KeyOriginInfo>>& key_origins, const bool add_keypool, const int64_t timestamp) EXCLUSIVE_LOCKS_REQUIRED(cs_KeyStore);
     bool ImportScriptPubKeys(const std::set<CScript>& script_pub_keys, const bool have_solving_data, const int64_t timestamp) EXCLUSIVE_LOCKS_REQUIRED(cs_KeyStore);
 
     /* Returns true if the wallet can generate new keys */
@@ -582,6 +588,7 @@ public:
 
 class DescriptorScriptPubKeyMan : public ScriptPubKeyMan
 {
+    friend class LegacyDataSPKM;
 private:
     using ScriptPubKeyMap = std::map<CScript, int32_t>; // Map of scripts to descriptor range index
     using PubKeyMap = std::map<CPubKey, int32_t>; // Map of pubkeys involved in scripts to descriptor range index
@@ -609,8 +616,6 @@ private:
     mutable std::map<int32_t, FlatSigningProvider> m_map_signing_providers;
     // Fetch the SigningProvider for the given script and optionally include private keys
     std::unique_ptr<FlatSigningProvider> GetSigningProvider(const CScript& script, bool include_private = false) const;
-    // Fetch the SigningProvider for the given pubkey and always include private keys. This should only be called by signing code.
-    std::unique_ptr<FlatSigningProvider> GetSigningProvider(const CPubKey& pubkey) const;
     // Fetch the SigningProvider for a given index and optionally include private keys. Called by the above functions.
     std::unique_ptr<FlatSigningProvider> GetSigningProvider(int32_t index, bool include_private = false) const EXCLUSIVE_LOCKS_REQUIRED(cs_desc_man);
 
@@ -659,6 +664,7 @@ public:
     bool HasPrivKey(const CKeyID& keyid) const EXCLUSIVE_LOCKS_REQUIRED(cs_desc_man);
     //! Retrieve the particular key if it is available. Returns nullopt if the key is not in the wallet, or if the wallet is locked.
     std::optional<CKey> GetKey(const CKeyID& keyid) const EXCLUSIVE_LOCKS_REQUIRED(cs_desc_man);
+    bool HaveCryptedKeys() const override;
 
     std::optional<int64_t> GetOldestKeyPoolTime() const override;
     unsigned int GetKeyPoolSize() const override;
@@ -672,6 +678,9 @@ public:
     std::unique_ptr<SigningProvider> GetSolvingProvider(const CScript& script) const override;
 
     bool CanProvide(const CScript& script, SignatureData& sigdata) override;
+
+    // Fetch the SigningProvider for the given pubkey and always include private keys. This should only be called by signing code.
+    std::unique_ptr<FlatSigningProvider> GetSigningProvider(const CPubKey& pubkey) const;
 
     bool SignTransaction(CMutableTransaction& tx, const std::map<COutPoint, Coin>& coins, int sighash, std::map<int, bilingual_str>& input_errors) const override;
     SigningResult SignMessage(const std::string& message, const PKHash& pkhash, std::string& str_sig) const override;

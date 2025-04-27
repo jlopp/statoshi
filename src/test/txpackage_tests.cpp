@@ -20,20 +20,22 @@
 
 #include <boost/test/unit_test.hpp>
 
-BOOST_AUTO_TEST_SUITE(txpackage_tests)
+using namespace util::hex_literals;
+
 // A fee amount that is above 1sat/vB but below 5sat/vB for most transactions created within these
 // unit tests.
 static const CAmount low_fee_amt{200};
 
+struct TxPackageTest : TestChain100Setup {
 // Create placeholder transactions that have no meaning.
 inline CTransactionRef create_placeholder_tx(size_t num_inputs, size_t num_outputs)
 {
     CMutableTransaction mtx = CMutableTransaction();
     mtx.vin.resize(num_inputs);
     mtx.vout.resize(num_outputs);
-    auto random_script = CScript() << ToByteVector(InsecureRand256()) << ToByteVector(InsecureRand256());
+    auto random_script = CScript() << ToByteVector(m_rng.rand256()) << ToByteVector(m_rng.rand256());
     for (size_t i{0}; i < num_inputs; ++i) {
-        mtx.vin[i].prevout.hash = Txid::FromUint256(InsecureRand256());
+        mtx.vin[i].prevout.hash = Txid::FromUint256(m_rng.rand256());
         mtx.vin[i].prevout.n = 0;
         mtx.vin[i].scriptSig = random_script;
     }
@@ -43,25 +45,29 @@ inline CTransactionRef create_placeholder_tx(size_t num_inputs, size_t num_outpu
     }
     return MakeTransactionRef(mtx);
 }
-BOOST_FIXTURE_TEST_CASE(package_hash_tests, TestChain100Setup)
+}; // struct TxPackageTest
+
+BOOST_FIXTURE_TEST_SUITE(txpackage_tests, TxPackageTest)
+
+BOOST_AUTO_TEST_CASE(package_hash_tests)
 {
     // Random real segwit transaction
     DataStream stream_1{
-        ParseHex("02000000000101964b8aa63509579ca6086e6012eeaa4c2f4dd1e283da29b67c8eea38b3c6fd220000000000fdffffff0294c618000000000017a9145afbbb42f4e83312666d0697f9e66259912ecde38768fa2c0000000000160014897388a0889390fd0e153a22bb2cf9d8f019faf50247304402200547406380719f84d68cf4e96cc3e4a1688309ef475b150be2b471c70ea562aa02206d255f5acc40fd95981874d77201d2eb07883657ce1c796513f32b6079545cdf0121023ae77335cefcb5ab4c1dc1fb0d2acfece184e593727d7d5906c78e564c7c11d125cf0c00"),
+        "02000000000101964b8aa63509579ca6086e6012eeaa4c2f4dd1e283da29b67c8eea38b3c6fd220000000000fdffffff0294c618000000000017a9145afbbb42f4e83312666d0697f9e66259912ecde38768fa2c0000000000160014897388a0889390fd0e153a22bb2cf9d8f019faf50247304402200547406380719f84d68cf4e96cc3e4a1688309ef475b150be2b471c70ea562aa02206d255f5acc40fd95981874d77201d2eb07883657ce1c796513f32b6079545cdf0121023ae77335cefcb5ab4c1dc1fb0d2acfece184e593727d7d5906c78e564c7c11d125cf0c00"_hex,
     };
     CTransaction tx_1(deserialize, TX_WITH_WITNESS, stream_1);
     CTransactionRef ptx_1{MakeTransactionRef(tx_1)};
 
     // Random real nonsegwit transaction
     DataStream stream_2{
-        ParseHex("01000000010b26e9b7735eb6aabdf358bab62f9816a21ba9ebdb719d5299e88607d722c190000000008b4830450220070aca44506c5cef3a16ed519d7c3c39f8aab192c4e1c90d065f37b8a4af6141022100a8e160b856c2d43d27d8fba71e5aef6405b8643ac4cb7cb3c462aced7f14711a0141046d11fee51b0e60666d5049a9101a72741df480b96ee26488a4d3466b95c9a40ac5eeef87e10a5cd336c19a84565f80fa6c547957b7700ff4dfbdefe76036c339ffffffff021bff3d11000000001976a91404943fdd508053c75000106d3bc6e2754dbcff1988ac2f15de00000000001976a914a266436d2965547608b9e15d9032a7b9d64fa43188ac00000000"),
+        "01000000010b26e9b7735eb6aabdf358bab62f9816a21ba9ebdb719d5299e88607d722c190000000008b4830450220070aca44506c5cef3a16ed519d7c3c39f8aab192c4e1c90d065f37b8a4af6141022100a8e160b856c2d43d27d8fba71e5aef6405b8643ac4cb7cb3c462aced7f14711a0141046d11fee51b0e60666d5049a9101a72741df480b96ee26488a4d3466b95c9a40ac5eeef87e10a5cd336c19a84565f80fa6c547957b7700ff4dfbdefe76036c339ffffffff021bff3d11000000001976a91404943fdd508053c75000106d3bc6e2754dbcff1988ac2f15de00000000001976a914a266436d2965547608b9e15d9032a7b9d64fa43188ac00000000"_hex,
     };
     CTransaction tx_2(deserialize, TX_WITH_WITNESS, stream_2);
     CTransactionRef ptx_2{MakeTransactionRef(tx_2)};
 
     // Random real segwit transaction
     DataStream stream_3{
-        ParseHex("0200000000010177862801f77c2c068a70372b4c435ef8dd621291c36a64eb4dd491f02218f5324600000000fdffffff014a0100000000000022512035ea312034cfac01e956a269f3bf147f569c2fbb00180677421262da042290d803402be713325ff285e66b0380f53f2fae0d0fb4e16f378a440fed51ce835061437566729d4883bc917632f3cff474d6384bc8b989961a1d730d4a87ed38ad28bd337b20f1d658c6c138b1c312e072b4446f50f01ae0da03a42e6274f8788aae53416a7fac0063036f7264010118746578742f706c61696e3b636861727365743d7574662d3800357b2270223a226272632d3230222c226f70223a226d696e74222c227469636b223a224342414c222c22616d74223a2236393639227d6821c1f1d658c6c138b1c312e072b4446f50f01ae0da03a42e6274f8788aae53416a7f00000000"),
+        "0200000000010177862801f77c2c068a70372b4c435ef8dd621291c36a64eb4dd491f02218f5324600000000fdffffff014a0100000000000022512035ea312034cfac01e956a269f3bf147f569c2fbb00180677421262da042290d803402be713325ff285e66b0380f53f2fae0d0fb4e16f378a440fed51ce835061437566729d4883bc917632f3cff474d6384bc8b989961a1d730d4a87ed38ad28bd337b20f1d658c6c138b1c312e072b4446f50f01ae0da03a42e6274f8788aae53416a7fac0063036f7264010118746578742f706c61696e3b636861727365743d7574662d3800357b2270223a226272632d3230222c226f70223a226d696e74222c227469636b223a224342414c222c22616d74223a2236393639227d6821c1f1d658c6c138b1c312e072b4446f50f01ae0da03a42e6274f8788aae53416a7f00000000"_hex,
     };
     CTransaction tx_3(deserialize, TX_WITH_WITNESS, stream_3);
     CTransactionRef ptx_3{MakeTransactionRef(tx_3)};
@@ -124,7 +130,7 @@ BOOST_FIXTURE_TEST_CASE(package_hash_tests, TestChain100Setup)
     BOOST_CHECK_EQUAL(calculated_hash_123, GetPackageHash(package_321));
 }
 
-BOOST_FIXTURE_TEST_CASE(package_sanitization_tests, TestChain100Setup)
+BOOST_AUTO_TEST_CASE(package_sanitization_tests)
 {
     // Packages can't have more than 25 transactions.
     Package package_too_many;
@@ -167,7 +173,7 @@ BOOST_FIXTURE_TEST_CASE(package_sanitization_tests, TestChain100Setup)
     // Packages can't have transactions spending the same prevout
     CMutableTransaction tx_zero_1;
     CMutableTransaction tx_zero_2;
-    COutPoint same_prevout{Txid::FromUint256(InsecureRand256()), 0};
+    COutPoint same_prevout{Txid::FromUint256(m_rng.rand256()), 0};
     tx_zero_1.vin.emplace_back(same_prevout);
     tx_zero_2.vin.emplace_back(same_prevout);
     // Different vouts (not the same tx)
@@ -185,7 +191,7 @@ BOOST_FIXTURE_TEST_CASE(package_sanitization_tests, TestChain100Setup)
     // IsConsistentPackage only cares about conflicts between transactions, not about a transaction
     // conflicting with itself (i.e. duplicate prevouts in vin).
     CMutableTransaction dup_tx;
-    const COutPoint rand_prevout{Txid::FromUint256(InsecureRand256()), 0};
+    const COutPoint rand_prevout{Txid::FromUint256(m_rng.rand256()), 0};
     dup_tx.vin.emplace_back(rand_prevout);
     dup_tx.vin.emplace_back(rand_prevout);
     Package package_with_dup_tx{MakeTransactionRef(dup_tx)};
@@ -194,7 +200,7 @@ BOOST_FIXTURE_TEST_CASE(package_sanitization_tests, TestChain100Setup)
     BOOST_CHECK(IsConsistentPackage(package_with_dup_tx));
 }
 
-BOOST_FIXTURE_TEST_CASE(package_validation_tests, TestChain100Setup)
+BOOST_AUTO_TEST_CASE(package_validation_tests)
 {
     LOCK(cs_main);
     unsigned int initialPoolSize = m_node.mempool->size();
@@ -249,7 +255,7 @@ BOOST_FIXTURE_TEST_CASE(package_validation_tests, TestChain100Setup)
     BOOST_CHECK_EQUAL(m_node.mempool->size(), initialPoolSize);
 }
 
-BOOST_FIXTURE_TEST_CASE(noncontextual_package_tests, TestChain100Setup)
+BOOST_AUTO_TEST_CASE(noncontextual_package_tests)
 {
     // The signatures won't be verified so we can just use a placeholder
     CKey placeholder_key = GenerateRandomKey();
@@ -277,6 +283,8 @@ BOOST_FIXTURE_TEST_CASE(noncontextual_package_tests, TestChain100Setup)
         BOOST_CHECK(GetPackageHash({tx_parent}) != GetPackageHash({tx_child}));
         BOOST_CHECK(GetPackageHash({tx_child, tx_child}) != GetPackageHash({tx_child}));
         BOOST_CHECK(GetPackageHash({tx_child, tx_parent}) != GetPackageHash({tx_child, tx_child}));
+        BOOST_CHECK(!IsChildWithParents({}));
+        BOOST_CHECK(!IsChildWithParentsTree({}));
     }
 
     // 24 Parents and 1 Child
@@ -345,7 +353,7 @@ BOOST_FIXTURE_TEST_CASE(noncontextual_package_tests, TestChain100Setup)
     }
 }
 
-BOOST_FIXTURE_TEST_CASE(package_submission_tests, TestChain100Setup)
+BOOST_AUTO_TEST_CASE(package_submission_tests)
 {
     LOCK(cs_main);
     unsigned int expected_pool_size = m_node.mempool->size();
@@ -486,9 +494,100 @@ BOOST_FIXTURE_TEST_CASE(package_submission_tests, TestChain100Setup)
     }
 }
 
+// Tests for packages containing a single transaction
+BOOST_AUTO_TEST_CASE(package_single_tx)
+{
+    // Mine blocks to mature coinbases.
+    mineBlocks(3);
+    LOCK(cs_main);
+    auto expected_pool_size{m_node.mempool->size()};
+
+    const CAmount high_fee{1000};
+
+    // No unconfirmed parents
+    CKey single_key = GenerateRandomKey();
+    CScript single_locking_script = GetScriptForDestination(PKHash(single_key.GetPubKey()));
+    auto mtx_single = CreateValidMempoolTransaction(/*input_transaction=*/m_coinbase_txns[0], /*input_vout=*/0,
+                                                    /*input_height=*/0, /*input_signing_key=*/coinbaseKey,
+                                                    /*output_destination=*/single_locking_script,
+                                                    /*output_amount=*/CAmount(49 * COIN), /*submit=*/false);
+    CTransactionRef tx_single = MakeTransactionRef(mtx_single);
+    Package package_tx_single{tx_single};
+    const auto result_single_tx = ProcessNewPackage(m_node.chainman->ActiveChainstate(), *m_node.mempool,
+                                                    package_tx_single, /*test_accept=*/false, /*client_maxfeerate=*/{});
+    expected_pool_size += 1;
+    BOOST_CHECK_MESSAGE(result_single_tx.m_state.IsValid(),
+                        "Package validation unexpectedly failed: " << result_single_tx.m_state.ToString());
+    BOOST_CHECK_EQUAL(m_node.mempool->size(), expected_pool_size);
+
+    // Parent and Child. Both submitted by themselves through the ProcessNewPackage interface.
+    CKey parent_key = GenerateRandomKey();
+    CScript parent_locking_script = GetScriptForDestination(WitnessV0KeyHash(parent_key.GetPubKey()));
+    auto mtx_parent = CreateValidMempoolTransaction(/*input_transaction=*/m_coinbase_txns[1], /*input_vout=*/0,
+                                                    /*input_height=*/0, /*input_signing_key=*/coinbaseKey,
+                                                    /*output_destination=*/parent_locking_script,
+                                                    /*output_amount=*/CAmount(50 * COIN) - high_fee, /*submit=*/false);
+    CTransactionRef tx_parent = MakeTransactionRef(mtx_parent);
+    Package package_just_parent{tx_parent};
+    const auto result_just_parent = ProcessNewPackage(m_node.chainman->ActiveChainstate(), *m_node.mempool, package_just_parent, /*test_accept=*/false, /*client_maxfeerate=*/{});
+    if (auto err_parent_child{CheckPackageMempoolAcceptResult(package_just_parent, result_just_parent, /*expect_valid=*/true, nullptr)}) {
+        BOOST_ERROR(err_parent_child.value());
+    } else {
+        auto it_parent = result_just_parent.m_tx_results.find(tx_parent->GetWitnessHash());
+        BOOST_CHECK_MESSAGE(it_parent->second.m_state.IsValid(), it_parent->second.m_state.ToString());
+        BOOST_CHECK(it_parent->second.m_effective_feerate.value().GetFee(GetVirtualTransactionSize(*tx_parent)) == high_fee);
+        BOOST_CHECK_EQUAL(it_parent->second.m_wtxids_fee_calculations.value().size(), 1);
+        BOOST_CHECK_EQUAL(it_parent->second.m_wtxids_fee_calculations.value().front(), tx_parent->GetWitnessHash());
+    }
+    expected_pool_size += 1;
+    BOOST_CHECK_EQUAL(m_node.mempool->size(), expected_pool_size);
+
+    CKey child_key = GenerateRandomKey();
+    CScript child_locking_script = GetScriptForDestination(WitnessV0KeyHash(child_key.GetPubKey()));
+    auto mtx_child = CreateValidMempoolTransaction(/*input_transaction=*/tx_parent, /*input_vout=*/0,
+                                                   /*input_height=*/101, /*input_signing_key=*/parent_key,
+                                                   /*output_destination=*/child_locking_script,
+                                                   /*output_amount=*/CAmount(50 * COIN) - 2 * high_fee, /*submit=*/false);
+    CTransactionRef tx_child = MakeTransactionRef(mtx_child);
+    Package package_just_child{tx_child};
+    const auto result_just_child = ProcessNewPackage(m_node.chainman->ActiveChainstate(), *m_node.mempool, package_just_child, /*test_accept=*/false, /*client_maxfeerate=*/{});
+    if (auto err_parent_child{CheckPackageMempoolAcceptResult(package_just_child, result_just_child, /*expect_valid=*/true, nullptr)}) {
+        BOOST_ERROR(err_parent_child.value());
+    } else {
+        auto it_child = result_just_child.m_tx_results.find(tx_child->GetWitnessHash());
+        BOOST_CHECK_MESSAGE(it_child->second.m_state.IsValid(), it_child->second.m_state.ToString());
+        BOOST_CHECK(it_child->second.m_effective_feerate.value().GetFee(GetVirtualTransactionSize(*tx_child)) == high_fee);
+        BOOST_CHECK_EQUAL(it_child->second.m_wtxids_fee_calculations.value().size(), 1);
+        BOOST_CHECK_EQUAL(it_child->second.m_wtxids_fee_calculations.value().front(), tx_child->GetWitnessHash());
+    }
+    expected_pool_size += 1;
+    BOOST_CHECK_EQUAL(m_node.mempool->size(), expected_pool_size);
+
+    // Too-low fee to RBF tx_single
+    auto mtx_single_low_fee = CreateValidMempoolTransaction(/*input_transaction=*/m_coinbase_txns[0], /*input_vout=*/0,
+                                                    /*input_height=*/0, /*input_signing_key=*/coinbaseKey,
+                                                    /*output_destination=*/single_locking_script,
+                                                    /*output_amount=*/CAmount(49 * COIN - 1), /*submit=*/false);
+    CTransactionRef tx_single_low_fee = MakeTransactionRef(mtx_single_low_fee);
+    Package package_tx_single_low_fee{tx_single_low_fee};
+    const auto result_single_tx_low_fee = ProcessNewPackage(m_node.chainman->ActiveChainstate(), *m_node.mempool,
+                                                    package_tx_single_low_fee, /*test_accept=*/false, /*client_maxfeerate=*/{});
+
+    BOOST_CHECK_EQUAL(m_node.mempool->size(), expected_pool_size);
+
+    BOOST_CHECK(!result_single_tx_low_fee.m_state.IsValid());
+    BOOST_CHECK_EQUAL(result_single_tx_low_fee.m_state.GetResult(), PackageValidationResult::PCKG_TX);
+    auto it_low_fee = result_single_tx_low_fee.m_tx_results.find(tx_single_low_fee->GetWitnessHash());
+    BOOST_CHECK_EQUAL(it_low_fee->second.m_state.GetResult(), TxValidationResult::TX_RECONSIDERABLE);
+    if (auto err_single{CheckPackageMempoolAcceptResult(package_tx_single_low_fee, result_single_tx_low_fee, /*expect_valid=*/false, m_node.mempool.get())}) {
+        BOOST_ERROR(err_single.value());
+    }
+    BOOST_CHECK_EQUAL(m_node.mempool->size(), expected_pool_size);
+}
+
 // Tests for packages containing transactions that have same-txid-different-witness equivalents in
 // the mempool.
-BOOST_FIXTURE_TEST_CASE(package_witness_swap_tests, TestChain100Setup)
+BOOST_AUTO_TEST_CASE(package_witness_swap_tests)
 {
     // Mine blocks to mature coinbases.
     mineBlocks(5);
@@ -722,7 +821,7 @@ BOOST_FIXTURE_TEST_CASE(package_witness_swap_tests, TestChain100Setup)
     }
 }
 
-BOOST_FIXTURE_TEST_CASE(package_cpfp_tests, TestChain100Setup)
+BOOST_AUTO_TEST_CASE(package_cpfp_tests)
 {
     mineBlocks(5);
     MockMempoolMinFee(CFeeRate(5000));
@@ -933,7 +1032,7 @@ BOOST_FIXTURE_TEST_CASE(package_cpfp_tests, TestChain100Setup)
     }
 }
 
-BOOST_FIXTURE_TEST_CASE(package_rbf_tests, TestChain100Setup)
+BOOST_AUTO_TEST_CASE(package_rbf_tests)
 {
     mineBlocks(5);
     LOCK(::cs_main);
@@ -1072,7 +1171,25 @@ BOOST_FIXTURE_TEST_CASE(package_rbf_tests, TestChain100Setup)
         BOOST_CHECK_EQUAL(it_child_3->second.m_effective_feerate.value().GetFee(package3_total_vsize), 199 + 1300);
 
         BOOST_CHECK_EQUAL(m_node.mempool->size(), expected_pool_size);
-    }
 
+        // Finally, check that we can prioritise tx_child_1 to get package1 into the mempool.
+        // It should not be possible to resubmit package1 and get it in without prioritisation.
+        const auto submit4 = ProcessNewPackage(m_node.chainman->ActiveChainstate(), *m_node.mempool, package1, false, std::nullopt);
+        if (auto err_4{CheckPackageMempoolAcceptResult(package1, submit4, /*expect_valid=*/false, m_node.mempool.get())}) {
+            BOOST_ERROR(err_4.value());
+        }
+        m_node.mempool->PrioritiseTransaction(tx_child_1->GetHash(), 1363);
+        const auto submit5 = ProcessNewPackage(m_node.chainman->ActiveChainstate(), *m_node.mempool, package1, false, std::nullopt);
+        if (auto err_5{CheckPackageMempoolAcceptResult(package1, submit5, /*expect_valid=*/true, m_node.mempool.get())}) {
+            BOOST_ERROR(err_5.value());
+        }
+        it_parent_1 = submit5.m_tx_results.find(tx_parent_1->GetWitnessHash());
+        it_child_1 = submit5.m_tx_results.find(tx_child_1->GetWitnessHash());
+        BOOST_CHECK_EQUAL(it_parent_1->second.m_result_type, MempoolAcceptResult::ResultType::VALID);
+        BOOST_CHECK_EQUAL(it_child_1->second.m_result_type, MempoolAcceptResult::ResultType::VALID);
+        LOCK(m_node.mempool->cs);
+        BOOST_CHECK(m_node.mempool->GetIter(tx_parent_1->GetHash()).has_value());
+        BOOST_CHECK(m_node.mempool->GetIter(tx_child_1->GetHash()).has_value());
+    }
 }
 BOOST_AUTO_TEST_SUITE_END()

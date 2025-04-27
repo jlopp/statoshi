@@ -36,8 +36,7 @@ list or changes that are
 Some of them might no longer be applicable. So if you are interested, but
 unsure, you might want to leave a comment on the issue first.
 
-You may also participate in the weekly
-[Bitcoin Core PR Review Club](https://bitcoincore.reviews/) meeting.
+You may also participate in the [Bitcoin Core PR Review Club](https://bitcoincore.reviews/).
 
 ### Good First Issue Label
 
@@ -153,7 +152,7 @@ the pull request affects. Valid areas as:
   - `test`, `qa` or `ci` for changes to the unit tests, QA tests or CI code
   - `util` or `lib` for changes to the utils or libraries
   - `wallet` for changes to the wallet code
-  - `build` for changes to the GNU Autotools or MSVC builds
+  - `build` for changes to CMake
   - `guix` for changes to the GUIX reproducible builds
 
 Examples:

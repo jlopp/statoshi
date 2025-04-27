@@ -180,6 +180,11 @@ public:
     }
 };
 
+struct DbTxnListener
+{
+    std::function<void()> on_commit, on_abort;
+};
+
 /** Access to the wallet database.
  * Opens the database and provides read and write access to it. Each read and write is its own transaction.
  * Multiple operation transactions can be started using TxnBegin() and committed using TxnCommit()
@@ -238,6 +243,7 @@ public:
     bool WriteKey(const CPubKey& vchPubKey, const CPrivKey& vchPrivKey, const CKeyMetadata &keyMeta);
     bool WriteCryptedKey(const CPubKey& vchPubKey, const std::vector<unsigned char>& vchCryptedSecret, const CKeyMetadata &keyMeta);
     bool WriteMasterKey(unsigned int nID, const CMasterKey& kMasterKey);
+    bool EraseMasterKey(unsigned int id);
 
     bool WriteCScript(const uint160& hash, const CScript& redeemScript);
 
@@ -292,9 +298,18 @@ public:
     bool TxnCommit();
     //! Abort current transaction
     bool TxnAbort();
+    bool HasActiveTxn() { return m_batch->HasActiveTxn(); }
+
+    //! Registers db txn callback functions
+    void RegisterTxnListener(const DbTxnListener& l);
+
 private:
     std::unique_ptr<DatabaseBatch> m_batch;
     WalletDatabase& m_database;
+
+    // External functions listening to the current db txn outcome.
+    // Listeners are cleared at the end of the transaction.
+    std::vector<DbTxnListener> m_txn_listeners;
 };
 
 /**
@@ -318,6 +333,10 @@ bool LoadKey(CWallet* pwallet, DataStream& ssKey, DataStream& ssValue, std::stri
 bool LoadCryptedKey(CWallet* pwallet, DataStream& ssKey, DataStream& ssValue, std::string& strErr);
 bool LoadEncryptionKey(CWallet* pwallet, DataStream& ssKey, DataStream& ssValue, std::string& strErr);
 bool LoadHDChain(CWallet* pwallet, DataStream& ssValue, std::string& strErr);
+
+//! Returns true if there are any DBKeys::LEGACY_TYPES record in the wallet db
+bool HasLegacyRecords(CWallet& wallet);
+bool HasLegacyRecords(CWallet& wallet, DatabaseBatch& batch);
 } // namespace wallet
 
 #endif // BITCOIN_WALLET_WALLETDB_H

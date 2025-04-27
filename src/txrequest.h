@@ -92,6 +92,10 @@
  *   peers with a nonzero number of tracked announcements.
  * - CPU usage is generally logarithmic in the total number of tracked announcements, plus the number of
  *   announcements affected by an operation (amortized O(1) per announcement).
+ *
+ * Context:
+ * - In an earlier version of the transaction request logic it was possible for a peer to prevent us from seeing a
+ *   specific transaction. See https://bitcoincore.org/en/2024/07/03/disclose_already_asked_for.
  */
 class TxRequestTracker {
     // Avoid littering this header file with implementation details.
@@ -194,6 +198,10 @@ public:
 
     /** Count how many announcements are being tracked in total across all peers and transaction hashes. */
     size_t Size() const;
+
+    /** For some txhash (txid or wtxid), finds all peers with non-COMPLETED announcements and appends them to
+     * result_peers. Does not try to ensure that result_peers contains no duplicates. */
+    void GetCandidatePeers(const uint256& txhash, std::vector<NodeId>& result_peers) const;
 
     /** Access to the internal priority computation (testing only) */
     uint64_t ComputePriority(const uint256& txhash, NodeId peer, bool preferred) const;

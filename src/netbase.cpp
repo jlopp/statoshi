@@ -3,7 +3,7 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#include <config/bitcoin-config.h> // IWYU pragma: keep
+#include <bitcoin-build-config.h> // IWYU pragma: keep
 
 #include <netbase.h>
 
@@ -230,7 +230,7 @@ CService LookupNumeric(const std::string& name, uint16_t portDefault, DNSLookupF
 bool IsUnixSocketPath(const std::string& name)
 {
 #ifdef HAVE_SOCKADDR_UN
-    if (name.find(ADDR_PREFIX_UNIX) != 0) return false;
+    if (!name.starts_with(ADDR_PREFIX_UNIX)) return false;
 
     // Split off "unix:" prefix
     std::string str{name.substr(ADDR_PREFIX_UNIX.length())};
@@ -266,17 +266,25 @@ enum SOCKS5Command: uint8_t {
     UDP_ASSOCIATE = 0x03
 };
 
-/** Values defined for REP in RFC1928 */
+/** Values defined for REP in RFC1928 and https://spec.torproject.org/socks-extensions.html */
 enum SOCKS5Reply: uint8_t {
-    SUCCEEDED = 0x00,        //!< Succeeded
-    GENFAILURE = 0x01,       //!< General failure
-    NOTALLOWED = 0x02,       //!< Connection not allowed by ruleset
-    NETUNREACHABLE = 0x03,   //!< Network unreachable
-    HOSTUNREACHABLE = 0x04,  //!< Network unreachable
-    CONNREFUSED = 0x05,      //!< Connection refused
-    TTLEXPIRED = 0x06,       //!< TTL expired
-    CMDUNSUPPORTED = 0x07,   //!< Command not supported
-    ATYPEUNSUPPORTED = 0x08, //!< Address type not supported
+    SUCCEEDED = 0x00,                  //!< RFC1928: Succeeded
+    GENFAILURE = 0x01,                 //!< RFC1928: General failure
+    NOTALLOWED = 0x02,                 //!< RFC1928: Connection not allowed by ruleset
+    NETUNREACHABLE = 0x03,             //!< RFC1928: Network unreachable
+    HOSTUNREACHABLE = 0x04,            //!< RFC1928: Network unreachable
+    CONNREFUSED = 0x05,                //!< RFC1928: Connection refused
+    TTLEXPIRED = 0x06,                 //!< RFC1928: TTL expired
+    CMDUNSUPPORTED = 0x07,             //!< RFC1928: Command not supported
+    ATYPEUNSUPPORTED = 0x08,           //!< RFC1928: Address type not supported
+    TOR_HS_DESC_NOT_FOUND = 0xf0,      //!< Tor: Onion service descriptor can not be found
+    TOR_HS_DESC_INVALID = 0xf1,        //!< Tor: Onion service descriptor is invalid
+    TOR_HS_INTRO_FAILED = 0xf2,        //!< Tor: Onion service introduction failed
+    TOR_HS_REND_FAILED = 0xf3,         //!< Tor: Onion service rendezvous failed
+    TOR_HS_MISSING_CLIENT_AUTH = 0xf4, //!< Tor: Onion service missing client authorization
+    TOR_HS_WRONG_CLIENT_AUTH = 0xf5,   //!< Tor: Onion service wrong client authorization
+    TOR_HS_BAD_ADDRESS = 0xf6,         //!< Tor: Onion service invalid address
+    TOR_HS_INTRO_TIMEOUT = 0xf7,       //!< Tor: Onion service introduction timed out
 };
 
 /** Values defined for ATYPE in RFC1928 */
@@ -364,8 +372,24 @@ static std::string Socks5ErrorString(uint8_t err)
             return "protocol error";
         case SOCKS5Reply::ATYPEUNSUPPORTED:
             return "address type not supported";
+        case SOCKS5Reply::TOR_HS_DESC_NOT_FOUND:
+            return "onion service descriptor can not be found";
+        case SOCKS5Reply::TOR_HS_DESC_INVALID:
+            return "onion service descriptor is invalid";
+        case SOCKS5Reply::TOR_HS_INTRO_FAILED:
+            return "onion service introduction failed";
+        case SOCKS5Reply::TOR_HS_REND_FAILED:
+            return "onion service rendezvous failed";
+        case SOCKS5Reply::TOR_HS_MISSING_CLIENT_AUTH:
+            return "onion service missing client authorization";
+        case SOCKS5Reply::TOR_HS_WRONG_CLIENT_AUTH:
+            return "onion service wrong client authorization";
+        case SOCKS5Reply::TOR_HS_BAD_ADDRESS:
+            return "onion service invalid address";
+        case SOCKS5Reply::TOR_HS_INTRO_TIMEOUT:
+            return "onion service introduction timed out";
         default:
-            return "unknown";
+            return strprintf("unknown (0x%02x)", err);
     }
 }
 
@@ -373,7 +397,7 @@ bool Socks5(const std::string& strDest, uint16_t port, const ProxyCredentials* a
 {
     try {
         IntrRecvError recvr;
-        LogPrint(BCLog::NET, "SOCKS5 connecting %s\n", strDest);
+        LogDebug(BCLog::NET, "SOCKS5 connecting %s\n", strDest);
         if (strDest.size() > 255) {
             LogError("Hostname too long\n");
             return false;
@@ -412,7 +436,7 @@ bool Socks5(const std::string& strDest, uint16_t port, const ProxyCredentials* a
             vAuth.push_back(auth->password.size());
             vAuth.insert(vAuth.end(), auth->password.begin(), auth->password.end());
             sock.SendComplete(vAuth, g_socks5_recv_timeout, g_socks5_interrupt);
-            LogPrint(BCLog::PROXY, "SOCKS5 sending proxy authentication %s:%s\n", auth->username, auth->password);
+            LogDebug(BCLog::PROXY, "SOCKS5 sending proxy authentication %s:%s\n", auth->username, auth->password);
             uint8_t pchRetA[2];
             if (InterruptibleRecv(pchRetA, 2, g_socks5_recv_timeout, sock) != IntrRecvError::OK) {
                 LogError("Error reading proxy authentication response\n");
@@ -491,7 +515,7 @@ bool Socks5(const std::string& strDest, uint16_t port, const ProxyCredentials* a
             LogError("Error reading from proxy\n");
             return false;
         }
-        LogPrint(BCLog::NET, "SOCKS5 connected %s\n", strDest);
+        LogDebug(BCLog::NET, "SOCKS5 connected %s\n", strDest);
         return true;
     } catch (const std::runtime_error& e) {
         LogError("Error during SOCKS5 proxy handshake: %s\n", e.what());
@@ -547,7 +571,7 @@ std::unique_ptr<Sock> CreateSockOS(int domain, int type, int protocol)
         // Set the no-delay option (disable Nagle's algorithm) on the TCP socket.
         const int on{1};
         if (sock->SetSockOpt(IPPROTO_TCP, TCP_NODELAY, &on, sizeof(on)) == SOCKET_ERROR) {
-            LogPrint(BCLog::NET, "Unable to set TCP_NODELAY on a newly created socket, continuing anyway\n");
+            LogDebug(BCLog::NET, "Unable to set TCP_NODELAY on a newly created socket, continuing anyway\n");
         }
     }
 
@@ -557,12 +581,13 @@ std::unique_ptr<Sock> CreateSockOS(int domain, int type, int protocol)
 std::function<std::unique_ptr<Sock>(int, int, int)> CreateSock = CreateSockOS;
 
 template<typename... Args>
-static void LogConnectFailure(bool manual_connection, const char* fmt, const Args&... args) {
+static void LogConnectFailure(bool manual_connection, util::ConstevalFormatString<sizeof...(Args)> fmt, const Args&... args)
+{
     std::string error_message = tfm::format(fmt, args...);
     if (manual_connection) {
         LogPrintf("%s\n", error_message);
     } else {
-        LogPrint(BCLog::NET, "%s\n", error_message);
+        LogDebug(BCLog::NET, "%s\n", error_message);
     }
 }
 
@@ -724,6 +749,43 @@ bool IsProxy(const CNetAddr &addr) {
     return false;
 }
 
+/**
+ * Generate unique credentials for Tor stream isolation. Tor will create
+ * separate circuits for SOCKS5 proxy connections with different credentials, which
+ * makes it harder to correlate the connections.
+ */
+class TorStreamIsolationCredentialsGenerator
+{
+public:
+    TorStreamIsolationCredentialsGenerator():
+        m_prefix(GenerateUniquePrefix()) {
+    }
+
+    /** Return the next unique proxy credentials. */
+    ProxyCredentials Generate() {
+        ProxyCredentials auth;
+        auth.username = auth.password = strprintf("%s%i", m_prefix, m_counter);
+        ++m_counter;
+        return auth;
+    }
+
+    /** Size of session prefix in bytes. */
+    static constexpr size_t PREFIX_BYTE_LENGTH = 8;
+private:
+    const std::string m_prefix;
+    std::atomic<uint64_t> m_counter;
+
+    /** Generate a random prefix for each of the credentials returned by this generator.
+     * This makes sure that different launches of the application (either successively or in parallel)
+     * will not share the same circuits, as would be the case with a bare counter.
+     */
+    static std::string GenerateUniquePrefix() {
+        std::array<uint8_t, PREFIX_BYTE_LENGTH> prefix_bytes;
+        GetRandBytes(prefix_bytes);
+        return HexStr(prefix_bytes) + "-";
+    }
+};
+
 std::unique_ptr<Sock> ConnectThroughProxy(const Proxy& proxy,
                                           const std::string& dest,
                                           uint16_t port,
@@ -737,10 +799,9 @@ std::unique_ptr<Sock> ConnectThroughProxy(const Proxy& proxy,
     }
 
     // do socks negotiation
-    if (proxy.m_randomize_credentials) {
-        ProxyCredentials random_auth;
-        static std::atomic_int counter(0);
-        random_auth.username = random_auth.password = strprintf("%i", counter++);
+    if (proxy.m_tor_stream_isolation) {
+        static TorStreamIsolationCredentialsGenerator generator;
+        ProxyCredentials random_auth{generator.Generate()};
         if (!Socks5(dest, port, &random_auth, *sock)) {
             return {};
         }

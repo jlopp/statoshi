@@ -29,20 +29,24 @@ util::Result<void> ApplyArgsManOptions(const ArgsManager& args, ChainstateManage
         opts.check_block_index = args.GetArg("-checkblockindex")->empty() ? 1 : *value;
     }
 
-    if (auto value{args.GetBoolArg("-checkpoints")}) opts.checkpoints_enabled = *value;
-
     if (auto value{args.GetArg("-minimumchainwork")}) {
-        if (!IsHexNumber(*value)) {
-            return util::Error{strprintf(Untranslated("Invalid non-hex (%s) minimum chain work value specified"), *value)};
+        if (auto min_work{uint256::FromUserHex(*value)}) {
+            opts.minimum_chain_work = UintToArith256(*min_work);
+        } else {
+            return util::Error{Untranslated(strprintf("Invalid minimum work specified (%s), must be up to %d hex digits", *value, uint256::size() * 2))};
         }
-        opts.minimum_chain_work = UintToArith256(uint256S(*value));
     }
 
-    if (auto value{args.GetArg("-assumevalid")}) opts.assumed_valid_block = uint256S(*value);
+    if (auto value{args.GetArg("-assumevalid")}) {
+        if (auto block_hash{uint256::FromUserHex(*value)}) {
+            opts.assumed_valid_block = *block_hash;
+        } else {
+            return util::Error{Untranslated(strprintf("Invalid assumevalid block hash specified (%s), must be up to %d hex digits (or 0 to disable)", *value, uint256::size() * 2))};
+        }
+    }
 
     if (auto value{args.GetIntArg("-maxtipage")}) opts.max_tip_age = std::chrono::seconds{*value};
 
-    ReadDatabaseArgs(args, opts.block_tree_db);
     ReadDatabaseArgs(args, opts.coins_db);
     ReadCoinsViewArgs(args, opts.coins_view);
 
@@ -53,8 +57,7 @@ util::Result<void> ApplyArgsManOptions(const ArgsManager& args, ChainstateManage
         script_threads += GetNumCores();
     }
     // Subtract 1 because the main thread counts towards the par threads.
-    opts.worker_threads_num = std::clamp(script_threads - 1, 0, MAX_SCRIPTCHECK_THREADS);
-    LogPrintf("Script verification uses %d additional threads\n", opts.worker_threads_num);
+    opts.worker_threads_num = script_threads - 1;
 
     if (auto max_size = args.GetIntArg("-maxsigcachesize")) {
         // 1. When supplied with a max_size of 0, both the signature cache and

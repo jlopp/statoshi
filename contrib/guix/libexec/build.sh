@@ -69,8 +69,9 @@ unset CPLUS_INCLUDE_PATH
 unset OBJC_INCLUDE_PATH
 unset OBJCPLUS_INCLUDE_PATH
 
-export C_INCLUDE_PATH="${NATIVE_GCC}/include"
-export CPLUS_INCLUDE_PATH="${NATIVE_GCC}/include/c++:${NATIVE_GCC}/include"
+# Set native toolchain
+build_CC="${NATIVE_GCC}/bin/gcc -isystem ${NATIVE_GCC}/include"
+build_CXX="${NATIVE_GCC}/bin/g++ -isystem ${NATIVE_GCC}/include/c++ -isystem ${NATIVE_GCC}/include"
 
 case "$HOST" in
     *darwin*) export LIBRARY_PATH="${NATIVE_GCC}/lib" ;; # Required for qt/qmake
@@ -171,6 +172,8 @@ make -C depends --jobs="$JOBS" HOST="$HOST" \
                                    ${SOURCES_PATH+SOURCES_PATH="$SOURCES_PATH"} \
                                    ${BASE_CACHE+BASE_CACHE="$BASE_CACHE"} \
                                    ${SDK_PATH+SDK_PATH="$SDK_PATH"} \
+                                   ${build_CC+build_CC="$build_CC"} \
+                                   ${build_CXX+build_CXX="$build_CXX"} \
                                    x86_64_linux_CC=x86_64-linux-gnu-gcc \
                                    x86_64_linux_CXX=x86_64-linux-gnu-g++ \
                                    x86_64_linux_AR=x86_64-linux-gnu-gcc-ar \
@@ -181,8 +184,6 @@ make -C depends --jobs="$JOBS" HOST="$HOST" \
 case "$HOST" in
     *darwin*)
         # Unset now that Qt is built
-        unset C_INCLUDE_PATH
-        unset CPLUS_INCLUDE_PATH
         unset LIBRARY_PATH
         ;;
 esac
@@ -206,13 +207,12 @@ mkdir -p "$OUTDIR"
 ###########################
 
 # CONFIGFLAGS
-CONFIGFLAGS="--enable-reduce-exports --disable-bench --disable-gui-tests --disable-fuzz-binary"
+CONFIGFLAGS="-DREDUCE_EXPORTS=ON -DBUILD_BENCH=OFF -DBUILD_GUI_TESTS=OFF -DBUILD_FUZZ_BINARY=OFF"
 
 # CFLAGS
 HOST_CFLAGS="-O2 -g"
 HOST_CFLAGS+=$(find /gnu/store -maxdepth 1 -mindepth 1 -type d -exec echo -n " -ffile-prefix-map={}=/usr" \;)
 case "$HOST" in
-    *linux*)  HOST_CFLAGS+=" -ffile-prefix-map=${PWD}=." ;;
     *mingw*)  HOST_CFLAGS+=" -fno-ident" ;;
     *darwin*) unset HOST_CFLAGS ;;
 esac
@@ -230,8 +230,6 @@ case "$HOST" in
     *mingw*)  HOST_LDFLAGS="-Wl,--no-insert-timestamp" ;;
 esac
 
-# Make $HOST-specific native binaries from depends available in $PATH
-export PATH="${BASEPREFIX}/${HOST}/native/bin:${PATH}"
 mkdir -p "$DISTSRC"
 (
     cd "$DISTSRC"
@@ -239,38 +237,29 @@ mkdir -p "$DISTSRC"
     # Extract the source tarball
     tar --strip-components=1 -xf "${GIT_ARCHIVE}"
 
-    ./autogen.sh
-
     # Configure this DISTSRC for $HOST
     # shellcheck disable=SC2086
-    env CONFIG_SITE="${BASEPREFIX}/${HOST}/share/config.site" \
-        ./configure --prefix=/ \
-                    --disable-ccache \
-                    --disable-maintainer-mode \
-                    --disable-dependency-tracking \
-                    ${CONFIGFLAGS} \
-                    ${HOST_CFLAGS:+CFLAGS="${HOST_CFLAGS}"} \
-                    ${HOST_CXXFLAGS:+CXXFLAGS="${HOST_CXXFLAGS}"} \
-                    ${HOST_LDFLAGS:+LDFLAGS="${HOST_LDFLAGS}"}
-
-    sed -i.old 's/-lstdc++ //g' config.status libtool
+    env CFLAGS="${HOST_CFLAGS}" CXXFLAGS="${HOST_CXXFLAGS}" LDFLAGS="${HOST_LDFLAGS}" \
+    cmake -S . -B build \
+          --toolchain "${BASEPREFIX}/${HOST}/toolchain.cmake" \
+          -DWITH_CCACHE=OFF \
+          ${CONFIGFLAGS}
 
     # Build Bitcoin Core
-    make --jobs="$JOBS" ${V:+V=1}
+    cmake --build build -j "$JOBS" ${V:+--verbose}
 
-    # Check that symbol/security checks tools are sane.
-    make test-security-check ${V:+V=1}
     # Perform basic security checks on a series of executables.
-    make -C src --jobs=1 check-security ${V:+V=1}
+    cmake --build build -j 1 --target check-security ${V:+--verbose}
     # Check that executables only contain allowed version symbols.
-    make -C src --jobs=1 check-symbols  ${V:+V=1}
+    cmake --build build -j 1 --target check-symbols ${V:+--verbose}
 
     mkdir -p "$OUTDIR"
 
     # Make the os-specific installers
     case "$HOST" in
         *mingw*)
-            make deploy ${V:+V=1} BITCOIN_WIN_INSTALLER="${OUTDIR}/${DISTNAME}-win64-setup-unsigned.exe"
+            cmake --build build -j "$JOBS" -t deploy ${V:+--verbose}
+            mv build/bitcoin-win64-setup.exe "${OUTDIR}/${DISTNAME}-win64-setup-unsigned.exe"
             ;;
     esac
 
@@ -282,37 +271,19 @@ mkdir -p "$DISTSRC"
     # Install built Bitcoin Core to $INSTALLPATH
     case "$HOST" in
         *darwin*)
-            make install-strip DESTDIR="${INSTALLPATH}" ${V:+V=1}
+            # This workaround can be dropped for CMake >= 3.27.
+            # See the upstream commit 689616785f76acd844fd448c51c5b2a0711aafa2.
+            find build -name 'cmake_install.cmake' -exec sed -i 's| -u -r | |g' {} +
+
+            cmake --install build --strip --prefix "${INSTALLPATH}" ${V:+--verbose}
             ;;
         *)
-            make install DESTDIR="${INSTALLPATH}" ${V:+V=1}
+            cmake --install build --prefix "${INSTALLPATH}" ${V:+--verbose}
             ;;
     esac
 
-    case "$HOST" in
-        *darwin*)
-            make deploydir ${V:+V=1}
-            mkdir -p "unsigned-app-${HOST}"
-            cp  --target-directory="unsigned-app-${HOST}" \
-                contrib/macdeploy/detached-sig-create.sh
-            mv --target-directory="unsigned-app-${HOST}" dist
-            (
-                cd "unsigned-app-${HOST}"
-                find . -print0 \
-                    | sort --zero-terminated \
-                    | tar --create --no-recursion --mode='u+rw,go+r-w,a+X' --null --files-from=- \
-                    | gzip -9n > "${OUTDIR}/${DISTNAME}-${HOST}-unsigned.tar.gz" \
-                    || ( rm -f "${OUTDIR}/${DISTNAME}-${HOST}-unsigned.tar.gz" && exit 1 )
-            )
-            make deploy ${V:+V=1} OSX_ZIP="${OUTDIR}/${DISTNAME}-${HOST}-unsigned.zip"
-            ;;
-    esac
     (
         cd installed
-
-        # Prune libtool and object archives
-        find . -name "lib*.la" -delete
-        find . -name "lib*.a" -delete
 
         case "$HOST" in
             *darwin*) ;;
@@ -320,7 +291,7 @@ mkdir -p "$DISTSRC"
                 # Split binaries from their debug symbols
                 {
                     find "${DISTNAME}/bin" -type f -executable -print0
-                } | xargs -0 -P"$JOBS" -I{} "${DISTSRC}/contrib/devtools/split-debug.sh" {} {} {}.dbg
+                } | xargs -0 -P"$JOBS" -I{} "${DISTSRC}/build/split-debug.sh" {} {} {}.dbg
                 ;;
         esac
 
@@ -339,7 +310,7 @@ mkdir -p "$DISTSRC"
 
         cp -r "${DISTSRC}/share/rpcauth" "${DISTNAME}/share/"
 
-        # Finally, deterministically produce {non-,}debug binary tarballs ready
+        # Deterministically produce {non-,}debug binary tarballs ready
         # for release
         case "$HOST" in
             *mingw*)
@@ -347,8 +318,8 @@ mkdir -p "$DISTSRC"
                     | xargs -0r touch --no-dereference --date="@${SOURCE_DATE_EPOCH}"
                 find "${DISTNAME}" -not -name "*.dbg" \
                     | sort \
-                    | zip -X@ "${OUTDIR}/${DISTNAME}-${HOST//x86_64-w64-mingw32/win64}.zip" \
-                    || ( rm -f "${OUTDIR}/${DISTNAME}-${HOST//x86_64-w64-mingw32/win64}.zip" && exit 1 )
+                    | zip -X@ "${OUTDIR}/${DISTNAME}-${HOST//x86_64-w64-mingw32/win64}-unsigned.zip" \
+                    || ( rm -f "${OUTDIR}/${DISTNAME}-${HOST//x86_64-w64-mingw32/win64}-unsigned.zip" && exit 1 )
                 find "${DISTNAME}" -name "*.dbg" -print0 \
                     | xargs -0r touch --no-dereference --date="@${SOURCE_DATE_EPOCH}"
                 find "${DISTNAME}" -name "*.dbg" \
@@ -372,12 +343,13 @@ mkdir -p "$DISTSRC"
                 find "${DISTNAME}" -print0 \
                     | sort --zero-terminated \
                     | tar --create --no-recursion --mode='u+rw,go+r-w,a+X' --null --files-from=- \
-                    | gzip -9n > "${OUTDIR}/${DISTNAME}-${HOST}.tar.gz" \
-                    || ( rm -f "${OUTDIR}/${DISTNAME}-${HOST}.tar.gz" && exit 1 )
+                    | gzip -9n > "${OUTDIR}/${DISTNAME}-${HOST}-unsigned.tar.gz" \
+                    || ( rm -f "${OUTDIR}/${DISTNAME}-${HOST}-unsigned.tar.gz" && exit 1 )
                 ;;
         esac
     )  # $DISTSRC/installed
 
+    # Finally make tarballs for codesigning
     case "$HOST" in
         *mingw*)
             cp -rf --target-directory=. contrib/windeploy
@@ -385,11 +357,31 @@ mkdir -p "$DISTSRC"
                 cd ./windeploy
                 mkdir -p unsigned
                 cp --target-directory=unsigned/ "${OUTDIR}/${DISTNAME}-win64-setup-unsigned.exe"
+                cp -r --target-directory=unsigned/ "${INSTALLPATH}"
+                find unsigned/ -name "*.dbg" -print0 \
+                    | xargs -0r rm
                 find . -print0 \
                     | sort --zero-terminated \
                     | tar --create --no-recursion --mode='u+rw,go+r-w,a+X' --null --files-from=- \
-                    | gzip -9n > "${OUTDIR}/${DISTNAME}-win64-unsigned.tar.gz" \
-                    || ( rm -f "${OUTDIR}/${DISTNAME}-win64-unsigned.tar.gz" && exit 1 )
+                    | gzip -9n > "${OUTDIR}/${DISTNAME}-win64-codesigning.tar.gz" \
+                    || ( rm -f "${OUTDIR}/${DISTNAME}-win64-codesigning.tar.gz" && exit 1 )
+            )
+            ;;
+        *darwin*)
+            cmake --build build --target deploy ${V:+--verbose}
+            mv build/dist/Bitcoin-Core.zip "${OUTDIR}/${DISTNAME}-${HOST}-unsigned.zip"
+            mkdir -p "unsigned-app-${HOST}"
+            cp  --target-directory="unsigned-app-${HOST}" \
+                contrib/macdeploy/detached-sig-create.sh
+            mv --target-directory="unsigned-app-${HOST}" build/dist
+            cp -r --target-directory="unsigned-app-${HOST}" "${INSTALLPATH}"
+            (
+                cd "unsigned-app-${HOST}"
+                find . -print0 \
+                    | sort --zero-terminated \
+                    | tar --create --no-recursion --mode='u+rw,go+r-w,a+X' --null --files-from=- \
+                    | gzip -9n > "${OUTDIR}/${DISTNAME}-${HOST}-codesigning.tar.gz" \
+                    || ( rm -f "${OUTDIR}/${DISTNAME}-${HOST}-codesigning.tar.gz" && exit 1 )
             )
             ;;
     esac

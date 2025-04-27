@@ -6,7 +6,6 @@
 import os
 import struct
 import tempfile
-from time import sleep
 from io import BytesIO
 
 from test_framework.address import (
@@ -27,6 +26,7 @@ from test_framework.messages import (
 from test_framework.util import (
     assert_equal,
     assert_raises_rpc_error,
+    ensure_for,
     p2p_port,
 )
 from test_framework.wallet import (
@@ -394,11 +394,10 @@ class ZMQTest (BitcoinTestFramework):
         block_count = self.nodes[0].getblockcount()
         best_hash = self.nodes[0].getbestblockhash()
         self.nodes[0].invalidateblock(best_hash)
-        sleep(2)  # Bit of room to make sure transaction things happened
 
         # Make sure getrawmempool mempool_sequence results aren't "queued" but immediately reflective
         # of the time they were gathered.
-        assert self.nodes[0].getrawmempool(mempool_sequence=True)["mempool_sequence"] > seq_num
+        ensure_for(duration=2, f=lambda: self.nodes[0].getrawmempool(mempool_sequence=True)["mempool_sequence"] > seq_num)
 
         assert_equal((best_hash, "D", None), seq.receive_sequence())
         assert_equal((rbf_txid, "A", seq_num), seq.receive_sequence())
@@ -489,13 +488,8 @@ class ZMQTest (BitcoinTestFramework):
         mempool_snapshot = self.nodes[0].getrawmempool(mempool_sequence=True)
         mempool_view = set(mempool_snapshot["txids"])
         get_raw_seq = mempool_snapshot["mempool_sequence"]
-        assert_equal(get_raw_seq, 6)
-        # Snapshot may be too old compared to zmq message we read off latest
-        while zmq_mem_seq >= get_raw_seq:
-            sleep(2)
-            mempool_snapshot = self.nodes[0].getrawmempool(mempool_sequence=True)
-            mempool_view = set(mempool_snapshot["txids"])
-            get_raw_seq = mempool_snapshot["mempool_sequence"]
+        assert_equal(get_raw_seq, num_txs + 1)
+        assert zmq_mem_seq < get_raw_seq
 
         # Things continue to happen in the "interim" while waiting for snapshot results
         # We have node 0 do all these to avoid p2p races with RBF announcements

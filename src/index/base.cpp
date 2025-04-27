@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2022 The Bitcoin Core developers
+// Copyright (c) 2017-present The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -14,6 +14,7 @@
 #include <node/database_args.h>
 #include <node/interface_ui.h>
 #include <tinyformat.h>
+#include <util/string.h>
 #include <util/thread.h>
 #include <util/translation.h>
 #include <validation.h> // For g_chainman
@@ -27,10 +28,10 @@ constexpr auto SYNC_LOG_INTERVAL{30s};
 constexpr auto SYNC_LOCATOR_WRITE_INTERVAL{30s};
 
 template <typename... Args>
-void BaseIndex::FatalErrorf(const char* fmt, const Args&... args)
+void BaseIndex::FatalErrorf(util::ConstevalFormatString<sizeof...(Args)> fmt, const Args&... args)
 {
     auto message = tfm::format(fmt, args...);
-    node::AbortNode(m_chain->context()->shutdown, m_chain->context()->exit_status, Untranslated(message), m_chain->context()->warnings.get());
+    node::AbortNode(m_chain->context()->shutdown_request, m_chain->context()->exit_status, Untranslated(message), m_chain->context()->warnings.get());
 }
 
 CBlockLocator GetLocator(interfaces::Chain& chain, const uint256& block_hash)
@@ -105,14 +106,14 @@ bool BaseIndex::Init()
         // best chain, we will rewind to the fork point during index sync
         const CBlockIndex* locator_index{m_chainstate->m_blockman.LookupBlockIndex(locator.vHave.at(0))};
         if (!locator_index) {
-            return InitError(strprintf(Untranslated("%s: best block of the index not found. Please rebuild the index."), GetName()));
+            return InitError(Untranslated(strprintf("%s: best block of the index not found. Please rebuild the index.", GetName())));
         }
         SetBestBlockIndex(locator_index);
     }
 
     // Child init
     const CBlockIndex* start_block = m_best_block_index.load();
-    if (!CustomInit(start_block ? std::make_optional(interfaces::BlockKey{start_block->GetBlockHash(), start_block->nHeight}) : std::nullopt)) {
+    if (!CustomInit(start_block ? std::make_optional(interfaces::BlockRef{start_block->GetBlockHash(), start_block->nHeight}) : std::nullopt)) {
         return false;
     }
 
@@ -187,7 +188,7 @@ void BaseIndex::Sync()
 
             CBlock block;
             interfaces::BlockInfo block_info = kernel::MakeBlockInfo(pindex);
-            if (!m_chainstate->m_blockman.ReadBlockFromDisk(block, *pindex)) {
+            if (!m_chainstate->m_blockman.ReadBlock(block, *pindex)) {
                 FatalErrorf("%s: Failed to read block %s from disk",
                            __func__, pindex->GetBlockHash().ToString());
                 return;
@@ -255,7 +256,7 @@ bool BaseIndex::Rewind(const CBlockIndex* current_tip, const CBlockIndex* new_ti
     // In the case of a reorg, ensure persisted block locator is not stale.
     // Pruning has a minimum of 288 blocks-to-keep and getting the index
     // out of sync may be possible but a users fault.
-    // In case we reorg beyond the pruned depth, ReadBlockFromDisk would
+    // In case we reorg beyond the pruned depth, ReadBlock would
     // throw and lead to a graceful shutdown
     SetBestBlockIndex(new_tip);
     if (!Commit()) {

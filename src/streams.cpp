@@ -2,6 +2,7 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
 
+#include <memusage.h>
 #include <span.h>
 #include <streams.h>
 #include <util/fs_helpers.h>
@@ -17,7 +18,7 @@ AutoFile::AutoFile(std::FILE* file, std::vector<std::byte> data_xor)
     }
 }
 
-std::size_t AutoFile::detail_fread(Span<std::byte> dst)
+std::size_t AutoFile::detail_fread(std::span<std::byte> dst)
 {
     if (!m_file) throw std::ios_base::failure("AutoFile::read: file handle is nullptr");
     size_t ret = std::fread(dst.data(), 1, dst.size(), m_file);
@@ -56,7 +57,7 @@ int64_t AutoFile::tell()
     return *m_position;
 }
 
-void AutoFile::read(Span<std::byte> dst)
+void AutoFile::read(std::span<std::byte> dst)
 {
     if (detail_fread(dst) != dst.size()) {
         throw std::ios_base::failure(feof() ? "AutoFile::read: end of file" : "AutoFile::read: fread failed");
@@ -77,7 +78,7 @@ void AutoFile::ignore(size_t nSize)
     }
 }
 
-void AutoFile::write(Span<const std::byte> src)
+void AutoFile::write(std::span<const std::byte> src)
 {
     if (!m_file) throw std::ios_base::failure("AutoFile::write: file handle is nullptr");
     if (m_xor.empty()) {
@@ -89,7 +90,7 @@ void AutoFile::write(Span<const std::byte> src)
         if (!m_position.has_value()) throw std::ios_base::failure("AutoFile::write: position unknown");
         std::array<std::byte, 4096> buf;
         while (src.size() > 0) {
-            auto buf_now{Span{buf}.first(std::min<size_t>(src.size(), buf.size()))};
+            auto buf_now{std::span{buf}.first(std::min<size_t>(src.size(), buf.size()))};
             std::copy(src.begin(), src.begin() + buf_now.size(), buf_now.begin());
             util::Xor(buf_now, m_xor, *m_position);
             if (std::fwrite(buf_now.data(), 1, buf_now.size(), m_file) != buf_now.size()) {
@@ -106,12 +107,12 @@ bool AutoFile::Commit()
     return ::FileCommit(m_file);
 }
 
-bool AutoFile::IsError()
-{
-    return ferror(m_file);
-}
-
 bool AutoFile::Truncate(unsigned size)
 {
     return ::TruncateFile(m_file, size);
+}
+
+size_t DataStream::GetMemoryUsage() const noexcept
+{
+    return sizeof(*this) + memusage::DynamicUsage(vch);
 }

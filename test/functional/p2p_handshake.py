@@ -9,6 +9,7 @@ import itertools
 import time
 
 from test_framework.test_framework import BitcoinTestFramework
+from test_framework.util import assert_not_equal
 from test_framework.messages import (
     NODE_NETWORK,
     NODE_NETWORK_LIMITED,
@@ -55,7 +56,7 @@ class P2PHandshakeTest(BitcoinTestFramework):
             expected_result = "disconnect" if expect_disconnect else "connect"
             self.log.info(f'    - services 0x{services:08x}, type "{conn_type}" [{expected_result}]')
             if expect_disconnect:
-                assert (services & desirable_service_flags) != desirable_service_flags
+                assert_not_equal((services & desirable_service_flags), desirable_service_flags)
                 expected_debug_log = f'does not offer the expected services ' \
                         f'({services:08x} offered, {desirable_service_flags:08x} expected)'
                 with node.assert_debug_log([expected_debug_log]):
@@ -86,7 +87,7 @@ class P2PHandshakeTest(BitcoinTestFramework):
                                           DESIRABLE_SERVICE_FLAGS_PRUNED, expect_disconnect=False)
 
         self.log.info("Check that feeler connections get disconnected immediately")
-        with node.assert_debug_log([f"feeler connection completed"]):
+        with node.assert_debug_log(["feeler connection completed"]):
             self.add_outbound_connection(node, "feeler", NODE_NONE, wait_for_disconnect=True)
 
         self.log.info("Check that connecting to ourself leads to immediate disconnect")

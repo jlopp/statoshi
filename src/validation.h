@@ -1,5 +1,5 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
-// Copyright (c) 2009-2022 The Bitcoin Core developers
+// Copyright (c) 2009-present The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -39,9 +39,9 @@
 #include <memory>
 #include <optional>
 #include <set>
+#include <span>
 #include <stdint.h>
 #include <string>
-#include <thread>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -81,6 +81,9 @@ static constexpr int DEFAULT_CHECKLEVEL{3};
 // Setting the target to >= 550 MiB will make it likely we can respect the target.
 static const uint64_t MIN_DISK_SPACE_FOR_BLOCK_FILES = 550 * 1024 * 1024;
 
+/** Maximum number of dedicated script-checking threads allowed */
+static constexpr int MAX_SCRIPTCHECK_THREADS{15};
+
 /** Current sync state passed to tip changed callbacks. */
 enum class SynchronizationState {
     INIT_REINDEX,
@@ -88,20 +91,12 @@ enum class SynchronizationState {
     POST_INIT
 };
 
-extern GlobalMutex g_best_block_mutex;
-extern std::condition_variable g_best_block_cv;
-/** Used to notify getblocktemplate RPC of new tips. */
-extern uint256 g_best_block;
-
 /** Documentation for argument 'checklevel'. */
 extern const std::vector<std::string> CHECKLEVEL_DOC;
 
 CAmount GetBlockSubsidy(int nHeight, const Consensus::Params& consensusParams);
 
 bool FatalError(kernel::Notifications& notifications, BlockValidationState& state, const bilingual_str& message);
-
-/** Guess verification progress (as a fraction between 0.0=genesis and 1.0=current tip). */
-double GuessVerificationProgress(const ChainTxData& data, const CBlockIndex* pindex);
 
 /** Prune block files up to a given height */
 void PruneBlockFilesManual(Chainstate& active_chainstate, int nManualPruneHeight);
@@ -162,7 +157,7 @@ struct MempoolAcceptResult {
     const std::optional<std::vector<Wtxid>> m_wtxids_fee_calculations;
 
     /** The wtxid of the transaction in the mempool which has the same txid but different witness. */
-    const std::optional<uint256> m_other_wtxid;
+    const std::optional<Wtxid> m_other_wtxid;
 
     static MempoolAcceptResult Failure(TxValidationState state) {
         return MempoolAcceptResult(state);
@@ -187,7 +182,7 @@ struct MempoolAcceptResult {
         return MempoolAcceptResult(vsize, fees);
     }
 
-    static MempoolAcceptResult MempoolTxDifferentWitness(const uint256& other_wtxid) {
+    static MempoolAcceptResult MempoolTxDifferentWitness(const Wtxid& other_wtxid) {
         return MempoolAcceptResult(other_wtxid);
     }
 
@@ -226,7 +221,7 @@ private:
         : m_result_type(ResultType::MEMPOOL_ENTRY), m_vsize{vsize}, m_base_fees(fees) {}
 
     /** Constructor for witness-swapped case. */
-    explicit MempoolAcceptResult(const uint256& other_wtxid)
+    explicit MempoolAcceptResult(const Wtxid& other_wtxid)
         : m_result_type(ResultType::DIFFERENT_WITNESS), m_other_wtxid(other_wtxid) {}
 };
 
@@ -242,18 +237,18 @@ struct PackageMempoolAcceptResult
     * present, it means validation was unfinished for that transaction. If there
     * was a package-wide error (see result in m_state), m_tx_results will be empty.
     */
-    std::map<uint256, MempoolAcceptResult> m_tx_results;
+    std::map<Wtxid, MempoolAcceptResult> m_tx_results;
 
     explicit PackageMempoolAcceptResult(PackageValidationState state,
-                                        std::map<uint256, MempoolAcceptResult>&& results)
+                                        std::map<Wtxid, MempoolAcceptResult>&& results)
         : m_state{state}, m_tx_results(std::move(results)) {}
 
     explicit PackageMempoolAcceptResult(PackageValidationState state, CFeeRate feerate,
-                                        std::map<uint256, MempoolAcceptResult>&& results)
+                                        std::map<Wtxid, MempoolAcceptResult>&& results)
         : m_state{state}, m_tx_results(std::move(results)) {}
 
     /** Constructor to create a PackageMempoolAcceptResult from a single MempoolAcceptResult */
-    explicit PackageMempoolAcceptResult(const uint256& wtxid, const MempoolAcceptResult& result)
+    explicit PackageMempoolAcceptResult(const Wtxid& wtxid, const MempoolAcceptResult& result)
         : m_tx_results{ {wtxid, result} } {}
 };
 
@@ -343,7 +338,6 @@ private:
     unsigned int nIn;
     unsigned int nFlags;
     bool cacheStore;
-    ScriptError error{SCRIPT_ERR_UNKNOWN_ERROR};
     PrecomputedTransactionData *txdata;
     SignatureCache* m_signature_cache;
 
@@ -356,9 +350,7 @@ public:
     CScriptCheck(CScriptCheck&&) = default;
     CScriptCheck& operator=(CScriptCheck&&) = default;
 
-    bool operator()();
-
-    ScriptError GetScriptError() const { return error; }
+    std::optional<std::pair<ScriptError, std::string>> operator()();
 };
 
 // CScriptCheck is used a lot in std::vector, make sure that's efficient
@@ -410,7 +402,7 @@ bool HasValidProofOfWork(const std::vector<CBlockHeader>& headers, const Consens
 bool IsBlockMutated(const CBlock& block, bool check_witness_root);
 
 /** Return the sum of the claimed work on a given set of headers. No verification of PoW is done. */
-arith_uint256 CalculateClaimedHeadersWork(const std::vector<CBlockHeader>& headers);
+arith_uint256 CalculateClaimedHeadersWork(std::span<const CBlockHeader> headers);
 
 enum class VerifyDBResult {
     SUCCESS,
@@ -737,6 +729,9 @@ public:
         EXCLUSIVE_LOCKS_REQUIRED(!m_chainstate_mutex)
         LOCKS_EXCLUDED(::cs_main);
 
+    /** Set invalidity status to all descendants of a block */
+    void SetBlockFailureFlags(CBlockIndex* pindex) EXCLUSIVE_LOCKS_REQUIRED(::cs_main);
+
     /** Remove invalidity status from a block and its descendants. */
     void ResetBlockFailureFlags(CBlockIndex* pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
@@ -917,7 +912,7 @@ private:
     //! Internal helper for ActivateSnapshot().
     //!
     //! De-serialization of a snapshot that is created with
-    //! CreateUTXOSnapshot() in rpc/blockchain.cpp.
+    //! the dumptxoutset RPC.
     //! To reduce space the serialization format of the snapshot avoids
     //! duplication of tx hashes. The code takes advantage of the guarantee by
     //! leveldb that keys are lexicographically sorted.
@@ -941,7 +936,7 @@ private:
     friend Chainstate;
 
     /** Most recent headers presync progress update, for rate-limiting. */
-    std::chrono::time_point<std::chrono::steady_clock> m_last_presync_update GUARDED_BY(::cs_main) {};
+    MockableSteadyClock::time_point m_last_presync_update GUARDED_BY(GetMutex()){};
 
     std::array<ThresholdConditionCache, VERSIONBITS_NUM_BITS> m_warningcache GUARDED_BY(::cs_main);
 
@@ -1010,7 +1005,6 @@ public:
 
     const util::SignalInterrupt& m_interrupt;
     const Options m_options;
-    std::thread m_thread_load;
     //! A single BlockManager instance is shared across each constructed
     //! chainstate to avoid duplicating block metadata.
     node::BlockManager m_blockman;
@@ -1073,11 +1067,11 @@ public:
 
     //! The total number of bytes available for us to use across all in-memory
     //! coins caches. This will be split somehow across chainstates.
-    int64_t m_total_coinstip_cache{0};
+    size_t m_total_coinstip_cache{0};
     //
     //! The total number of bytes available for us to use across all leveldb
     //! coins databases. This will be split somehow across chainstates.
-    int64_t m_total_coinsdb_cache{0};
+    size_t m_total_coinsdb_cache{0};
 
     //! Instantiate a new chainstate.
     //!
@@ -1157,6 +1151,9 @@ public:
     /** Check whether we are doing an initial block download (synchronizing from disk or network) */
     bool IsInitialBlockDownload() const;
 
+    /** Guess verification progress (as a fraction between 0.0=genesis and 1.0=current tip). */
+    double GuessVerificationProgress(const CBlockIndex* pindex) const;
+
     /**
      * Import blocks from an external file
      *
@@ -1220,12 +1217,12 @@ public:
      * May not be called in a
      * validationinterface callback.
      *
-     * @param[in]  block The block headers themselves
+     * @param[in]  headers The block headers themselves
      * @param[in]  min_pow_checked  True if proof-of-work anti-DoS checks have been done by caller for headers chain
      * @param[out] state This may be set to an Error state if any error occurred processing them
      * @param[out] ppindex If set, the pointer will be set to point to the last new block index object for the given headers
      */
-    bool ProcessNewBlockHeaders(const std::vector<CBlockHeader>& block, bool min_pow_checked, BlockValidationState& state, const CBlockIndex** ppindex = nullptr) LOCKS_EXCLUDED(cs_main);
+    bool ProcessNewBlockHeaders(std::span<const CBlockHeader> headers, bool min_pow_checked, BlockValidationState& state, const CBlockIndex** ppindex = nullptr) LOCKS_EXCLUDED(cs_main);
 
     /**
      * Sufficiently validate a block for disk storage (and store on disk).
@@ -1322,6 +1319,11 @@ public:
     //! Return the height of the base block of the snapshot in use, if one exists, else
     //! nullopt.
     std::optional<int> GetSnapshotBaseHeight() const EXCLUSIVE_LOCKS_REQUIRED(::cs_main);
+
+    //! If, due to invalidation / reconsideration of blocks, the previous
+    //! best header is no longer valid / guaranteed to be the most-work
+    //! header in our block-index not known to be invalid, recalculate it.
+    void RecalculateBestHeader() EXCLUSIVE_LOCKS_REQUIRED(::cs_main);
 
     CCheckQueue<CScriptCheck>& GetCheckQueue() { return m_script_check_queue; }
 

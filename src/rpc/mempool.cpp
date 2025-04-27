@@ -8,8 +8,10 @@
 #include <node/mempool_persist.h>
 
 #include <chainparams.h>
+#include <consensus/validation.h>
 #include <core_io.h>
 #include <kernel/mempool_entry.h>
+#include <net_processing.h>
 #include <node/mempool_persist_args.h>
 #include <node/types.h>
 #include <policy/rbf.h>
@@ -24,6 +26,7 @@
 #include <util/moneystr.h>
 #include <util/strencodings.h>
 #include <util/time.h>
+#include <util/vector.h>
 
 #include <utility>
 
@@ -143,7 +146,8 @@ static RPCHelpMan testmempoolaccept()
                             {RPCResult{RPCResult::Type::STR_HEX, "", "transaction wtxid in hex"},
                         }},
                     }},
-                    {RPCResult::Type::STR, "reject-reason", /*optional=*/true, "Rejection string (only present when 'allowed' is false)"},
+                    {RPCResult::Type::STR, "reject-reason", /*optional=*/true, "Rejection reason (only present when 'allowed' is false)"},
+                    {RPCResult::Type::STR, "reject-details", /*optional=*/true, "Rejection details (only present when 'allowed' is false and rejection details exist)"},
                 }},
             }
         },
@@ -242,6 +246,7 @@ static RPCHelpMan testmempoolaccept()
                         result_inner.pushKV("reject-reason", "missing-inputs");
                     } else {
                         result_inner.pushKV("reject-reason", state.GetRejectReason());
+                        result_inner.pushKV("reject-details", state.ToString());
                     }
                 }
                 rpc_result.push_back(std::move(result_inner));
@@ -274,7 +279,7 @@ static std::vector<RPCResult> MempoolEntryDescription()
             {RPCResult{RPCResult::Type::STR_HEX, "transactionid", "parent transaction id"}}},
         RPCResult{RPCResult::Type::ARR, "spentby", "unconfirmed transactions spending outputs from this transaction",
             {RPCResult{RPCResult::Type::STR_HEX, "transactionid", "child transaction id"}}},
-        RPCResult{RPCResult::Type::BOOL, "bip125-replaceable", "Whether this transaction signals BIP125 replaceability or has an unconfirmed ancestor signaling BIP125 replaceability.\n"},
+        RPCResult{RPCResult::Type::BOOL, "bip125-replaceable", "Whether this transaction signals BIP125 replaceability or has an unconfirmed ancestor signaling BIP125 replaceability. (DEPRECATED)\n"},
         RPCResult{RPCResult::Type::BOOL, "unbroadcast", "Whether this transaction is currently unbroadcast (initial broadcast not yet acknowledged by any peers)"},
     };
 }
@@ -679,7 +684,7 @@ UniValue MempoolInfoToJSON(const CTxMemPool& pool)
     ret.pushKV("minrelaytxfee", ValueFromAmount(pool.m_opts.min_relay_feerate.GetFeePerK()));
     ret.pushKV("incrementalrelayfee", ValueFromAmount(pool.m_opts.incremental_relay_feerate.GetFeePerK()));
     ret.pushKV("unbroadcastcount", uint64_t{pool.GetUnbroadcastTxs().size()});
-    ret.pushKV("fullrbf", pool.m_opts.full_rbf);
+    ret.pushKV("fullrbf", true);
     return ret;
 }
 
@@ -701,7 +706,7 @@ static RPCHelpMan getmempoolinfo()
                 {RPCResult::Type::STR_AMOUNT, "minrelaytxfee", "Current minimum relay fee for transactions"},
                 {RPCResult::Type::NUM, "incrementalrelayfee", "minimum fee rate increment for mempool limiting or replacement in " + CURRENCY_UNIT + "/kvB"},
                 {RPCResult::Type::NUM, "unbroadcastcount", "Current number of transactions that haven't passed initial broadcast yet"},
-                {RPCResult::Type::BOOL, "fullrbf", "True if the mempool accepts RBF without replaceability signaling inspection"},
+                {RPCResult::Type::BOOL, "fullrbf", "True if the mempool accepts RBF without replaceability signaling inspection (DEPRECATED)"},
             }},
         RPCExamples{
             HelpExampleCli("getmempoolinfo", "")
@@ -812,6 +817,109 @@ static RPCHelpMan savemempool()
     };
 }
 
+static std::vector<RPCResult> OrphanDescription()
+{
+    return {
+        RPCResult{RPCResult::Type::STR_HEX, "txid", "The transaction hash in hex"},
+        RPCResult{RPCResult::Type::STR_HEX, "wtxid", "The transaction witness hash in hex"},
+        RPCResult{RPCResult::Type::NUM, "bytes", "The serialized transaction size in bytes"},
+        RPCResult{RPCResult::Type::NUM, "vsize", "The virtual transaction size as defined in BIP 141. This is different from actual serialized size for witness transactions as witness data is discounted."},
+        RPCResult{RPCResult::Type::NUM, "weight", "The transaction weight as defined in BIP 141."},
+        RPCResult{RPCResult::Type::NUM_TIME, "entry", "The entry time into the orphanage expressed in " + UNIX_EPOCH_TIME},
+        RPCResult{RPCResult::Type::NUM_TIME, "expiration", "The orphan expiration time expressed in " + UNIX_EPOCH_TIME},
+        RPCResult{RPCResult::Type::ARR, "from", "",
+        {
+            RPCResult{RPCResult::Type::NUM, "peer_id", "Peer ID"},
+        }},
+    };
+}
+
+static UniValue OrphanToJSON(const TxOrphanage::OrphanTxBase& orphan)
+{
+    UniValue o(UniValue::VOBJ);
+    o.pushKV("txid", orphan.tx->GetHash().ToString());
+    o.pushKV("wtxid", orphan.tx->GetWitnessHash().ToString());
+    o.pushKV("bytes", orphan.tx->GetTotalSize());
+    o.pushKV("vsize", GetVirtualTransactionSize(*orphan.tx));
+    o.pushKV("weight", GetTransactionWeight(*orphan.tx));
+    o.pushKV("entry", int64_t{TicksSinceEpoch<std::chrono::seconds>(orphan.nTimeExpire - ORPHAN_TX_EXPIRE_TIME)});
+    o.pushKV("expiration", int64_t{TicksSinceEpoch<std::chrono::seconds>(orphan.nTimeExpire)});
+    UniValue from(UniValue::VARR);
+    for (const auto fromPeer: orphan.announcers) {
+        from.push_back(fromPeer);
+    }
+    o.pushKV("from", from);
+    return o;
+}
+
+static RPCHelpMan getorphantxs()
+{
+    return RPCHelpMan{"getorphantxs",
+        "\nShows transactions in the tx orphanage.\n"
+        "\nEXPERIMENTAL warning: this call may be changed in future releases.\n",
+        {
+            {"verbosity", RPCArg::Type::NUM, RPCArg::Default{0}, "0 for an array of txids (may contain duplicates), 1 for an array of objects with tx details, and 2 for details from (1) and tx hex",
+             RPCArgOptions{.skip_type_check = true}},
+        },
+        {
+            RPCResult{"for verbose = 0",
+                RPCResult::Type::ARR, "", "",
+                {
+                    {RPCResult::Type::STR_HEX, "txid", "The transaction hash in hex"},
+                }},
+            RPCResult{"for verbose = 1",
+                RPCResult::Type::ARR, "", "",
+                {
+                    {RPCResult::Type::OBJ, "", "", OrphanDescription()},
+                }},
+            RPCResult{"for verbose = 2",
+                RPCResult::Type::ARR, "", "",
+                {
+                    {RPCResult::Type::OBJ, "", "",
+                        Cat<std::vector<RPCResult>>(
+                            OrphanDescription(),
+                            {{RPCResult::Type::STR_HEX, "hex", "The serialized, hex-encoded transaction data"}}
+                        )
+                    },
+                }},
+        },
+        RPCExamples{
+            HelpExampleCli("getorphantxs", "2")
+            + HelpExampleRpc("getorphantxs", "2")
+        },
+        [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
+        {
+            const NodeContext& node = EnsureAnyNodeContext(request.context);
+            PeerManager& peerman = EnsurePeerman(node);
+            std::vector<TxOrphanage::OrphanTxBase> orphanage = peerman.GetOrphanTransactions();
+
+            int verbosity{ParseVerbosity(request.params[0], /*default_verbosity=*/0, /*allow_bool*/false)};
+
+            UniValue ret(UniValue::VARR);
+
+            if (verbosity == 0) {
+                for (auto const& orphan : orphanage) {
+                    ret.push_back(orphan.tx->GetHash().ToString());
+                }
+            } else if (verbosity == 1) {
+                for (auto const& orphan : orphanage) {
+                    ret.push_back(OrphanToJSON(orphan));
+                }
+            } else if (verbosity == 2) {
+                for (auto const& orphan : orphanage) {
+                    UniValue o{OrphanToJSON(orphan)};
+                    o.pushKV("hex", EncodeHexTx(*orphan.tx));
+                    ret.push_back(o);
+                }
+            } else {
+                throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid verbosity value " + ToString(verbosity));
+            }
+
+            return ret;
+        },
+    };
+}
+
 static RPCHelpMan submitpackage()
 {
     return RPCHelpMan{"submitpackage",
@@ -822,7 +930,7 @@ static RPCHelpMan submitpackage()
         ,
         {
             {"package", RPCArg::Type::ARR, RPCArg::Optional::NO, "An array of raw transactions.\n"
-                "The package must solely consist of a child and its parents. None of the parents may depend on each other.\n"
+                "The package must solely consist of a child transaction and all of its unconfirmed parents, if any. None of the parents may depend on each other.\n"
                 "The package must be topologically sorted, with the child being the last element in the array.",
                 {
                     {"rawtx", RPCArg::Type::STR_HEX, RPCArg::Optional::OMITTED, ""},
@@ -864,15 +972,15 @@ static RPCHelpMan submitpackage()
             },
         },
         RPCExamples{
-            HelpExampleRpc("submitpackage", R"(["rawtx1", "rawtx2"])") +
-            HelpExampleCli("submitpackage", R"('["rawtx1", "rawtx2"]')")
+            HelpExampleRpc("submitpackage", R"(["raw-parent-tx-1", "raw-parent-tx-2", "raw-child-tx"])") +
+            HelpExampleCli("submitpackage", R"('["raw-tx-without-unconfirmed-parents"]')")
         },
         [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
         {
             const UniValue raw_transactions = request.params[0].get_array();
-            if (raw_transactions.size() < 2 || raw_transactions.size() > MAX_PACKAGE_COUNT) {
+            if (raw_transactions.empty() || raw_transactions.size() > MAX_PACKAGE_COUNT) {
                 throw JSONRPCError(RPC_INVALID_PARAMETER,
-                                   "Array must contain between 2 and " + ToString(MAX_PACKAGE_COUNT) + " transactions.");
+                                   "Array must contain between 1 and " + ToString(MAX_PACKAGE_COUNT) + " transactions.");
             }
 
             // Fee check needs to be run with chainstate and package context
@@ -903,7 +1011,8 @@ static RPCHelpMan submitpackage()
 
                 txns.emplace_back(MakeTransactionRef(std::move(mtx)));
             }
-            if (!IsChildWithParentsTree(txns)) {
+            CHECK_NONFATAL(!txns.empty());
+            if (txns.size() > 1 && !IsChildWithParentsTree(txns)) {
                 throw JSONRPCTransactionError(TransactionError::INVALID_PACKAGE, "package topology disallowed. not child-with-parents or parents depend on each other.");
             }
 
@@ -1027,6 +1136,7 @@ void RegisterMempoolRPCCommands(CRPCTable& t)
         {"blockchain", &getrawmempool},
         {"blockchain", &importmempool},
         {"blockchain", &savemempool},
+        {"hidden", &getorphantxs},
         {"rawtransactions", &submitpackage},
     };
     for (const auto& c : commands) {

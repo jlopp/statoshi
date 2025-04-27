@@ -123,7 +123,7 @@ bool CoinStatsIndex::CustomAppend(const interfaces::BlockInfo& block)
         // pindex variable gives indexing code access to node internals. It
         // will be removed in upcoming commit
         const CBlockIndex* pindex = WITH_LOCK(cs_main, return m_chainstate->m_blockman.LookupBlockIndex(block.hash));
-        if (!m_chainstate->m_blockman.UndoReadFromDisk(block_undo, *pindex)) {
+        if (!m_chainstate->m_blockman.ReadBlockUndo(block_undo, *pindex)) {
             return false;
         }
 
@@ -265,7 +265,7 @@ bool CoinStatsIndex::CustomAppend(const interfaces::BlockInfo& block)
     return true;
 }
 
-bool CoinStatsIndex::CustomRewind(const interfaces::BlockKey& current_tip, const interfaces::BlockKey& new_tip)
+bool CoinStatsIndex::CustomRewind(const interfaces::BlockRef& current_tip, const interfaces::BlockRef& new_tip)
 {
     CDBBatch batch(*m_db);
     std::unique_ptr<CDBIterator> db_it(m_db->NewIterator());
@@ -287,7 +287,7 @@ bool CoinStatsIndex::CustomRewind(const interfaces::BlockKey& current_tip, const
         do {
             CBlock block;
 
-            if (!m_chainstate->m_blockman.ReadBlockFromDisk(block, *iter_tip)) {
+            if (!m_chainstate->m_blockman.ReadBlock(block, *iter_tip)) {
                 LogError("%s: Failed to read block %s from disk\n",
                              __func__, iter_tip->GetBlockHash().ToString());
                 return false;
@@ -304,7 +304,7 @@ bool CoinStatsIndex::CustomRewind(const interfaces::BlockKey& current_tip, const
     return true;
 }
 
-static bool LookUpOne(const CDBWrapper& db, const interfaces::BlockKey& block, DBVal& result)
+static bool LookUpOne(const CDBWrapper& db, const interfaces::BlockRef& block, DBVal& result)
 {
     // First check if the result is stored under the height index and the value
     // there matches the block hash. This should be the case if the block is on
@@ -350,7 +350,7 @@ std::optional<CCoinsStats> CoinStatsIndex::LookUpStats(const CBlockIndex& block_
     return stats;
 }
 
-bool CoinStatsIndex::CustomInit(const std::optional<interfaces::BlockKey>& block)
+bool CoinStatsIndex::CustomInit(const std::optional<interfaces::BlockRef>& block)
 {
     if (!m_db->Read(DB_MUHASH, m_muhash)) {
         // Check that the cause of the read failure is that the key does not
@@ -415,7 +415,7 @@ bool CoinStatsIndex::ReverseBlock(const CBlock& block, const CBlockIndex* pindex
 
     // Ignore genesis block
     if (pindex->nHeight > 0) {
-        if (!m_chainstate->m_blockman.UndoReadFromDisk(block_undo, *pindex)) {
+        if (!m_chainstate->m_blockman.ReadBlockUndo(block_undo, *pindex)) {
             return false;
         }
 

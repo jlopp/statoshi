@@ -37,6 +37,7 @@ from test_framework.script import CScript, OP_TRUE
 from test_framework.script_util import MIN_STANDARD_TX_NONWITNESS_SIZE
 from test_framework.test_framework import BitcoinTestFramework
 from test_framework.util import (
+    assert_not_equal,
     assert_approx,
     assert_equal,
     assert_greater_than,
@@ -292,7 +293,7 @@ class PSBTTest(BitcoinTestFramework):
         processed_finalized_psbt = self.nodes[0].walletprocesspsbt(psbt=psbtx, finalize=True)
         finalized_psbt = processed_finalized_psbt['psbt']
         finalized_psbt_hex = processed_finalized_psbt['hex']
-        assert signed_psbt != finalized_psbt
+        assert_not_equal(signed_psbt, finalized_psbt)
         assert finalized_psbt_hex == finalized_hex
 
         # Manually selected inputs can be locked:
@@ -999,7 +1000,7 @@ class PSBTTest(BitcoinTestFramework):
             {'hex': '0200000001dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd0000000000000000000100000000000000000000000000', 'complete': True})
 
         self.log.info("Test we don't crash when making a 0-value funded transaction at 0 fee without forcing an input selection")
-        assert_raises_rpc_error(-4, "Transaction requires one destination of non-0 value, a non-0 feerate, or a pre-selected input", self.nodes[0].walletcreatefundedpsbt, [], [{"data": "deadbeef"}], 0, {"fee_rate": "0"})
+        assert_raises_rpc_error(-4, "Transaction requires one destination of non-zero value, a non-zero feerate, or a pre-selected input", self.nodes[0].walletcreatefundedpsbt, [], [{"data": "deadbeef"}], 0, {"fee_rate": "0"})
 
         self.log.info("Test descriptorprocesspsbt updates and signs a psbt with descriptors")
 

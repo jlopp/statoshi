@@ -4,12 +4,9 @@
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 from decimal import Decimal
 
-from test_framework.messages import (
-    MAX_BIP125_RBF_SEQUENCE,
-    WITNESS_SCALE_FACTOR,
-)
 from test_framework.test_framework import BitcoinTestFramework
 from test_framework.util import (
+    assert_not_equal,
     assert_equal,
     assert_greater_than,
     assert_greater_than_or_equal,
@@ -23,6 +20,7 @@ from test_framework.wallet import (
 
 MAX_REPLACEMENT_CANDIDATES = 100
 TRUC_MAX_VSIZE = 10000
+TRUC_CHILD_MAX_VSIZE = 1000
 
 def cleanup(extra_args=None):
     def decorator(func):
@@ -55,14 +53,14 @@ class MempoolTRUC(BitcoinTestFramework):
     def test_truc_max_vsize(self):
         node = self.nodes[0]
         self.log.info("Test TRUC-specific maximum transaction vsize")
-        tx_v3_heavy = self.wallet.create_self_transfer(target_weight=(TRUC_MAX_VSIZE + 1) * WITNESS_SCALE_FACTOR, version=3)
+        tx_v3_heavy = self.wallet.create_self_transfer(target_vsize=TRUC_MAX_VSIZE + 1, version=3)
         assert_greater_than_or_equal(tx_v3_heavy["tx"].get_vsize(), TRUC_MAX_VSIZE)
         expected_error_heavy = f"TRUC-violation, version=3 tx {tx_v3_heavy['txid']} (wtxid={tx_v3_heavy['wtxid']}) is too big"
         assert_raises_rpc_error(-26, expected_error_heavy, node.sendrawtransaction, tx_v3_heavy["hex"])
         self.check_mempool([])
 
         # Ensure we are hitting the TRUC-specific limit and not something else
-        tx_v2_heavy = self.wallet.send_self_transfer(from_node=node, target_weight=(TRUC_MAX_VSIZE + 1) * WITNESS_SCALE_FACTOR, version=2)
+        tx_v2_heavy = self.wallet.send_self_transfer(from_node=node, target_vsize=TRUC_MAX_VSIZE + 1, version=2)
         self.check_mempool([tx_v2_heavy["txid"]])
 
     @cleanup(extra_args=["-datacarriersize=1000"])
@@ -73,10 +71,10 @@ class MempoolTRUC(BitcoinTestFramework):
         self.check_mempool([tx_v3_parent_normal["txid"]])
         tx_v3_child_heavy = self.wallet.create_self_transfer(
             utxo_to_spend=tx_v3_parent_normal["new_utxo"],
-            target_weight=4004,
+            target_vsize=TRUC_CHILD_MAX_VSIZE + 1,
             version=3
         )
-        assert_greater_than_or_equal(tx_v3_child_heavy["tx"].get_vsize(), 1000)
+        assert_greater_than_or_equal(tx_v3_child_heavy["tx"].get_vsize(), TRUC_CHILD_MAX_VSIZE)
         expected_error_child_heavy = f"TRUC-violation, version=3 child tx {tx_v3_child_heavy['txid']} (wtxid={tx_v3_child_heavy['wtxid']}) is too big"
         assert_raises_rpc_error(-26, expected_error_child_heavy, node.sendrawtransaction, tx_v3_child_heavy["hex"])
         self.check_mempool([tx_v3_parent_normal["txid"]])
@@ -88,20 +86,21 @@ class MempoolTRUC(BitcoinTestFramework):
             from_node=node,
             fee_rate=DEFAULT_FEE,
             utxo_to_spend=tx_v3_parent_normal["new_utxo"],
-            target_weight=3987,
+            target_vsize=TRUC_CHILD_MAX_VSIZE - 3,
             version=3
         )
-        assert_greater_than_or_equal(1000, tx_v3_child_almost_heavy["tx"].get_vsize())
+        assert_greater_than_or_equal(TRUC_CHILD_MAX_VSIZE, tx_v3_child_almost_heavy["tx"].get_vsize())
         self.check_mempool([tx_v3_parent_normal["txid"], tx_v3_child_almost_heavy["txid"]])
         assert_equal(node.getmempoolentry(tx_v3_parent_normal["txid"])["descendantcount"], 2)
         tx_v3_child_almost_heavy_rbf = self.wallet.send_self_transfer(
             from_node=node,
             fee_rate=DEFAULT_FEE * 2,
             utxo_to_spend=tx_v3_parent_normal["new_utxo"],
-            target_weight=3500,
+            target_vsize=875,
             version=3
         )
-        assert_greater_than_or_equal(tx_v3_child_almost_heavy["tx"].get_vsize() + tx_v3_child_almost_heavy_rbf["tx"].get_vsize(), 1000)
+        assert_greater_than_or_equal(tx_v3_child_almost_heavy["tx"].get_vsize() + tx_v3_child_almost_heavy_rbf["tx"].get_vsize(),
+                                     TRUC_CHILD_MAX_VSIZE)
         self.check_mempool([tx_v3_parent_normal["txid"], tx_v3_child_almost_heavy_rbf["txid"]])
         assert_equal(node.getmempoolentry(tx_v3_parent_normal["txid"])["descendantcount"], 2)
 
@@ -114,7 +113,6 @@ class MempoolTRUC(BitcoinTestFramework):
             from_node=node,
             fee_rate=DEFAULT_FEE,
             utxo_to_spend=utxo_v3_bip125,
-            sequence=MAX_BIP125_RBF_SEQUENCE,
             version=3
         )
         self.check_mempool([tx_v3_bip125["txid"]])
@@ -162,30 +160,6 @@ class MempoolTRUC(BitcoinTestFramework):
         self.check_mempool([tx_v3_bip125_rbf_v2["txid"], tx_v3_parent["txid"], tx_v3_child["txid"]])
 
 
-    @cleanup(extra_args=["-mempoolfullrbf=0"])
-    def test_truc_bip125(self):
-        node = self.nodes[0]
-        self.log.info("Test TRUC transactions that don't signal BIP125 are replaceable")
-        assert_equal(node.getmempoolinfo()["fullrbf"], False)
-        utxo_v3_no_bip125 = self.wallet.get_utxo()
-        tx_v3_no_bip125 = self.wallet.send_self_transfer(
-            from_node=node,
-            fee_rate=DEFAULT_FEE,
-            utxo_to_spend=utxo_v3_no_bip125,
-            sequence=MAX_BIP125_RBF_SEQUENCE + 1,
-            version=3
-        )
-
-        self.check_mempool([tx_v3_no_bip125["txid"]])
-        assert not node.getmempoolentry(tx_v3_no_bip125["txid"])["bip125-replaceable"]
-        tx_v3_no_bip125_rbf = self.wallet.send_self_transfer(
-            from_node=node,
-            fee_rate=DEFAULT_FEE * 2,
-            utxo_to_spend=utxo_v3_no_bip125,
-            version=3
-        )
-        self.check_mempool([tx_v3_no_bip125_rbf["txid"]])
-
     @cleanup(extra_args=["-datacarriersize=40000"])
     def test_truc_reorg(self):
         node = self.nodes[0]
@@ -199,8 +173,8 @@ class MempoolTRUC(BitcoinTestFramework):
         self.check_mempool([])
         tx_v2_from_v3 = self.wallet.send_self_transfer(from_node=node, utxo_to_spend=tx_v3_block["new_utxo"], version=2)
         tx_v3_from_v2 = self.wallet.send_self_transfer(from_node=node, utxo_to_spend=tx_v2_block["new_utxo"], version=3)
-        tx_v3_child_large = self.wallet.send_self_transfer(from_node=node, utxo_to_spend=tx_v3_block2["new_utxo"], target_weight=5000, version=3)
-        assert_greater_than(node.getmempoolentry(tx_v3_child_large["txid"])["vsize"], 1000)
+        tx_v3_child_large = self.wallet.send_self_transfer(from_node=node, utxo_to_spend=tx_v3_block2["new_utxo"], target_vsize=1250, version=3)
+        assert_greater_than(node.getmempoolentry(tx_v3_child_large["txid"])["vsize"], TRUC_CHILD_MAX_VSIZE)
         self.check_mempool([tx_v2_from_v3["txid"], tx_v3_from_v2["txid"], tx_v3_child_large["txid"]])
         node.invalidateblock(block[0])
         self.check_mempool([tx_v3_block["txid"], tx_v2_block["txid"], tx_v3_block2["txid"], tx_v2_from_v3["txid"], tx_v3_from_v2["txid"], tx_v3_child_large["txid"]])
@@ -217,22 +191,22 @@ class MempoolTRUC(BitcoinTestFramework):
         """
         node = self.nodes[0]
         self.log.info("Test that a decreased limitdescendantsize also applies to TRUC child")
-        parent_target_weight = 9990 * WITNESS_SCALE_FACTOR
-        child_target_weight = 500 * WITNESS_SCALE_FACTOR
+        parent_target_vsize = 9990
+        child_target_vsize = 500
         tx_v3_parent_large1 = self.wallet.send_self_transfer(
             from_node=node,
-            target_weight=parent_target_weight,
+            target_vsize=parent_target_vsize,
             version=3
         )
         tx_v3_child_large1 = self.wallet.create_self_transfer(
             utxo_to_spend=tx_v3_parent_large1["new_utxo"],
-            target_weight=child_target_weight,
+            target_vsize=child_target_vsize,
             version=3
         )
 
         # Parent and child are within v3 limits, but parent's 10kvB descendant limit is exceeded
         assert_greater_than_or_equal(TRUC_MAX_VSIZE, tx_v3_parent_large1["tx"].get_vsize())
-        assert_greater_than_or_equal(1000, tx_v3_child_large1["tx"].get_vsize())
+        assert_greater_than_or_equal(TRUC_CHILD_MAX_VSIZE, tx_v3_child_large1["tx"].get_vsize())
         assert_greater_than(tx_v3_parent_large1["tx"].get_vsize() + tx_v3_child_large1["tx"].get_vsize(), 10000)
 
         assert_raises_rpc_error(-26, f"too-long-mempool-chain, exceeds descendant size limit for tx {tx_v3_parent_large1['txid']}", node.sendrawtransaction, tx_v3_child_large1["hex"])
@@ -244,21 +218,21 @@ class MempoolTRUC(BitcoinTestFramework):
         self.restart_node(0, extra_args=["-limitancestorsize=10", "-datacarriersize=40000"])
         tx_v3_parent_large2 = self.wallet.send_self_transfer(
             from_node=node,
-            target_weight=parent_target_weight,
+            target_vsize=parent_target_vsize,
             version=3
         )
         tx_v3_child_large2 = self.wallet.create_self_transfer(
             utxo_to_spend=tx_v3_parent_large2["new_utxo"],
-            target_weight=child_target_weight,
+            target_vsize=child_target_vsize,
             version=3
         )
 
         # Parent and child are within TRUC limits
         assert_greater_than_or_equal(TRUC_MAX_VSIZE, tx_v3_parent_large2["tx"].get_vsize())
-        assert_greater_than_or_equal(1000, tx_v3_child_large2["tx"].get_vsize())
+        assert_greater_than_or_equal(TRUC_CHILD_MAX_VSIZE, tx_v3_child_large2["tx"].get_vsize())
         assert_greater_than(tx_v3_parent_large2["tx"].get_vsize() + tx_v3_child_large2["tx"].get_vsize(), 10000)
 
-        assert_raises_rpc_error(-26, f"too-long-mempool-chain, exceeds ancestor size limit", node.sendrawtransaction, tx_v3_child_large2["hex"])
+        assert_raises_rpc_error(-26, "too-long-mempool-chain, exceeds ancestor size limit", node.sendrawtransaction, tx_v3_child_large2["hex"])
         self.check_mempool([tx_v3_parent_large2["txid"]])
 
     @cleanup(extra_args=["-datacarriersize=1000"])
@@ -267,12 +241,12 @@ class MempoolTRUC(BitcoinTestFramework):
         node = self.nodes[0]
         tx_v3_parent_normal = self.wallet.create_self_transfer(
             fee_rate=0,
-            target_weight=4004,
+            target_vsize=1001,
             version=3
         )
         tx_v3_parent_2_normal = self.wallet.create_self_transfer(
             fee_rate=0,
-            target_weight=4004,
+            target_vsize=1001,
             version=3
         )
         tx_v3_child_multiparent = self.wallet.create_self_transfer_multi(
@@ -282,7 +256,7 @@ class MempoolTRUC(BitcoinTestFramework):
         )
         tx_v3_child_heavy = self.wallet.create_self_transfer_multi(
             utxos_to_spend=[tx_v3_parent_normal["new_utxo"]],
-            target_weight=4004,
+            target_vsize=TRUC_CHILD_MAX_VSIZE + 1,
             fee_per_output=10000,
             version=3
         )
@@ -294,7 +268,7 @@ class MempoolTRUC(BitcoinTestFramework):
 
         self.check_mempool([])
         result = node.submitpackage([tx_v3_parent_normal["hex"], tx_v3_child_heavy["hex"]])
-        # tx_v3_child_heavy is heavy based on weight, not sigops.
+        # tx_v3_child_heavy is heavy based on vsize, not sigops.
         assert_equal(result['package_msg'], f"TRUC-violation, version=3 child tx {tx_v3_child_heavy['txid']} (wtxid={tx_v3_child_heavy['wtxid']}) is too big: {tx_v3_child_heavy['tx'].get_vsize()} > 1000 virtual bytes")
         self.check_mempool([])
 
@@ -416,7 +390,7 @@ class MempoolTRUC(BitcoinTestFramework):
         node = self.nodes[0]
         tx_v3_parent = self.wallet.create_self_transfer(
             fee_rate=0,
-            target_weight=4004,
+            target_vsize=1001,
             version=3
         )
         tx_v2_child = self.wallet.create_self_transfer_multi(
@@ -506,7 +480,7 @@ class MempoolTRUC(BitcoinTestFramework):
         child_1_conflict = self.wallet.send_self_transfer(from_node=node, version=3, utxo_to_spend=ancestor_tx["new_utxos"][0], fee_rate=Decimal("0.01"))
 
         # Ensure child_1 and child_1_conflict are different transactions
-        assert (child_1_conflict["txid"] != child_1["txid"])
+        assert_not_equal(child_1_conflict["txid"], child_1["txid"])
         self.check_mempool([ancestor_tx["txid"], child_1_conflict["txid"], child_2["txid"]])
         assert_equal(node.getmempoolentry(ancestor_tx["txid"])["descendantcount"], 3)
 
@@ -630,7 +604,6 @@ class MempoolTRUC(BitcoinTestFramework):
         self.test_truc_max_vsize()
         self.test_truc_acceptance()
         self.test_truc_replacement()
-        self.test_truc_bip125()
         self.test_truc_reorg()
         self.test_nondefault_package_limits()
         self.test_truc_ancestors_package()

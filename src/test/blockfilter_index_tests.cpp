@@ -67,8 +67,9 @@ CBlock BuildChainTestingSetup::CreateBlock(const CBlockIndex* prev,
     const std::vector<CMutableTransaction>& txns,
     const CScript& scriptPubKey)
 {
-     BlockAssembler::Options options;
-    std::unique_ptr<CBlockTemplate> pblocktemplate = BlockAssembler{m_node.chainman->ActiveChainstate(), m_node.mempool.get(), options}.CreateNewBlock(scriptPubKey);
+    BlockAssembler::Options options;
+    options.coinbase_output_script = scriptPubKey;
+    std::unique_ptr<CBlockTemplate> pblocktemplate = BlockAssembler{m_node.chainman->ActiveChainstate(), m_node.mempool.get(), options}.CreateNewBlock();
     CBlock& block = pblocktemplate->block;
     block.hashPrevBlock = prev->GetBlockHash();
     block.nTime = prev->nTime + 1;
@@ -103,7 +104,7 @@ bool BuildChainTestingSetup::BuildChain(const CBlockIndex* pindex,
         CBlockHeader header = block->GetBlockHeader();
 
         BlockValidationState state;
-        if (!Assert(m_node.chainman)->ProcessNewBlockHeaders({header}, true, state, &pindex)) {
+        if (!Assert(m_node.chainman)->ProcessNewBlockHeaders({{header}}, true, state, &pindex)) {
             return false;
         }
     }
@@ -144,7 +145,7 @@ BOOST_FIXTURE_TEST_CASE(blockfilter_index_initial_sync, BuildChainTestingSetup)
     BOOST_REQUIRE(filter_index.StartBackgroundSync());
 
     // Allow filter index to catch up with the block index.
-    IndexWaitSynced(filter_index, *Assert(m_node.shutdown));
+    IndexWaitSynced(filter_index, *Assert(m_node.shutdown_signal));
 
     // Check that filter index has all blocks that were in the chain before it started.
     {

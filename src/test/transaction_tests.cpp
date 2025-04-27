@@ -39,6 +39,7 @@
 
 #include <univalue.h>
 
+using namespace util::hex_literals;
 using util::SplitString;
 using util::ToString;
 
@@ -263,7 +264,7 @@ BOOST_AUTO_TEST_CASE(tx_valid)
                     BOOST_ERROR("Tx unexpectedly failed with flag " << name << " unset: " << strTest);
                 }
                 // Removing random combinations of flags
-                flags = TrimFlags(~(verify_flags | (unsigned int)InsecureRandBits(mapFlagNames.size())));
+                flags = TrimFlags(~(verify_flags | (unsigned int)m_rng.randbits(mapFlagNames.size())));
                 if (!CheckTxScripts(tx, mapprevOutScriptPubKeys, mapprevOutValues, flags, txdata, strTest, /*expect_valid=*/true)) {
                     BOOST_ERROR("Tx unexpectedly failed with random flags " << ToString(flags) << ": " << strTest);
                 }
@@ -354,7 +355,7 @@ BOOST_AUTO_TEST_CASE(tx_invalid)
                     BOOST_ERROR("Tx unexpectedly passed with flag " << name << " set: " << strTest);
                 }
                 // Adding random combinations of flags
-                flags = FillFlags(verify_flags | (unsigned int)InsecureRandBits(mapFlagNames.size()));
+                flags = FillFlags(verify_flags | (unsigned int)m_rng.randbits(mapFlagNames.size()));
                 if (!CheckTxScripts(tx, mapprevOutScriptPubKeys, mapprevOutValues, flags, txdata, strTest, /*expect_valid=*/false)) {
                     BOOST_ERROR("Tx unexpectedly passed with random flags " << name << ": " << strTest);
                 }
@@ -587,7 +588,7 @@ BOOST_AUTO_TEST_CASE(test_big_witness_transaction)
         control.Add(std::move(vChecks));
     }
 
-    bool controlCheck = control.Wait();
+    bool controlCheck = !control.Complete().has_value();
     assert(controlCheck);
 }
 
@@ -812,6 +813,13 @@ BOOST_AUTO_TEST_CASE(test_IsStandard)
     // Check dust with default relay fee:
     CAmount nDustThreshold = 182 * g_dust.GetFeePerK() / 1000;
     BOOST_CHECK_EQUAL(nDustThreshold, 546);
+
+    // Add dust outputs up to allowed maximum, still standard!
+    for (size_t i{0}; i < MAX_DUST_OUTPUTS_PER_TX; ++i) {
+        t.vout.emplace_back(0, t.vout[0].scriptPubKey);
+        CheckIsStandard(t);
+    }
+
     // dust:
     t.vout[0].nValue = nDustThreshold - 1;
     CheckIsNotStandard(t, "dust");
@@ -851,24 +859,24 @@ BOOST_AUTO_TEST_CASE(test_IsStandard)
     CheckIsNotStandard(t, "scriptpubkey");
 
     // MAX_OP_RETURN_RELAY-byte TxoutType::NULL_DATA (standard)
-    t.vout[0].scriptPubKey = CScript() << OP_RETURN << ParseHex("04678afdb0fe5548271967f1a67130b7105cd6a828e03909a67962e0ea1f61deb649f6bc3f4cef3804678afdb0fe5548271967f1a67130b7105cd6a828e03909a67962e0ea1f61deb649f6bc3f4cef38");
+    t.vout[0].scriptPubKey = CScript() << OP_RETURN << "04678afdb0fe5548271967f1a67130b7105cd6a828e03909a67962e0ea1f61deb649f6bc3f4cef3804678afdb0fe5548271967f1a67130b7105cd6a828e03909a67962e0ea1f61deb649f6bc3f4cef38"_hex;
     BOOST_CHECK_EQUAL(MAX_OP_RETURN_RELAY, t.vout[0].scriptPubKey.size());
     CheckIsStandard(t);
 
     // MAX_OP_RETURN_RELAY+1-byte TxoutType::NULL_DATA (non-standard)
-    t.vout[0].scriptPubKey = CScript() << OP_RETURN << ParseHex("04678afdb0fe5548271967f1a67130b7105cd6a828e03909a67962e0ea1f61deb649f6bc3f4cef3804678afdb0fe5548271967f1a67130b7105cd6a828e03909a67962e0ea1f61deb649f6bc3f4cef3800");
+    t.vout[0].scriptPubKey = CScript() << OP_RETURN << "04678afdb0fe5548271967f1a67130b7105cd6a828e03909a67962e0ea1f61deb649f6bc3f4cef3804678afdb0fe5548271967f1a67130b7105cd6a828e03909a67962e0ea1f61deb649f6bc3f4cef3800"_hex;
     BOOST_CHECK_EQUAL(MAX_OP_RETURN_RELAY + 1, t.vout[0].scriptPubKey.size());
     CheckIsNotStandard(t, "scriptpubkey");
 
     // Data payload can be encoded in any way...
-    t.vout[0].scriptPubKey = CScript() << OP_RETURN << ParseHex("");
+    t.vout[0].scriptPubKey = CScript() << OP_RETURN << ""_hex;
     CheckIsStandard(t);
-    t.vout[0].scriptPubKey = CScript() << OP_RETURN << ParseHex("00") << ParseHex("01");
+    t.vout[0].scriptPubKey = CScript() << OP_RETURN << "00"_hex << "01"_hex;
     CheckIsStandard(t);
     // OP_RESERVED *is* considered to be a PUSHDATA type opcode by IsPushOnly()!
-    t.vout[0].scriptPubKey = CScript() << OP_RETURN << OP_RESERVED << -1 << 0 << ParseHex("01") << 2 << 3 << 4 << 5 << 6 << 7 << 8 << 9 << 10 << 11 << 12 << 13 << 14 << 15 << 16;
+    t.vout[0].scriptPubKey = CScript() << OP_RETURN << OP_RESERVED << -1 << 0 << "01"_hex << 2 << 3 << 4 << 5 << 6 << 7 << 8 << 9 << 10 << 11 << 12 << 13 << 14 << 15 << 16;
     CheckIsStandard(t);
-    t.vout[0].scriptPubKey = CScript() << OP_RETURN << 0 << ParseHex("01") << 2 << ParseHex("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+    t.vout[0].scriptPubKey = CScript() << OP_RETURN << 0 << "01"_hex << 2 << "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"_hex;
     CheckIsStandard(t);
 
     // ...so long as it only contains PUSHDATA's
@@ -882,13 +890,13 @@ BOOST_AUTO_TEST_CASE(test_IsStandard)
 
     // Only one TxoutType::NULL_DATA permitted in all cases
     t.vout.resize(2);
-    t.vout[0].scriptPubKey = CScript() << OP_RETURN << ParseHex("04678afdb0fe5548271967f1a67130b7105cd6a828e03909a67962e0ea1f61deb649f6bc3f4cef38");
+    t.vout[0].scriptPubKey = CScript() << OP_RETURN << "04678afdb0fe5548271967f1a67130b7105cd6a828e03909a67962e0ea1f61deb649f6bc3f4cef38"_hex;
     t.vout[0].nValue = 0;
-    t.vout[1].scriptPubKey = CScript() << OP_RETURN << ParseHex("04678afdb0fe5548271967f1a67130b7105cd6a828e03909a67962e0ea1f61deb649f6bc3f4cef38");
+    t.vout[1].scriptPubKey = CScript() << OP_RETURN << "04678afdb0fe5548271967f1a67130b7105cd6a828e03909a67962e0ea1f61deb649f6bc3f4cef38"_hex;
     t.vout[1].nValue = 0;
     CheckIsNotStandard(t, "multi-op-return");
 
-    t.vout[0].scriptPubKey = CScript() << OP_RETURN << ParseHex("04678afdb0fe5548271967f1a67130b7105cd6a828e03909a67962e0ea1f61deb649f6bc3f4cef38");
+    t.vout[0].scriptPubKey = CScript() << OP_RETURN << "04678afdb0fe5548271967f1a67130b7105cd6a828e03909a67962e0ea1f61deb649f6bc3f4cef38"_hex;
     t.vout[1].scriptPubKey = CScript() << OP_RETURN;
     CheckIsNotStandard(t, "multi-op-return");
 
@@ -968,6 +976,10 @@ BOOST_AUTO_TEST_CASE(test_IsStandard)
     CheckIsNotStandard(t, "bare-multisig");
     g_bare_multi = DEFAULT_PERMIT_BAREMULTISIG;
 
+    // Add dust outputs up to allowed maximum
+    assert(t.vout.size() == 1);
+    t.vout.insert(t.vout.end(), MAX_DUST_OUTPUTS_PER_TX, {0, t.vout[0].scriptPubKey});
+
     // Check compressed P2PK outputs dust threshold (must have leading 02 or 03)
     t.vout[0].scriptPubKey = CScript() << std::vector<unsigned char>(33, 0x02) << OP_CHECKSIG;
     t.vout[0].nValue = 576;
@@ -1028,7 +1040,7 @@ BOOST_AUTO_TEST_CASE(test_IsStandard)
     }
 
     // Check anchor outputs
-    t.vout[0].scriptPubKey = CScript() << OP_1 << std::vector<unsigned char>{0x4e, 0x73};
+    t.vout[0].scriptPubKey = CScript() << OP_1 << ANCHOR_BYTES;
     BOOST_CHECK(t.vout[0].scriptPubKey.IsPayToAnchor());
     t.vout[0].nValue = 240;
     CheckIsStandard(t);

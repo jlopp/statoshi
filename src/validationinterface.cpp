@@ -9,6 +9,7 @@
 #include <consensus/validation.h>
 #include <kernel/chain.h>
 #include <kernel/mempool_entry.h>
+#include <kernel/mempool_removal_reason.h>
 #include <logging.h>
 #include <primitives/block.h>
 #include <primitives/transaction.h>
@@ -18,8 +19,6 @@
 #include <future>
 #include <unordered_map>
 #include <utility>
-
-std::string RemovalReasonToString(const MemPoolRemovalReason& r) noexcept;
 
 /**
  * ValidationSignalsImpl manages a list of shared_ptr<CValidationInterface> callbacks.
@@ -167,7 +166,7 @@ void ValidationSignals::SyncWithValidationInterfaceQueue()
     } while (0)
 
 #define LOG_EVENT(fmt, ...) \
-    LogPrint(BCLog::VALIDATION, fmt "\n", __VA_ARGS__)
+    LogDebug(BCLog::VALIDATION, fmt "\n", __VA_ARGS__)
 
 void ValidationSignals::UpdatedBlockTip(const CBlockIndex *pindexNew, const CBlockIndex *pindexFork, bool fInitialDownload) {
     // Dependencies exist that require UpdatedBlockTip events to be delivered in the order in which

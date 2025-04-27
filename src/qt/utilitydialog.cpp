@@ -2,7 +2,7 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#include <config/bitcoin-config.h> // IWYU pragma: keep
+#include <bitcoin-build-config.h> // IWYU pragma: keep
 
 #include <qt/utilitydialog.h>
 
@@ -33,11 +33,11 @@ HelpMessageDialog::HelpMessageDialog(QWidget *parent, bool about) :
 {
     ui->setupUi(this);
 
-    QString version = QString{PACKAGE_NAME} + " " + tr("version") + " " + QString::fromStdString(FormatFullVersion());
+    QString version = QString{CLIENT_NAME} + " " + tr("version") + " " + QString::fromStdString(FormatFullVersion());
 
     if (about)
     {
-        setWindowTitle(tr("About %1").arg(PACKAGE_NAME));
+        setWindowTitle(tr("About %1").arg(CLIENT_NAME));
 
         std::string licenseInfo = LicenseInfo();
         /// HTML-format the license message from the core
@@ -56,8 +56,11 @@ HelpMessageDialog::HelpMessageDialog(QWidget *parent, bool about) :
         ui->helpMessage->setVisible(false);
     } else {
         setWindowTitle(tr("Command-line options"));
-        QString header = "Usage: bitcoin-qt [command-line options] [URI]\n\n"
-                         "Optional URI is a Bitcoin address in BIP21 URI format.\n";
+        QString header = "The bitcoin-qt application provides a graphical interface for interacting with " CLIENT_NAME ".\n\n"
+                         "It combines the core functionalities of bitcoind with a user-friendly interface for wallet management, transaction history, and network statistics.\n\n"
+                         "It is suitable for users who prefer a graphical over a command-line interface.\n\n"
+                         "You can optionally specify a payment [URI], in e.g. the BIP21 URI format.\n\n"
+                         "Usage: bitcoin-qt [options] [URI]\n\n";
         QTextCursor cursor(ui->helpMessage->document());
         cursor.insertText(version);
         cursor.insertBlock();
@@ -141,7 +144,7 @@ ShutdownWindow::ShutdownWindow(QWidget *parent, Qt::WindowFlags f):
 {
     QVBoxLayout *layout = new QVBoxLayout();
     layout->addWidget(new QLabel(
-        tr("%1 is shutting down…").arg(PACKAGE_NAME) + "<br /><br />" +
+        tr("%1 is shutting down…").arg(CLIENT_NAME) + "<br /><br />" +
         tr("Do not shut down the computer until this window disappears.")));
     setLayout(layout);
 

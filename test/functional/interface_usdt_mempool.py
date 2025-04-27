@@ -7,6 +7,7 @@
      See https://github.com/bitcoin/bitcoin/blob/master/doc/tracing.md#context-mempool
 """
 
+import ctypes
 from decimal import Decimal
 
 # Test will be skipped if we don't have bcc installed
@@ -63,6 +64,7 @@ struct replaced_event
   u8    replacement_hash[HASH_LENGTH];
   s32   replacement_vsize;
   s64   replacement_fee;
+  bool  replaced_by_transaction;
 };
 
 // BPF perf buffer to push the data to user space.
@@ -73,8 +75,9 @@ BPF_PERF_OUTPUT(replaced_events);
 
 int trace_added(struct pt_regs *ctx) {
   struct added_event added = {};
-
-  bpf_usdt_readarg_p(1, ctx, &added.hash, HASH_LENGTH);
+  void *phash = NULL;
+  bpf_usdt_readarg(1, ctx, &phash);
+  bpf_probe_read_user(&added.hash, sizeof(added.hash), phash);
   bpf_usdt_readarg(2, ctx, &added.vsize);
   bpf_usdt_readarg(3, ctx, &added.fee);
 
@@ -84,9 +87,11 @@ int trace_added(struct pt_regs *ctx) {
 
 int trace_removed(struct pt_regs *ctx) {
   struct removed_event removed = {};
-
-  bpf_usdt_readarg_p(1, ctx, &removed.hash, HASH_LENGTH);
-  bpf_usdt_readarg_p(2, ctx, &removed.reason, MAX_REMOVAL_REASON_LENGTH);
+  void *phash = NULL, *preason = NULL;
+  bpf_usdt_readarg(1, ctx, &phash);
+  bpf_probe_read_user(&removed.hash, sizeof(removed.hash), phash);
+  bpf_usdt_readarg(2, ctx, &preason);
+  bpf_probe_read_user_str(&removed.reason, sizeof(removed.reason), preason);
   bpf_usdt_readarg(3, ctx, &removed.vsize);
   bpf_usdt_readarg(4, ctx, &removed.fee);
   bpf_usdt_readarg(5, ctx, &removed.entry_time);
@@ -97,30 +102,47 @@ int trace_removed(struct pt_regs *ctx) {
 
 int trace_rejected(struct pt_regs *ctx) {
   struct rejected_event rejected = {};
-
-  bpf_usdt_readarg_p(1, ctx, &rejected.hash, HASH_LENGTH);
-  bpf_usdt_readarg_p(2, ctx, &rejected.reason, MAX_REJECT_REASON_LENGTH);
-
+  void *phash = NULL, *preason = NULL;
+  bpf_usdt_readarg(1, ctx, &phash);
+  bpf_probe_read_user(&rejected.hash, sizeof(rejected.hash), phash);
+  bpf_usdt_readarg(2, ctx, &preason);
+  bpf_probe_read_user_str(&rejected.reason, sizeof(rejected.reason), preason);
   rejected_events.perf_submit(ctx, &rejected, sizeof(rejected));
   return 0;
 }
 
 int trace_replaced(struct pt_regs *ctx) {
   struct replaced_event replaced = {};
-
-  bpf_usdt_readarg_p(1, ctx, &replaced.replaced_hash, HASH_LENGTH);
+  void *preplaced_hash = NULL, *preplacement_hash = NULL;
+  bpf_usdt_readarg(1, ctx, &preplaced_hash);
+  bpf_probe_read_user(&replaced.replaced_hash, sizeof(replaced.replaced_hash), preplaced_hash);
   bpf_usdt_readarg(2, ctx, &replaced.replaced_vsize);
   bpf_usdt_readarg(3, ctx, &replaced.replaced_fee);
   bpf_usdt_readarg(4, ctx, &replaced.replaced_entry_time);
-  bpf_usdt_readarg_p(5, ctx, &replaced.replacement_hash, HASH_LENGTH);
+  bpf_usdt_readarg(5, ctx, &preplacement_hash);
+  bpf_probe_read_user(&replaced.replacement_hash, sizeof(replaced.replacement_hash), preplacement_hash);
   bpf_usdt_readarg(6, ctx, &replaced.replacement_vsize);
   bpf_usdt_readarg(7, ctx, &replaced.replacement_fee);
+  bpf_usdt_readarg(8, ctx, &replaced.replaced_by_transaction);
 
   replaced_events.perf_submit(ctx, &replaced, sizeof(replaced));
   return 0;
 }
 
 """
+
+
+class MempoolReplaced(ctypes.Structure):
+    _fields_ = [
+        ("replaced_hash", ctypes.c_ubyte * 32),
+        ("replaced_vsize", ctypes.c_int32),
+        ("replaced_fee", ctypes.c_int64),
+        ("replaced_entry_time", ctypes.c_uint64),
+        ("replacement_hash", ctypes.c_ubyte * 32),
+        ("replacement_vsize", ctypes.c_int32),
+        ("replacement_fee", ctypes.c_int64),
+        ("replaced_by_transaction", ctypes.c_bool),
+    ]
 
 
 class MempoolTracepointTest(BitcoinTestFramework):
@@ -230,7 +252,8 @@ class MempoolTracepointTest(BitcoinTestFramework):
         bpf = BPF(text=MEMPOOL_TRACEPOINTS_PROGRAM, usdt_contexts=[ctx], debug=0, cflags=["-Wno-error=implicit-function-declaration"])
 
         def handle_replaced_event(_, data, __):
-            events.append(bpf["replaced_events"].event(data))
+            event = ctypes.cast(data, ctypes.POINTER(MempoolReplaced)).contents
+            events.append(event)
 
         bpf["replaced_events"].open_perf_buffer(handle_replaced_event)
 
@@ -261,6 +284,7 @@ class MempoolTracepointTest(BitcoinTestFramework):
         assert_equal(bytes(event.replacement_hash)[::-1].hex(), replacement_tx["txid"])
         assert_equal(event.replacement_vsize, replacement_tx["tx"].get_vsize())
         assert_equal(event.replacement_fee, replacement_fee)
+        assert_equal(event.replaced_by_transaction, True)
 
         bpf.cleanup()
         self.generate(self.wallet, 1)
@@ -296,10 +320,7 @@ class MempoolTracepointTest(BitcoinTestFramework):
         assert_equal(1, len(events))
         event = events[0]
         assert_equal(bytes(event.hash)[::-1].hex(), tx["tx"].hash)
-        # The next test is already known to fail, so disable it to avoid
-        # wasting CPU time and developer time. See
-        # https://github.com/bitcoin/bitcoin/issues/27380
-        #assert_equal(event.reason.decode("UTF-8"), "min relay fee not met")
+        assert_equal(event.reason.decode("UTF-8"), "min relay fee not met")
 
         bpf.cleanup()
         self.generate(self.wallet, 1)

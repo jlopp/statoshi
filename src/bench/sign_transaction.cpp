@@ -2,8 +2,8 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#include <bench/bench.h>
 #include <addresstype.h>
+#include <bench/bench.h>
 #include <coins.h>
 #include <key.h>
 #include <primitives/transaction.h>
@@ -11,9 +11,15 @@
 #include <script/interpreter.h>
 #include <script/script.h>
 #include <script/sign.h>
-#include <uint256.h>
+#include <script/signingprovider.h>
+#include <span.h>
 #include <test/util/random.h>
+#include <uint256.h>
 #include <util/translation.h>
+
+#include <cassert>
+#include <map>
+#include <vector>
 
 enum class InputType {
     P2WPKH, // segwitv0, witness-pubkey-hash (ECDSA signature)
@@ -56,7 +62,7 @@ static void SignTransactionSingleInput(benchmark::Bench& bench, InputType input_
     bench.minEpochIterations(100).run([&] {
         CMutableTransaction tx{unsigned_tx};
         std::map<COutPoint, Coin> coins;
-        CScript prev_spk = prev_spks[(iter++) % prev_spks.size()];
+        const CScript& prev_spk = prev_spks[(iter++) % prev_spks.size()];
         coins[prevout] = Coin(CTxOut(10000, prev_spk), /*nHeightIn=*/100, /*fCoinBaseIn=*/false);
         std::map<int, bilingual_str> input_errors;
         bool complete = SignTransaction(tx, &keystore, coins, SIGHASH_ALL, input_errors);
@@ -69,12 +75,13 @@ static void SignTransactionSchnorr(benchmark::Bench& bench) { SignTransactionSin
 
 static void SignSchnorrTapTweakBenchmark(benchmark::Bench& bench, bool use_null_merkle_root)
 {
+    FastRandomContext rng;
     ECC_Context ecc_context{};
 
     auto key = GenerateRandomKey();
-    auto msg = InsecureRand256();
-    auto merkle_root = use_null_merkle_root ? uint256() : InsecureRand256();
-    auto aux = InsecureRand256();
+    auto msg = rng.rand256();
+    auto merkle_root = use_null_merkle_root ? uint256() : rng.rand256();
+    auto aux = rng.rand256();
     std::vector<unsigned char> sig(64);
 
     bench.minEpochIterations(100).run([&] {

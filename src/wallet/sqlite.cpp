@@ -1,8 +1,8 @@
-// Copyright (c) 2020-2022 The Bitcoin Core developers
+// Copyright (c) 2020-present The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#include <config/bitcoin-config.h> // IWYU pragma: keep
+#include <bitcoin-build-config.h> // IWYU pragma: keep
 
 #include <wallet/sqlite.h>
 
@@ -26,7 +26,7 @@
 namespace wallet {
 static constexpr int32_t WALLET_SCHEMA_VERSION = 0;
 
-static Span<const std::byte> SpanFromBlob(sqlite3_stmt* stmt, int col)
+static std::span<const std::byte> SpanFromBlob(sqlite3_stmt* stmt, int col)
 {
     return {reinterpret_cast<const std::byte*>(sqlite3_column_blob(stmt, col)),
             static_cast<size_t>(sqlite3_column_bytes(stmt, col))};
@@ -60,7 +60,7 @@ static int TraceSqlCallback(unsigned code, void* context, void* param1, void* pa
 
 static bool BindBlobToStatement(sqlite3_stmt* stmt,
                                 int index,
-                                Span<const std::byte> blob,
+                                std::span<const std::byte> blob,
                                 const std::string& description)
 {
     // Pass a pointer to the empty string "" below instead of passing the
@@ -282,7 +282,7 @@ void SQLiteDatabase::Open()
     // Now begin a transaction to acquire the exclusive lock. This lock won't be released until we close because of the exclusive locking mode.
     int ret = sqlite3_exec(m_db, "BEGIN EXCLUSIVE TRANSACTION", nullptr, nullptr, nullptr);
     if (ret != SQLITE_OK) {
-        throw std::runtime_error("SQLiteDatabase: Unable to obtain an exclusive lock on the database, is it being used by another instance of " PACKAGE_NAME "?\n");
+        throw std::runtime_error("SQLiteDatabase: Unable to obtain an exclusive lock on the database, is it being used by another instance of " CLIENT_NAME "?\n");
     }
     ret = sqlite3_exec(m_db, "COMMIT", nullptr, nullptr, nullptr);
     if (ret != SQLITE_OK) {
@@ -513,7 +513,7 @@ bool SQLiteBatch::WriteKey(DataStream&& key, DataStream&& value, bool overwrite)
     return res == SQLITE_DONE;
 }
 
-bool SQLiteBatch::ExecStatement(sqlite3_stmt* stmt, Span<const std::byte> blob)
+bool SQLiteBatch::ExecStatement(sqlite3_stmt* stmt, std::span<const std::byte> blob)
 {
     if (!m_database.m_db) return false;
     assert(stmt);
@@ -542,7 +542,7 @@ bool SQLiteBatch::EraseKey(DataStream&& key)
     return ExecStatement(m_delete_stmt, key);
 }
 
-bool SQLiteBatch::ErasePrefix(Span<const std::byte> prefix)
+bool SQLiteBatch::ErasePrefix(std::span<const std::byte> prefix)
 {
     return ExecStatement(m_delete_prefix_stmt, prefix);
 }
@@ -606,7 +606,7 @@ std::unique_ptr<DatabaseCursor> SQLiteBatch::GetNewCursor()
     return cursor;
 }
 
-std::unique_ptr<DatabaseCursor> SQLiteBatch::GetNewPrefixCursor(Span<const std::byte> prefix)
+std::unique_ptr<DatabaseCursor> SQLiteBatch::GetNewPrefixCursor(std::span<const std::byte> prefix)
 {
     if (!m_database.m_db) return nullptr;
 

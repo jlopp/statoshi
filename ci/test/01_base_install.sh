@@ -15,13 +15,27 @@ if [ "$(git config --global ${CFG_DONE})" == "true" ]; then
   exit 0
 fi
 
+MAKEJOBS="-j$( nproc )"  # Use nproc, because MAKEJOBS is the default in docker image builds.
+
 if [ -n "$DPKG_ADD_ARCH" ]; then
   dpkg --add-architecture "$DPKG_ADD_ARCH"
 fi
 
+if [ -n "${APT_LLVM_V}" ]; then
+  ${CI_RETRY_EXE} apt-get update
+  ${CI_RETRY_EXE} apt-get install curl -y
+  curl "https://apt.llvm.org/llvm-snapshot.gpg.key" | tee "/etc/apt/trusted.gpg.d/apt.llvm.org.asc"
+  (
+    # shellcheck disable=SC2034
+    source /etc/os-release
+    echo "deb http://apt.llvm.org/${VERSION_CODENAME}/ llvm-toolchain-${VERSION_CODENAME}-${APT_LLVM_V} main" > "/etc/apt/sources.list.d/llvm-toolchain-${VERSION_CODENAME}-${APT_LLVM_V}.list"
+  )
+fi
+
 if [[ $CI_IMAGE_NAME_TAG == *centos* ]]; then
   bash -c "dnf -y install epel-release"
-  bash -c "dnf -y --allowerasing install $CI_BASE_PACKAGES $PACKAGES"
+  # The ninja-build package is available in the CRB repository.
+  bash -c "dnf -y --allowerasing --enablerepo crb install $CI_BASE_PACKAGES $PACKAGES"
 elif [ "$CI_OS_NAME" != "macos" ]; then
   if [[ -n "${APPEND_APT_SOURCES_LIST}" ]]; then
     echo "${APPEND_APT_SOURCES_LIST}" >> /etc/apt/sources.list
@@ -36,7 +50,7 @@ if [ -n "$PIP_PACKAGES" ]; then
 fi
 
 if [[ ${USE_MEMORY_SANITIZER} == "true" ]]; then
-  ${CI_RETRY_EXE} git clone --depth=1 https://github.com/llvm/llvm-project -b "llvmorg-18.1.3" /msan/llvm-project
+  ${CI_RETRY_EXE} git clone --depth=1 https://github.com/llvm/llvm-project -b "llvmorg-20.1.0" /msan/llvm-project
 
   cmake -G Ninja -B /msan/clang_build/ \
     -DLLVM_ENABLE_PROJECTS="clang" \
@@ -45,7 +59,7 @@ if [[ ${USE_MEMORY_SANITIZER} == "true" ]]; then
     -DLLVM_ENABLE_RUNTIMES="compiler-rt;libcxx;libcxxabi;libunwind" \
     -S /msan/llvm-project/llvm
 
-  ninja -C /msan/clang_build/ "-j$( nproc )"  # Use nproc, because MAKEJOBS is the default in docker image builds
+  ninja -C /msan/clang_build/ "$MAKEJOBS"
   ninja -C /msan/clang_build/ install-runtimes
 
   update-alternatives --install /usr/bin/clang++ clang++ /msan/clang_build/bin/clang++ 100
@@ -61,10 +75,11 @@ if [[ ${USE_MEMORY_SANITIZER} == "true" ]]; then
     -DLLVM_TARGETS_TO_BUILD=Native \
     -DLLVM_ENABLE_PER_TARGET_RUNTIME_DIR=OFF \
     -DLIBCXXABI_USE_LLVM_UNWINDER=OFF \
+    -DLIBCXX_ABI_DEFINES="_LIBCPP_ABI_BOUNDED_ITERATORS;_LIBCPP_ABI_BOUNDED_ITERATORS_IN_STD_ARRAY;_LIBCPP_ABI_BOUNDED_ITERATORS_IN_STRING;_LIBCPP_ABI_BOUNDED_ITERATORS_IN_VECTOR;_LIBCPP_ABI_BOUNDED_UNIQUE_PTR" \
     -DLIBCXX_HARDENING_MODE=debug \
     -S /msan/llvm-project/runtimes
 
-  ninja -C /msan/cxx_build/ "-j$( nproc )"  # Use nproc, because MAKEJOBS is the default in docker image builds
+  ninja -C /msan/cxx_build/ "$MAKEJOBS"
 
   # Clear no longer needed source folder
   du -sh /msan/llvm-project
@@ -74,7 +89,7 @@ fi
 if [[ "${RUN_TIDY}" == "true" ]]; then
   ${CI_RETRY_EXE} git clone --depth=1 https://github.com/include-what-you-use/include-what-you-use -b clang_"${TIDY_LLVM_V}" /include-what-you-use
   cmake -B /iwyu-build/ -G 'Unix Makefiles' -DCMAKE_PREFIX_PATH=/usr/lib/llvm-"${TIDY_LLVM_V}" -S /include-what-you-use
-  make -C /iwyu-build/ install "-j$( nproc )"  # Use nproc, because MAKEJOBS is the default in docker image builds
+  make -C /iwyu-build/ install "$MAKEJOBS"
 fi
 
 mkdir -p "${DEPENDS_DIR}/SDKs" "${DEPENDS_DIR}/sdk-sources"

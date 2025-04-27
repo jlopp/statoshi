@@ -68,29 +68,26 @@ std::set<int> InterpretSubtractFeeFromOutputInstructions(const UniValue& sffo_in
 {
     std::set<int> sffo_set;
     if (sffo_instructions.isNull()) return sffo_set;
-    if (sffo_instructions.isBool()) {
-        if (sffo_instructions.get_bool()) sffo_set.insert(0);
-        return sffo_set;
-    }
+
     for (const auto& sffo : sffo_instructions.getValues()) {
+        int pos{-1};
         if (sffo.isStr()) {
-            for (size_t i = 0; i < destinations.size(); ++i) {
-                if (sffo.get_str() == destinations.at(i)) {
-                    sffo_set.insert(i);
-                    break;
-                }
-            }
+            auto it = find(destinations.begin(), destinations.end(), sffo.get_str());
+            if (it == destinations.end()) throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Invalid parameter 'subtract fee from output', destination %s not found in tx outputs", sffo.get_str()));
+            pos = it - destinations.begin();
+        } else if (sffo.isNum()) {
+            pos = sffo.getInt<int>();
+        } else {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Invalid parameter 'subtract fee from output', invalid value type: %s", uvTypeName(sffo.type())));
         }
-        if (sffo.isNum()) {
-            int pos = sffo.getInt<int>();
-            if (sffo_set.contains(pos))
-                throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Invalid parameter, duplicated position: %d", pos));
-            if (pos < 0)
-                throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Invalid parameter, negative position: %d", pos));
-            if (pos >= int(destinations.size()))
-                throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Invalid parameter, position too large: %d", pos));
-            sffo_set.insert(pos);
-        }
+
+        if (sffo_set.contains(pos))
+            throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Invalid parameter 'subtract fee from output', duplicated position: %d", pos));
+        if (pos < 0)
+            throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Invalid parameter 'subtract fee from output', negative position: %d", pos));
+        if (pos >= int(destinations.size()))
+            throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Invalid parameter 'subtract fee from output', position too large: %d", pos));
+        sffo_set.insert(pos);
     }
     return sffo_set;
 }
@@ -310,10 +307,13 @@ RPCHelpMan sendtoaddress()
     UniValue address_amounts(UniValue::VOBJ);
     const std::string address = request.params[0].get_str();
     address_amounts.pushKV(address, request.params[1]);
-    std::vector<CRecipient> recipients = CreateRecipients(
-            ParseOutputs(address_amounts),
-            InterpretSubtractFeeFromOutputInstructions(request.params[4], address_amounts.getKeys())
-    );
+
+    std::set<int> sffo_set;
+    if (!request.params[4].isNull() && request.params[4].get_bool()) {
+        sffo_set.insert(0);
+    }
+
+    std::vector<CRecipient> recipients{CreateRecipients(ParseOutputs(address_amounts), sffo_set)};
     const bool verbose{request.params[10].isNull() ? false : request.params[10].get_bool()};
 
     return SendMoney(*pwallet, coin_control, recipients, mapValue, verbose);
@@ -418,7 +418,7 @@ RPCHelpMan sendmany()
 RPCHelpMan settxfee()
 {
     return RPCHelpMan{"settxfee",
-                "\nSet the transaction fee rate in " + CURRENCY_UNIT + "/kvB for this wallet. Overrides the global -paytxfee command line parameter.\n"
+                "\n(DEPRECATED) Set the transaction fee rate in " + CURRENCY_UNIT + "/kvB for this wallet. Overrides the global -paytxfee command line parameter.\n"
                 "Can be deactivated by passing 0 as the fee. In that case automatic fee selection will be used by default.\n",
                 {
                     {"amount", RPCArg::Type::AMOUNT, RPCArg::Optional::NO, "The transaction fee rate in " + CURRENCY_UNIT + "/kvB"},
@@ -436,6 +436,11 @@ RPCHelpMan settxfee()
     if (!pwallet) return UniValue::VNULL;
 
     LOCK(pwallet->cs_wallet);
+
+    if (!pwallet->chain().rpcEnableDeprecated("settxfee")) {
+        throw JSONRPCError(RPC_METHOD_DEPRECATED, "settxfee is deprecated and will be fully removed in v31.0."
+        "\nTo use settxfee restart bitcoind with -deprecatedrpc=settxfee.");
+    }
 
     CAmount nAmount = AmountFromValue(request.params[0]);
     CFeeRate tx_fee_rate(nAmount, 1000);
@@ -661,11 +666,13 @@ CreatedTransactionResult FundTransaction(CWallet& wallet, const CMutableTransact
                 FlatSigningProvider desc_out;
                 std::string error;
                 std::vector<CScript> scripts_temp;
-                std::unique_ptr<Descriptor> desc = Parse(desc_str, desc_out, error, true);
-                if (!desc) {
+                auto descs = Parse(desc_str, desc_out, error, true);
+                if (descs.empty()) {
                     throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Unable to parse descriptor '%s': %s", desc_str, error));
                 }
-                desc->Expand(0, desc_out, scripts_temp, desc_out);
+                for (auto& desc : descs) {
+                    desc->Expand(0, desc_out, scripts_temp, desc_out);
+                }
                 coinControl.m_external_provider.Merge(std::move(desc_out));
             }
         }
@@ -1224,16 +1231,18 @@ RPCHelpMan send()
                     {"include_watching", RPCArg::Type::BOOL, RPCArg::DefaultHint{"true for watch-only wallets, otherwise false"}, "Also select inputs which are watch only.\n"
                                           "Only solvable inputs can be used. Watch-only destinations are solvable if the public key and/or output script was imported,\n"
                                           "e.g. with 'importpubkey' or 'importmulti' with the 'pubkeys' or 'desc' field."},
-                    {"inputs", RPCArg::Type::ARR, RPCArg::Default{UniValue::VARR}, "Specify inputs instead of adding them automatically. A JSON array of JSON objects",
+                    {"inputs", RPCArg::Type::ARR, RPCArg::Default{UniValue::VARR}, "Specify inputs instead of adding them automatically.",
                         {
+                          {"", RPCArg::Type::OBJ, RPCArg::Optional::OMITTED, "", {
                             {"txid", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "The transaction id"},
                             {"vout", RPCArg::Type::NUM, RPCArg::Optional::NO, "The output number"},
-                            {"sequence", RPCArg::Type::NUM, RPCArg::Optional::NO, "The sequence number"},
+                            {"sequence", RPCArg::Type::NUM, RPCArg::DefaultHint{"depends on the value of the 'replaceable' and 'locktime' arguments"}, "The sequence number"},
                             {"weight", RPCArg::Type::NUM, RPCArg::DefaultHint{"Calculated from wallet and solving data"}, "The maximum weight for this input, "
                                         "including the weight of the outpoint and sequence number. "
                                         "Note that signature sizes are not guaranteed to be consistent, "
                                         "so the maximum DER signatures size of 73 bytes should be used when considering ECDSA signatures."
                                         "Remember to convert serialized sizes to weight units when necessary."},
+                          }},
                         },
                     },
                     {"locktime", RPCArg::Type::NUM, RPCArg::Default{0}, "Raw locktime. Non-0 value also locktime-activates inputs"},

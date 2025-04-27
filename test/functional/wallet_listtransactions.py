@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2014-2022 The Bitcoin Core developers
+# Copyright (c) 2014-present The Bitcoin Core developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 """Test the listtransactions API."""
@@ -14,6 +14,7 @@ from test_framework.messages import (
 )
 from test_framework.test_framework import BitcoinTestFramework
 from test_framework.util import (
+    assert_not_equal,
     assert_array_result,
     assert_equal,
     assert_raises_rpc_error,
@@ -103,7 +104,6 @@ class ListTransactionsTest(BitcoinTestFramework):
             txid = self.nodes[1].sendtoaddress(multisig["address"], 0.1)
             self.generate(self.nodes[1], 1)
             assert_equal(len(self.nodes[0].listtransactions(label="watchonly", include_watchonly=True)), 1)
-            assert_equal(len(self.nodes[0].listtransactions(dummy="watchonly", include_watchonly=True)), 1)
             assert len(self.nodes[0].listtransactions(label="watchonly", count=100, include_watchonly=False)) == 0
             assert_array_result(self.nodes[0].listtransactions(label="watchonly", count=100, include_watchonly=True),
                                 {"category": "receive", "amount": Decimal("0.1")},
@@ -308,7 +308,7 @@ class ListTransactionsTest(BitcoinTestFramework):
         fee_join = self.nodes[0].getmempoolentry(txid_join)["fees"]["base"]
         # Fee should be correct: assert_equal(fee_join, self.nodes[0].gettransaction(txid_join)['fee'])
         # But it is not, see for example https://github.com/bitcoin/bitcoin/issues/14136:
-        assert fee_join != self.nodes[0].gettransaction(txid_join)["fee"]
+        assert_not_equal(fee_join, self.nodes[0].gettransaction(txid_join)["fee"])
 
     def run_invalid_parameters_test(self):
         self.log.info("Test listtransactions RPC parameter validity")

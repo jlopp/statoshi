@@ -49,9 +49,6 @@ class PackageRelayTest(BitcoinTestFramework):
     def raise_network_minfee(self):
         fill_mempool(self, self.nodes[0])
 
-        self.log.debug("Wait for the network to sync mempools")
-        self.sync_mempools()
-
         self.log.debug("Check that all nodes' mempool minimum feerates are above min relay feerate")
         for node in self.nodes:
             assert_equal(node.getmempoolinfo()['minrelaytxfee'], FEERATE_1SAT_VB)
@@ -107,7 +104,7 @@ class PackageRelayTest(BitcoinTestFramework):
 
         # 3: 2-parent-1-child package. Both parents are above mempool min feerate. No package submission happens.
         # We require packages to be child-with-unconfirmed-parents and only allow 1-parent-1-child packages.
-        package_hex_3, parent_31, parent_32, child_3 = self.create_package_2p1c(self.wallet)
+        package_hex_3, parent_31, _parent_32, child_3 = self.create_package_2p1c(self.wallet)
 
         # 4: parent + child package where the child spends 2 different outputs from the parent.
         package_hex_4, parent_4, child_4 = self.create_package_2outs(self.wallet)
@@ -146,12 +143,11 @@ class PackageRelayTest(BitcoinTestFramework):
         for (i, peer) in enumerate(self.peers):
             for tx in transactions_to_presend[i]:
                 peer.send_and_ping(msg_tx(tx))
-            # This disconnect removes any sent orphans from the orphanage (EraseForPeer) and times
-            # out the in-flight requests.  It is currently required for the test to pass right now,
-            # because the node will not reconsider an orphan tx and will not (re)try requesting
-            # orphan parents from multiple peers if the first one didn't respond.
-            # TODO: remove this in the future if the node tries orphan resolution with multiple peers.
-            peer.peer_disconnect()
+
+        # Disconnect python peers to clear outstanding orphan requests with them, avoiding timeouts.
+        # We are only interested in the syncing behavior between real nodes.
+        for i in range(self.num_nodes):
+            self.nodes[i].disconnect_p2ps()
 
         self.log.info("Submit full packages to node0")
         for package_hex in packages_to_submit:
@@ -159,7 +155,7 @@ class PackageRelayTest(BitcoinTestFramework):
             assert_equal(submitpackage_result["package_msg"], "success")
 
         self.log.info("Wait for mempools to sync")
-        self.sync_mempools(timeout=20)
+        self.sync_mempools()
 
 
 if __name__ == '__main__':

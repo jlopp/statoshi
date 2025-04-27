@@ -4,7 +4,7 @@
 
 #include <node/kernel_notifications.h>
 
-#include <config/bitcoin-config.h> // IWYU pragma: keep
+#include <bitcoin-build-config.h> // IWYU pragma: keep
 
 #include <chain.h>
 #include <common/args.h>
@@ -50,9 +50,16 @@ namespace node {
 
 kernel::InterruptResult KernelNotifications::blockTip(SynchronizationState state, CBlockIndex& index)
 {
+    {
+        LOCK(m_tip_block_mutex);
+        Assume(index.GetBlockHash() != uint256::ZERO);
+        m_tip_block = index.GetBlockHash();
+        m_tip_block_cv.notify_all();
+    }
+
     uiInterface.NotifyBlockTip(state, &index);
     if (m_stop_at_height && index.nHeight >= m_stop_at_height) {
-        if (!m_shutdown()) {
+        if (!m_shutdown_request()) {
             LogError("Failed to send shutdown signal after reaching stop height\n");
         }
         return kernel::Interrupted{};
@@ -84,14 +91,21 @@ void KernelNotifications::warningUnset(kernel::Warning id)
 
 void KernelNotifications::flushError(const bilingual_str& message)
 {
-    AbortNode(&m_shutdown, m_exit_status, message, &m_warnings);
+    AbortNode(m_shutdown_request, m_exit_status, message, &m_warnings);
 }
 
 void KernelNotifications::fatalError(const bilingual_str& message)
 {
-    node::AbortNode(m_shutdown_on_fatal_error ? &m_shutdown : nullptr,
+    node::AbortNode(m_shutdown_on_fatal_error ? m_shutdown_request : nullptr,
                     m_exit_status, message, &m_warnings);
 }
+
+std::optional<uint256> KernelNotifications::TipBlock()
+{
+    AssertLockHeld(m_tip_block_mutex);
+    return m_tip_block;
+};
+
 
 void ReadNotificationArgs(const ArgsManager& args, KernelNotifications& notifications)
 {

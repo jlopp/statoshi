@@ -1,0 +1,58 @@
+{
+  "$comment": "The builtin-baseline corresponds to 2024.09.30 Release",
+  "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
+  "builtin-baseline": "c82f74667287d3dc386bce81e44964370c91a289",
+  "dependencies": [
+    "boost-multi-index",
+    "boost-signals2",
+    "libevent"
+  ],
+  "default-features": [
+    "qt",
+    "tests",
+    "wallet",
+    "berkeleydb",
+    "zeromq"
+  ],
+  "features": {
+    "berkeleydb": {
+      "description": "Enable Berkeley DB wallet support",
+      "dependencies": [
+        "berkeleydb"
+      ]
+    },
+    "qt": {
+      "description": "Build GUI, Qt 6",
+      "dependencies": [
+        "qtbase",
+        "qttools",
+        "libqrencode"
+      ]
+    },
+    "tests": {
+      "description": "Build test_bitcoin.exe executable",
+      "dependencies": [
+        "boost-test"
+      ]
+    },
+    "wallet": {
+      "description": "Enable wallet (SQLite)",
+      "dependencies": [
+        "sqlite3"
+      ]
+    },
+    "zeromq": {
+      "description": "Enable ZMQ notifications",
+      "dependencies": [
+        "zeromq"
+      ]
+    }
+  },
+  "overrides": [
+    {
+      "$comment": "Newer unreleased libevent versions cause https://github.com/bitcoin/bitcoin/issues/30096",
+      "name": "libevent",
+      "version": "2.1.12#7"
+    }
+  ]
+}

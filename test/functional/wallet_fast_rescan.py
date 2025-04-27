@@ -28,7 +28,6 @@ class WalletFastRescanTest(BitcoinTestFramework):
 
     def skip_test_if_missing_module(self):
         self.skip_if_no_wallet()
-        self.skip_if_no_sqlite()
 
     def get_wallet_txids(self, node: TestNode, wallet_name: str) -> list[str]:
         w = node.get_wallet_rpc(wallet_name)
@@ -49,7 +48,7 @@ class WalletFastRescanTest(BitcoinTestFramework):
         assert_equal(len(descriptors), NUM_DESCRIPTORS)
         w.backupwallet(WALLET_BACKUP_FILENAME)
 
-        self.log.info(f"Create txs sending to end range address of each descriptor, triggering top-ups")
+        self.log.info("Create txs sending to end range address of each descriptor, triggering top-ups")
         for i in range(NUM_BLOCKS):
             self.log.info(f"Block {i+1}/{NUM_BLOCKS}")
             for desc_info in w.listdescriptors()['descriptors']:

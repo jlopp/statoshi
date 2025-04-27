@@ -1,9 +1,9 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
-// Copyright (c) 2009-2022 The Bitcoin Core developers
+// Copyright (c) 2009-present The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#include <config/bitcoin-config.h> // IWYU pragma: keep
+#include <bitcoin-build-config.h> // IWYU pragma: keep
 
 #include <random.h>
 
@@ -34,7 +34,7 @@
 #include <sys/time.h>
 #endif
 
-#if defined(HAVE_GETRANDOM) || (defined(HAVE_GETENTROPY_RAND) && defined(MAC_OSX))
+#if defined(HAVE_GETRANDOM) || (defined(HAVE_GETENTROPY_RAND) && defined(__APPLE__))
 #include <sys/random.h>
 #endif
 
@@ -126,7 +126,7 @@ uint64_t GetRdRand() noexcept
 {
     // RdRand may very rarely fail. Invoke it up to 10 times in a loop to reduce this risk.
 #ifdef __i386__
-    uint8_t ok;
+    uint8_t ok = 0;
     // Initialize to 0 to silence a compiler warning that r1 or r2 may be used
     // uninitialized. Even if rdrand fails (!ok) it will set the output to 0,
     // but there is no way that the compiler could know that.
@@ -141,7 +141,7 @@ uint64_t GetRdRand() noexcept
     }
     return (((uint64_t)r2) << 32) | r1;
 #elif defined(__x86_64__) || defined(__amd64__)
-    uint8_t ok;
+    uint8_t ok = 0;
     uint64_t r1 = 0; // See above why we initialize to 0.
     for (int i = 0; i < 10; ++i) {
         __asm__ volatile (".byte 0x48, 0x0f, 0xc7, 0xf0; setc %1" : "=a"(r1), "=q"(ok) :: "cc"); // rdrand %rax
@@ -162,7 +162,7 @@ uint64_t GetRdSeed() noexcept
     // RdSeed may fail when the HW RNG is overloaded. Loop indefinitely until enough entropy is gathered,
     // but pause after every failure.
 #ifdef __i386__
-    uint8_t ok;
+    uint8_t ok = 0;
     uint32_t r1, r2;
     do {
         __asm__ volatile (".byte 0x0f, 0xc7, 0xf8; setc %1" : "=a"(r1), "=q"(ok) :: "cc"); // rdseed %eax
@@ -215,7 +215,7 @@ void ReportHardwareRand()
  */
 uint64_t GetRNDR() noexcept
 {
-    uint8_t ok;
+    uint8_t ok = 0;
     uint64_t r1;
     do {
         // https://developer.arm.com/documentation/ddi0601/2022-12/AArch64-Registers/RNDR--Random-Number
@@ -233,7 +233,7 @@ uint64_t GetRNDR() noexcept
  */
 uint64_t GetRNDRRS() noexcept
 {
-    uint8_t ok;
+    uint8_t ok = 0;
     uint64_t r1;
     do {
         // https://developer.arm.com/documentation/ddi0601/2022-12/AArch64-Registers/RNDRRS--Reseeded-Random-Number
@@ -387,7 +387,7 @@ void GetOSRand(unsigned char *ent32)
        The function call is always successful.
      */
     arc4random_buf(ent32, NUM_OS_RANDOM_BYTES);
-#elif defined(HAVE_GETENTROPY_RAND) && defined(MAC_OSX)
+#elif defined(HAVE_GETENTROPY_RAND) && defined(__APPLE__)
     if (getentropy(ent32, NUM_OS_RANDOM_BYTES) != 0) {
         RandFailure();
     }
@@ -505,7 +505,7 @@ public:
             // Handle requests for deterministic randomness.
             if (!always_use_real_rng && m_deterministic_prng.has_value()) [[unlikely]] {
                 // Overwrite the beginning of buf, which will be used for output.
-                m_deterministic_prng->Keystream(AsWritableBytes(Span{buf, num}));
+                m_deterministic_prng->Keystream(std::as_writable_bytes(std::span{buf, num}));
                 // Do not require strong seeding for deterministic output.
                 ret = true;
             }
@@ -599,10 +599,10 @@ void SeedPeriodic(CSHA512& hasher, RNGState& rng) noexcept
     // Add the events hasher into the mix
     rng.SeedEvents(hasher);
 
-    // Dynamic environment data (performance monitoring, ...)
+    // Dynamic environment data (clocks, resource usage, ...)
     auto old_size = hasher.Size();
     RandAddDynamicEnv(hasher);
-    LogPrint(BCLog::RAND, "Feeding %i bytes of dynamic environment data into RNG\n", hasher.Size() - old_size);
+    LogDebug(BCLog::RAND, "Feeding %i bytes of dynamic environment data into RNG\n", hasher.Size() - old_size);
 
     // Strengthen for 10 ms
     SeedStrengthen(hasher, rng, 10ms);
@@ -616,13 +616,13 @@ void SeedStartup(CSHA512& hasher, RNGState& rng) noexcept
     // Everything that the 'slow' seeder includes.
     SeedSlow(hasher, rng);
 
-    // Dynamic environment data (performance monitoring, ...)
+    // Dynamic environment data (clocks, resource usage, ...)
     auto old_size = hasher.Size();
     RandAddDynamicEnv(hasher);
 
     // Static environment data
     RandAddStaticEnv(hasher);
-    LogPrint(BCLog::RAND, "Feeding %i bytes of environment data into RNG\n", hasher.Size() - old_size);
+    LogDebug(BCLog::RAND, "Feeding %i bytes of environment data into RNG\n", hasher.Size() - old_size);
 
     // Strengthen for 100 ms
     SeedStrengthen(hasher, rng, 100ms);
@@ -671,13 +671,15 @@ void MakeRandDeterministicDANGEROUS(const uint256& seed) noexcept
 {
     GetRNGState().MakeDeterministic(seed);
 }
+std::atomic<bool> g_used_g_prng{false}; // Only accessed from tests
 
-void GetRandBytes(Span<unsigned char> bytes) noexcept
+void GetRandBytes(std::span<unsigned char> bytes) noexcept
 {
+    g_used_g_prng = true;
     ProcRand(bytes.data(), bytes.size(), RNGLevel::FAST, /*always_use_real_rng=*/false);
 }
 
-void GetStrongRandBytes(Span<unsigned char> bytes) noexcept
+void GetStrongRandBytes(std::span<unsigned char> bytes) noexcept
 {
     ProcRand(bytes.data(), bytes.size(), RNGLevel::SLOW, /*always_use_real_rng=*/true);
 }
@@ -696,7 +698,7 @@ void FastRandomContext::RandomSeed() noexcept
     requires_seed = false;
 }
 
-void FastRandomContext::fillrand(Span<std::byte> output) noexcept
+void FastRandomContext::fillrand(std::span<std::byte> output) noexcept
 {
     if (requires_seed) RandomSeed();
     rng.Keystream(output);

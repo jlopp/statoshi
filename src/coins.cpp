@@ -9,7 +9,11 @@
 #include <random.h>
 #include <util/trace.h>
 
-bool CCoinsView::GetCoin(const COutPoint &outpoint, Coin &coin) const { return false; }
+TRACEPOINT_SEMAPHORE(utxocache, add);
+TRACEPOINT_SEMAPHORE(utxocache, spent);
+TRACEPOINT_SEMAPHORE(utxocache, uncache);
+
+std::optional<Coin> CCoinsView::GetCoin(const COutPoint& outpoint) const { return std::nullopt; }
 uint256 CCoinsView::GetBestBlock() const { return uint256(); }
 std::vector<uint256> CCoinsView::GetHeadBlocks() const { return std::vector<uint256>(); }
 bool CCoinsView::BatchWrite(CoinsViewCacheCursor& cursor, const uint256 &hashBlock) { return false; }
@@ -17,12 +21,11 @@ std::unique_ptr<CCoinsViewCursor> CCoinsView::Cursor() const { return nullptr; }
 
 bool CCoinsView::HaveCoin(const COutPoint &outpoint) const
 {
-    Coin coin;
-    return GetCoin(outpoint, coin);
+    return GetCoin(outpoint).has_value();
 }
 
 CCoinsViewBacked::CCoinsViewBacked(CCoinsView *viewIn) : base(viewIn) { }
-bool CCoinsViewBacked::GetCoin(const COutPoint &outpoint, Coin &coin) const { return base->GetCoin(outpoint, coin); }
+std::optional<Coin> CCoinsViewBacked::GetCoin(const COutPoint& outpoint) const { return base->GetCoin(outpoint); }
 bool CCoinsViewBacked::HaveCoin(const COutPoint &outpoint) const { return base->HaveCoin(outpoint); }
 uint256 CCoinsViewBacked::GetBestBlock() const { return base->GetBestBlock(); }
 std::vector<uint256> CCoinsViewBacked::GetHeadBlocks() const { return base->GetHeadBlocks(); }
@@ -45,26 +48,25 @@ size_t CCoinsViewCache::DynamicMemoryUsage() const {
 CCoinsMap::iterator CCoinsViewCache::FetchCoin(const COutPoint &outpoint) const {
     const auto [ret, inserted] = cacheCoins.try_emplace(outpoint);
     if (inserted) {
-        if (!base->GetCoin(outpoint, ret->second.coin)) {
+        if (auto coin{base->GetCoin(outpoint)}) {
+            ret->second.coin = std::move(*coin);
+            cachedCoinsUsage += ret->second.coin.DynamicMemoryUsage();
+            if (ret->second.coin.IsSpent()) { // TODO GetCoin cannot return spent coins
+                // The parent only has an empty entry for this outpoint; we can consider our version as fresh.
+                CCoinsCacheEntry::SetFresh(*ret, m_sentinel);
+            }
+        } else {
             cacheCoins.erase(ret);
             return cacheCoins.end();
         }
-        if (ret->second.coin.IsSpent()) {
-            // The parent only has an empty entry for this outpoint; we can consider our version as fresh.
-            ret->second.AddFlags(CCoinsCacheEntry::FRESH, *ret, m_sentinel);
-        }
-        cachedCoinsUsage += ret->second.coin.DynamicMemoryUsage();
     }
     return ret;
 }
 
-bool CCoinsViewCache::GetCoin(const COutPoint &outpoint, Coin &coin) const {
-    CCoinsMap::const_iterator it = FetchCoin(outpoint);
-    if (it != cacheCoins.end()) {
-        coin = it->second.coin;
-        return !coin.IsSpent();
-    }
-    return false;
+std::optional<Coin> CCoinsViewCache::GetCoin(const COutPoint& outpoint) const
+{
+    if (auto it{FetchCoin(outpoint)}; it != cacheCoins.end() && !it->second.coin.IsSpent()) return it->second.coin;
+    return std::nullopt;
 }
 
 void CCoinsViewCache::AddCoin(const COutPoint &outpoint, Coin&& coin, bool possible_overwrite) {
@@ -97,9 +99,10 @@ void CCoinsViewCache::AddCoin(const COutPoint &outpoint, Coin&& coin, bool possi
         fresh = !it->second.IsDirty();
     }
     it->second.coin = std::move(coin);
-    it->second.AddFlags(CCoinsCacheEntry::DIRTY | (fresh ? CCoinsCacheEntry::FRESH : 0), *it, m_sentinel);
+    CCoinsCacheEntry::SetDirty(*it, m_sentinel);
+    if (fresh) CCoinsCacheEntry::SetFresh(*it, m_sentinel);
     cachedCoinsUsage += it->second.coin.DynamicMemoryUsage();
-    TRACE5(utxocache, add,
+    TRACEPOINT(utxocache, add,
            outpoint.hash.data(),
            (uint32_t)outpoint.n,
            (uint32_t)it->second.coin.nHeight,
@@ -109,13 +112,8 @@ void CCoinsViewCache::AddCoin(const COutPoint &outpoint, Coin&& coin, bool possi
 
 void CCoinsViewCache::EmplaceCoinInternalDANGER(COutPoint&& outpoint, Coin&& coin) {
     cachedCoinsUsage += coin.DynamicMemoryUsage();
-    auto [it, inserted] = cacheCoins.emplace(
-        std::piecewise_construct,
-        std::forward_as_tuple(std::move(outpoint)),
-        std::forward_as_tuple(std::move(coin)));
-    if (inserted) {
-        it->second.AddFlags(CCoinsCacheEntry::DIRTY, *it, m_sentinel);
-    }
+    auto [it, inserted] = cacheCoins.try_emplace(std::move(outpoint), std::move(coin));
+    if (inserted) CCoinsCacheEntry::SetDirty(*it, m_sentinel);
 }
 
 void AddCoins(CCoinsViewCache& cache, const CTransaction &tx, int nHeight, bool check_for_overwrite) {
@@ -133,7 +131,7 @@ bool CCoinsViewCache::SpendCoin(const COutPoint &outpoint, Coin* moveout) {
     CCoinsMap::iterator it = FetchCoin(outpoint);
     if (it == cacheCoins.end()) return false;
     cachedCoinsUsage -= it->second.coin.DynamicMemoryUsage();
-    TRACE5(utxocache, spent,
+    TRACEPOINT(utxocache, spent,
            outpoint.hash.data(),
            (uint32_t)outpoint.n,
            (uint32_t)it->second.coin.nHeight,
@@ -145,7 +143,7 @@ bool CCoinsViewCache::SpendCoin(const COutPoint &outpoint, Coin* moveout) {
     if (it->second.IsFresh()) {
         cacheCoins.erase(it);
     } else {
-        it->second.AddFlags(CCoinsCacheEntry::DIRTY, *it, m_sentinel);
+        CCoinsCacheEntry::SetDirty(*it, m_sentinel);
         it->second.coin.Clear();
     }
     return true;
@@ -205,13 +203,11 @@ bool CCoinsViewCache::BatchWrite(CoinsViewCacheCursor& cursor, const uint256 &ha
                     entry.coin = it->second.coin;
                 }
                 cachedCoinsUsage += entry.coin.DynamicMemoryUsage();
-                entry.AddFlags(CCoinsCacheEntry::DIRTY, *itUs, m_sentinel);
+                CCoinsCacheEntry::SetDirty(*itUs, m_sentinel);
                 // We can mark it FRESH in the parent if it was FRESH in the child
                 // Otherwise it might have just been flushed from the parent's cache
                 // and already exist in the grandparent
-                if (it->second.IsFresh()) {
-                    entry.AddFlags(CCoinsCacheEntry::FRESH, *itUs, m_sentinel);
-                }
+                if (it->second.IsFresh()) CCoinsCacheEntry::SetFresh(*itUs, m_sentinel);
             }
         } else {
             // Found the entry in the parent cache
@@ -239,7 +235,7 @@ bool CCoinsViewCache::BatchWrite(CoinsViewCacheCursor& cursor, const uint256 &ha
                     itUs->second.coin = it->second.coin;
                 }
                 cachedCoinsUsage += itUs->second.coin.DynamicMemoryUsage();
-                itUs->second.AddFlags(CCoinsCacheEntry::DIRTY, *itUs, m_sentinel);
+                CCoinsCacheEntry::SetDirty(*itUs, m_sentinel);
                 // NOTE: It isn't safe to mark the coin as FRESH in the parent
                 // cache. If it already existed and was spent in the parent
                 // cache then marking it FRESH would prevent that spentness
@@ -280,7 +276,7 @@ void CCoinsViewCache::Uncache(const COutPoint& hash)
     CCoinsMap::iterator it = cacheCoins.find(hash);
     if (it != cacheCoins.end() && !it->second.IsDirty() && !it->second.IsFresh()) {
         cachedCoinsUsage -= it->second.coin.DynamicMemoryUsage();
-        TRACE5(utxocache, uncache,
+        TRACEPOINT(utxocache, uncache,
                hash.hash.data(),
                (uint32_t)hash.n,
                (uint32_t)it->second.coin.nHeight,
@@ -363,8 +359,8 @@ const Coin& AccessByTxid(const CCoinsViewCache& view, const Txid& txid)
     return coinEmpty;
 }
 
-template <typename Func>
-static bool ExecuteBackedWrapper(Func func, const std::vector<std::function<void()>>& err_callbacks)
+template <typename ReturnType, typename Func>
+static ReturnType ExecuteBackedWrapper(Func func, const std::vector<std::function<void()>>& err_callbacks)
 {
     try {
         return func();
@@ -381,10 +377,12 @@ static bool ExecuteBackedWrapper(Func func, const std::vector<std::function<void
     }
 }
 
-bool CCoinsViewErrorCatcher::GetCoin(const COutPoint &outpoint, Coin &coin) const {
-    return ExecuteBackedWrapper([&]() { return CCoinsViewBacked::GetCoin(outpoint, coin); }, m_err_callbacks);
+std::optional<Coin> CCoinsViewErrorCatcher::GetCoin(const COutPoint& outpoint) const
+{
+    return ExecuteBackedWrapper<std::optional<Coin>>([&]() { return CCoinsViewBacked::GetCoin(outpoint); }, m_err_callbacks);
 }
 
-bool CCoinsViewErrorCatcher::HaveCoin(const COutPoint &outpoint) const {
-    return ExecuteBackedWrapper([&]() { return CCoinsViewBacked::HaveCoin(outpoint); }, m_err_callbacks);
+bool CCoinsViewErrorCatcher::HaveCoin(const COutPoint& outpoint) const
+{
+    return ExecuteBackedWrapper<bool>([&]() { return CCoinsViewBacked::HaveCoin(outpoint); }, m_err_callbacks);
 }

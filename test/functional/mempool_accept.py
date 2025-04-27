@@ -45,6 +45,7 @@ from test_framework.util import (
     assert_equal,
     assert_greater_than,
     assert_raises_rpc_error,
+    sync_txindex,
 )
 from test_framework.wallet import MiniWallet
 from test_framework.wallet_util import generate_keypair
@@ -55,7 +56,6 @@ class MempoolAcceptanceTest(BitcoinTestFramework):
         self.num_nodes = 1
         self.extra_args = [[
             '-txindex','-permitbaremultisig=0',
-            '-mempoolfullrbf=0',
         ]] * self.num_nodes
         self.supports_cli = False
 
@@ -68,6 +68,8 @@ class MempoolAcceptanceTest(BitcoinTestFramework):
             if "fees" in r:
                 r["fees"].pop("effective-feerate")
                 r["fees"].pop("effective-includes")
+            if "reject-details" in r:
+                r.pop("reject-details")
         assert_equal(result_expected, result_test)
         assert_equal(self.nodes[0].getmempoolinfo()['size'], self.mempool_size)  # Must not change mempool state
 
@@ -155,25 +157,13 @@ class MempoolAcceptanceTest(BitcoinTestFramework):
         self.log.info('A transaction that replaces a mempool transaction')
         tx = tx_from_hex(raw_tx_0)
         tx.vout[0].nValue -= int(fee * COIN)  # Double the fee
-        tx.vin[0].nSequence = MAX_BIP125_RBF_SEQUENCE + 1  # Now, opt out of RBF
         raw_tx_0 = tx.serialize().hex()
         txid_0 = tx.rehash()
         self.check_mempool_result(
             result_expected=[{'txid': txid_0, 'allowed': True, 'vsize': tx.get_vsize(), 'fees': {'base': (2 * fee)}}],
             rawtxs=[raw_tx_0],
         )
-
-        self.log.info('A transaction that conflicts with an unconfirmed tx')
-        # Send the transaction that replaces the mempool transaction and opts out of replaceability
         node.sendrawtransaction(hexstring=tx.serialize().hex(), maxfeerate=0)
-        # take original raw_tx_0
-        tx = tx_from_hex(raw_tx_0)
-        tx.vout[0].nValue -= int(4 * fee * COIN)  # Set more fee
-        self.check_mempool_result(
-            result_expected=[{'txid': tx.rehash(), 'allowed': False, 'reject-reason': 'txn-mempool-conflict'}],
-            rawtxs=[tx.serialize().hex()],
-            maxfeerate=0,
-        )
 
         self.log.info('A transaction with missing inputs, that never existed')
         tx = tx_from_hex(raw_tx_0)
@@ -281,6 +271,7 @@ class MempoolAcceptanceTest(BitcoinTestFramework):
 
         self.log.info('A coinbase transaction')
         # Pick the input of the first tx we created, so it has to be a coinbase tx
+        sync_txindex(self, node)
         raw_tx_coinbase_spent = node.getrawtransaction(txid=node.decoderawtransaction(hexstring=raw_tx_in_block)['vin'][0]['txid'])
         tx = tx_from_hex(raw_tx_coinbase_spent)
         self.check_mempool_result(

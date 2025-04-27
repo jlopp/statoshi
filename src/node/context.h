@@ -9,6 +9,7 @@
 #include <cstdlib>
 #include <functional>
 #include <memory>
+#include <thread>
 #include <vector>
 
 class ArgsManager;
@@ -58,8 +59,10 @@ struct NodeContext {
     std::unique_ptr<ECC_Context> ecc_context;
     //! Init interface for initializing current process and connecting to other processes.
     interfaces::Init* init{nullptr};
+    //! Function to request a shutdown.
+    std::function<bool()> shutdown_request;
     //! Interrupt object used to track whether node shutdown was requested.
-    util::SignalInterrupt* shutdown{nullptr};
+    util::SignalInterrupt* shutdown_signal{nullptr};
     std::unique_ptr<AddrMan> addrman;
     std::unique_ptr<CConnman> connman;
     std::unique_ptr<CTxMemPool> mempool;
@@ -86,6 +89,7 @@ struct NodeContext {
     std::atomic<int> exit_status{EXIT_SUCCESS};
     //! Manages all the node warnings
     std::unique_ptr<node::Warnings> warnings;
+    std::thread background_init_thread;
 
     //! Declare default constructor and destructor that are not inline, so code
     //! instantiating the NodeContext struct doesn't need to #include class

@@ -4,7 +4,7 @@
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 """Test fee estimation code."""
 from copy import deepcopy
-from decimal import Decimal
+from decimal import Decimal, ROUND_DOWN
 import os
 import random
 import time
@@ -14,6 +14,7 @@ from test_framework.messages import (
 )
 from test_framework.test_framework import BitcoinTestFramework
 from test_framework.util import (
+    assert_not_equal,
     assert_equal,
     assert_greater_than,
     assert_greater_than_or_equal,
@@ -40,7 +41,7 @@ def small_txpuzzle_randfee(
     # Exponentially distributed from 1-128 * fee_increment
     rand_fee = float(fee_increment) * (1.1892 ** random.randint(0, 28))
     # Total fee ranges from min_fee to min_fee + 127*fee_increment
-    fee = min_fee - fee_increment + satoshi_round(rand_fee)
+    fee = min_fee - fee_increment + satoshi_round(rand_fee, rounding=ROUND_DOWN)
     utxos_to_spend = []
     total_in = Decimal("0.00000000")
     while total_in <= (amount + fee) and len(conflist) > 0:
@@ -363,7 +364,7 @@ class EstimateFeeTest(BitcoinTestFramework):
             self.nodes[0].mockscheduler(SECONDS_PER_HOUR)
 
         fee_dat_current_content = open(fee_dat, "rb").read()
-        assert fee_dat_current_content != fee_dat_initial_content
+        assert_not_equal(fee_dat_current_content, fee_dat_initial_content)
 
         fee_dat_initial_content = fee_dat_current_content
 
@@ -371,7 +372,7 @@ class EstimateFeeTest(BitcoinTestFramework):
         self.generate(self.nodes[0], 5, sync_fun=self.no_op)
         self.restart_node(0)
         fee_dat_current_content = open(fee_dat, "rb").read()
-        assert fee_dat_current_content != fee_dat_initial_content
+        assert_not_equal(fee_dat_current_content, fee_dat_initial_content)
 
 
     def test_acceptstalefeeestimates_option(self):
@@ -398,6 +399,7 @@ class EstimateFeeTest(BitcoinTestFramework):
         self.start_node(0)
         self.connect_nodes(0, 1)
         self.connect_nodes(0, 2)
+        self.sync_blocks()
         assert_equal(self.nodes[0].estimatesmartfee(1)["errors"], ["Insufficient data or no feerate found"])
 
     def broadcast_and_mine(self, broadcaster, miner, feerate, count):

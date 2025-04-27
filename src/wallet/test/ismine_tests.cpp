@@ -15,28 +15,10 @@
 
 #include <boost/test/unit_test.hpp>
 
+using namespace util::hex_literals;
 
 namespace wallet {
 BOOST_FIXTURE_TEST_SUITE(ismine_tests, BasicTestingSetup)
-
-wallet::ScriptPubKeyMan* CreateDescriptor(CWallet& keystore, const std::string& desc_str, const bool success)
-{
-    keystore.SetWalletFlag(WALLET_FLAG_DESCRIPTORS);
-
-    FlatSigningProvider keys;
-    std::string error;
-    std::unique_ptr<Descriptor> parsed_desc = Parse(desc_str, keys, error, false);
-    BOOST_CHECK(success == (parsed_desc != nullptr));
-    if (!success) return nullptr;
-
-    const int64_t range_start = 0, range_end = 1, next_index = 0, timestamp = 1;
-
-    WalletDescriptor w_desc(std::move(parsed_desc), timestamp, range_start, range_end, next_index);
-
-    LOCK(keystore.cs_wallet);
-
-    return Assert(keystore.AddWalletDescriptor(w_desc, keys,/*label=*/"", /*internal=*/false));
-};
 
 BOOST_AUTO_TEST_CASE(ismine_standard)
 {
@@ -424,7 +406,7 @@ BOOST_AUTO_TEST_CASE(ismine_standard)
     // scriptPubKey multisig - Descriptor
     {
         CWallet keystore(chain.get(), "", CreateMockableWalletDatabase());
-        std::string desc_str = "multi(2, " + EncodeSecret(uncompressedKey) + ", " + EncodeSecret(keys[1]) + ")";
+        std::string desc_str = "multi(2," + EncodeSecret(uncompressedKey) + "," + EncodeSecret(keys[1]) + ")";
 
         auto spk_manager = CreateDescriptor(keystore, desc_str, true);
 
@@ -460,7 +442,7 @@ BOOST_AUTO_TEST_CASE(ismine_standard)
     {
         CWallet keystore(chain.get(), "", CreateMockableWalletDatabase());
 
-        std::string desc_str = "sh(multi(2, " + EncodeSecret(uncompressedKey) + ", " + EncodeSecret(keys[1]) + "))";
+        std::string desc_str = "sh(multi(2," + EncodeSecret(uncompressedKey) + "," + EncodeSecret(keys[1]) + "))";
 
         auto spk_manager = CreateDescriptor(keystore, desc_str, true);
 
@@ -503,7 +485,7 @@ BOOST_AUTO_TEST_CASE(ismine_standard)
     {
         CWallet keystore(chain.get(), "", CreateMockableWalletDatabase());
 
-        std::string desc_str = "wsh(multi(2, " + EncodeSecret(keys[0]) + ", " + EncodeSecret(keys[1]) + "))";
+        std::string desc_str = "wsh(multi(2," + EncodeSecret(keys[0]) + "," + EncodeSecret(keys[1]) + "))";
 
         auto spk_manager = CreateDescriptor(keystore, desc_str, true);
 
@@ -546,7 +528,7 @@ BOOST_AUTO_TEST_CASE(ismine_standard)
     {
         CWallet keystore(chain.get(), "", CreateMockableWalletDatabase());
 
-        std::string desc_str = "wsh(multi(2, " + EncodeSecret(uncompressedKey) + ", " + EncodeSecret(keys[1]) + "))";
+        std::string desc_str = "wsh(multi(2," + EncodeSecret(uncompressedKey) + "," + EncodeSecret(keys[1]) + "))";
 
         auto spk_manager = CreateDescriptor(keystore, desc_str, false);
         BOOST_CHECK_EQUAL(spk_manager, nullptr);
@@ -586,7 +568,7 @@ BOOST_AUTO_TEST_CASE(ismine_standard)
     {
         CWallet keystore(chain.get(), "", CreateMockableWalletDatabase());
 
-        std::string desc_str = "sh(wsh(multi(2, " + EncodeSecret(keys[0]) + ", " + EncodeSecret(keys[1]) + ")))";
+        std::string desc_str = "sh(wsh(multi(2," + EncodeSecret(keys[0]) + "," + EncodeSecret(keys[1]) + ")))";
 
         auto spk_manager = CreateDescriptor(keystore, desc_str, true);
 
@@ -682,7 +664,7 @@ BOOST_AUTO_TEST_CASE(ismine_standard)
         BOOST_CHECK(keystore.GetLegacyScriptPubKeyMan()->AddKey(keys[0]));
 
         scriptPubKey.clear();
-        scriptPubKey << OP_0 << ToByteVector(ParseHex("aabb"));
+        scriptPubKey << OP_0 << "aabb"_hex;
 
         result = keystore.GetLegacyScriptPubKeyMan()->IsMine(scriptPubKey);
         BOOST_CHECK_EQUAL(result, ISMINE_NO);
@@ -697,7 +679,7 @@ BOOST_AUTO_TEST_CASE(ismine_standard)
         BOOST_CHECK(keystore.GetLegacyScriptPubKeyMan()->AddKey(keys[0]));
 
         scriptPubKey.clear();
-        scriptPubKey << OP_16 << ToByteVector(ParseHex("aabb"));
+        scriptPubKey << OP_16 << "aabb"_hex;
 
         result = keystore.GetLegacyScriptPubKeyMan()->IsMine(scriptPubKey);
         BOOST_CHECK_EQUAL(result, ISMINE_NO);

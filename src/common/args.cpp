@@ -16,6 +16,7 @@
 #include <util/fs.h>
 #include <util/fs_helpers.h>
 #include <util/strencodings.h>
+#include <util/string.h>
 
 #ifdef WIN32
 #include <codecvt>    /* for codecvt_utf8_utf16 */
@@ -183,7 +184,7 @@ bool ArgsManager::ParseParameters(int argc, const char* const argv[], std::strin
     for (int i = 1; i < argc; i++) {
         std::string key(argv[i]);
 
-#ifdef MAC_OSX
+#ifdef __APPLE__
         // At the first time when a user gets the "App downloaded from the
         // internet" warning, and clicks the Open button, macOS passes
         // a unique process serial number (PSN) as -psn_... command-line
@@ -588,6 +589,23 @@ void ArgsManager::AddHiddenArgs(const std::vector<std::string>& names)
     }
 }
 
+void ArgsManager::CheckMultipleCLIArgs() const
+{
+    LOCK(cs_args);
+    std::vector<std::string> found{};
+    auto cmds = m_available_args.find(OptionsCategory::CLI_COMMANDS);
+    if (cmds != m_available_args.end()) {
+        for (const auto& [cmd, argspec] : cmds->second) {
+            if (IsArgSet(cmd)) {
+                found.push_back(cmd);
+            }
+        }
+        if (found.size() > 1) {
+            throw std::runtime_error(strprintf("Only one of %s may be specified.", util::Join(found, ", ")));
+        }
+    }
+}
+
 std::string ArgsManager::GetHelpMessage() const
 {
     const bool show_debug = GetBoolArg("-help-debug", false);
@@ -617,6 +635,9 @@ std::string ArgsManager::GetHelpMessage() const
             case OptionsCategory::RPC:
                 usage += HelpMessageGroup("RPC server options:");
                 break;
+            case OptionsCategory::IPC:
+                usage += HelpMessageGroup("IPC interprocess connection options:");
+                break;
             case OptionsCategory::WALLET:
                 usage += HelpMessageGroup("Wallet options:");
                 break;
@@ -634,6 +655,9 @@ std::string ArgsManager::GetHelpMessage() const
                 break;
             case OptionsCategory::REGISTER_COMMANDS:
                 usage += HelpMessageGroup("Register Commands:");
+                break;
+            case OptionsCategory::CLI_COMMANDS:
+                usage += HelpMessageGroup("CLI Commands:");
                 break;
             default:
                 break;
@@ -664,8 +688,8 @@ bool HelpRequested(const ArgsManager& args)
 
 void SetupHelpOptions(ArgsManager& args)
 {
-    args.AddArg("-?", "Print this help message and exit", ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
-    args.AddHiddenArgs({"-h", "-help"});
+    args.AddArg("-help", "Print this help message and exit (also -h or -?)", ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    args.AddHiddenArgs({"-h", "-?"});
 }
 
 static const int screenWidth = 79;
@@ -685,6 +709,7 @@ std::string HelpMessageOpt(const std::string &option, const std::string &message
 
 const std::vector<std::string> TEST_OPTIONS_DOC{
     "addrman (use deterministic addrman)",
+    "bip94 (enforce BIP94 consensus rules)",
 };
 
 bool HasTestOption(const ArgsManager& args, const std::string& test_option)
@@ -717,7 +742,7 @@ fs::path GetDefaultDataDir()
         pathRet = fs::path("/");
     else
         pathRet = fs::path(pszHome);
-#ifdef MAC_OSX
+#ifdef __APPLE__
     // macOS
     return pathRet / "Library/Application Support/Bitcoin";
 #else

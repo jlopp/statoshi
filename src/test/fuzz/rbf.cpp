@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2022 The Bitcoin Core developers
+// Copyright (c) 2020-present The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -51,6 +51,7 @@ void initialize_package_rbf()
 
 FUZZ_TARGET(rbf, .init = initialize_rbf)
 {
+    SeedRandomStateForTest(SeedRand::ZEROS);
     FuzzedDataProvider fuzzed_data_provider(buffer.data(), buffer.size());
     SetMockTime(ConsumeTime(fuzzed_data_provider));
     std::optional<CMutableTransaction> mtx = ConsumeDeserializable<CMutableTransaction>(fuzzed_data_provider, TX_WITH_WITNESS);
@@ -73,12 +74,16 @@ FUZZ_TARGET(rbf, .init = initialize_rbf)
             mtx->vin[0].prevout = COutPoint{another_tx.GetHash(), 0};
         }
         LOCK2(cs_main, pool.cs);
-        pool.addUnchecked(ConsumeTxMemPoolEntry(fuzzed_data_provider, another_tx));
+        if (!pool.GetIter(another_tx.GetHash())) {
+            AddToMempool(pool, ConsumeTxMemPoolEntry(fuzzed_data_provider, another_tx));
+        }
     }
     const CTransaction tx{*mtx};
     if (fuzzed_data_provider.ConsumeBool()) {
         LOCK2(cs_main, pool.cs);
-        pool.addUnchecked(ConsumeTxMemPoolEntry(fuzzed_data_provider, tx));
+        if (!pool.GetIter(tx.GetHash())) {
+            AddToMempool(pool, ConsumeTxMemPoolEntry(fuzzed_data_provider, tx));
+        }
     }
     {
         LOCK(pool.cs);
@@ -88,6 +93,7 @@ FUZZ_TARGET(rbf, .init = initialize_rbf)
 
 FUZZ_TARGET(package_rbf, .init = initialize_package_rbf)
 {
+    SeedRandomStateForTest(SeedRand::ZEROS);
     FuzzedDataProvider fuzzed_data_provider(buffer.data(), buffer.size());
     SetMockTime(ConsumeTime(fuzzed_data_provider));
 
@@ -102,23 +108,30 @@ FUZZ_TARGET(package_rbf, .init = initialize_package_rbf)
 
     // Add a bunch of parent-child pairs to the mempool, and remember them.
     std::vector<CTransaction> mempool_txs;
-    size_t iter{0};
-
-    int32_t replacement_vsize = fuzzed_data_provider.ConsumeIntegralInRange<int32_t>(1, 1000000);
+    uint32_t iter{0};
 
     // Keep track of the total vsize of CTxMemPoolEntry's being added to the mempool to avoid overflow
     // Add replacement_vsize since this is added to new diagram during RBF check
+    std::optional<CMutableTransaction> replacement_tx = ConsumeDeserializable<CMutableTransaction>(fuzzed_data_provider, TX_WITH_WITNESS);
+    if (!replacement_tx) {
+        return;
+    }
+    replacement_tx->vin.resize(1);
+    replacement_tx->vin[0].prevout = g_outpoints.at(iter++);
+    CTransaction replacement_tx_final{*replacement_tx};
+    auto replacement_entry = ConsumeTxMemPoolEntry(fuzzed_data_provider, replacement_tx_final);
+    int32_t replacement_vsize = replacement_entry.GetTxSize();
     int64_t running_vsize_total{replacement_vsize};
 
     LOCK2(cs_main, pool.cs);
 
-    LIMITED_WHILE(fuzzed_data_provider.ConsumeBool(), NUM_ITERS)
-    {
+    while (fuzzed_data_provider.ConsumeBool()) {
+        if (iter >= NUM_ITERS) break;
+
         // Make sure txns only have one input, and that a unique input is given to avoid circular references
         CMutableTransaction parent;
-        assert(iter <= g_outpoints.size());
         parent.vin.resize(1);
-        parent.vin[0].prevout = g_outpoints[iter++];
+        parent.vin[0].prevout = g_outpoints.at(iter++);
         parent.vout.emplace_back(0, CScript());
 
         mempool_txs.emplace_back(parent);
@@ -129,7 +142,8 @@ FUZZ_TARGET(package_rbf, .init = initialize_package_rbf)
             mempool_txs.pop_back();
             break;
         }
-        pool.addUnchecked(parent_entry);
+        assert(!pool.GetIter(parent_entry.GetTx().GetHash()));
+        AddToMempool(pool, parent_entry);
         if (fuzzed_data_provider.ConsumeBool()) {
             child.vin[0].prevout = COutPoint{mempool_txs.back().GetHash(), 0};
         }
@@ -141,7 +155,9 @@ FUZZ_TARGET(package_rbf, .init = initialize_package_rbf)
             mempool_txs.pop_back();
             break;
         }
-        pool.addUnchecked(child_entry);
+        if (!pool.GetIter(child_entry.GetTx().GetHash())) {
+            AddToMempool(pool, child_entry);
+        }
 
         if (fuzzed_data_provider.ConsumeBool()) {
             pool.PrioritiseTransaction(mempool_txs.back().GetHash().ToUint256(), fuzzed_data_provider.ConsumeIntegralInRange<int32_t>(-100000, 100000));
@@ -162,9 +178,17 @@ FUZZ_TARGET(package_rbf, .init = initialize_package_rbf)
         pool.CalculateDescendants(txiter, all_conflicts);
     }
 
-    // Calculate the chunks for a replacement.
     CAmount replacement_fees = ConsumeMoney(fuzzed_data_provider);
-    auto calc_results{pool.CalculateChunksForRBF(replacement_fees, replacement_vsize, direct_conflicts, all_conflicts)};
+    auto changeset = pool.GetChangeSet();
+    for (auto& txiter : all_conflicts) {
+        changeset->StageRemoval(txiter);
+    }
+    changeset->StageAddition(replacement_entry.GetSharedTx(), replacement_fees,
+            replacement_entry.GetTime().count(), replacement_entry.GetHeight(),
+            replacement_entry.GetSequence(), replacement_entry.GetSpendsCoinbase(),
+            replacement_entry.GetSigOpCost(), replacement_entry.GetLockPoints());
+    // Calculate the chunks for a replacement.
+    auto calc_results{changeset->CalculateChunksForRBF()};
 
     if (calc_results.has_value()) {
         // Sanity checks on the chunks.
@@ -192,7 +216,7 @@ FUZZ_TARGET(package_rbf, .init = initialize_package_rbf)
     }
 
     // If internals report error, wrapper should too
-    auto err_tuple{ImprovesFeerateDiagram(pool, direct_conflicts, all_conflicts, replacement_fees, replacement_vsize)};
+    auto err_tuple{ImprovesFeerateDiagram(*changeset)};
     if (!calc_results.has_value()) {
          assert(err_tuple.value().first == DiagramCheckError::UNCALCULABLE);
     } else {

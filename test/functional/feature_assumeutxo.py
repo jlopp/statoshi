@@ -9,7 +9,7 @@ to a hash that has been compiled into bitcoind.
 The assumeutxo value generated and used here is committed to in
 `CRegTestParams::m_assumeutxo_data` in `src/kernel/chainparams.cpp`.
 """
-import time
+import contextlib
 from shutil import rmtree
 
 from dataclasses import dataclass
@@ -17,11 +17,17 @@ from test_framework.blocktools import (
         create_block,
         create_coinbase
 )
+from test_framework.compressor import (
+    compress_amount,
+)
 from test_framework.messages import (
     CBlockHeader,
     from_hex,
+    MAGIC_BYTES,
+    MAX_MONEY,
     msg_headers,
-    tx_from_hex
+    ser_varint,
+    tx_from_hex,
 )
 from test_framework.p2p import (
     P2PInterface,
@@ -30,12 +36,21 @@ from test_framework.test_framework import BitcoinTestFramework
 from test_framework.util import (
     assert_approx,
     assert_equal,
+    assert_not_equal,
     assert_raises_rpc_error,
+    ensure_for,
+    sha256sum_file,
     try_rpc,
 )
 from test_framework.wallet import (
     getnewdestination,
     MiniWallet,
+)
+from test_framework.blocktools import (
+    REGTEST_N_BITS,
+    REGTEST_TARGET,
+    nbits_str,
+    target_str,
 )
 
 START_HEIGHT = 199
@@ -89,15 +104,15 @@ class AssumeutxoTest(BitcoinTestFramework):
         self.log.info("  - snapshot file with mismatching network magic")
         invalid_magics = [
             # magic, name, real
-            [0xf9beb4d9, "main", True],
-            [0x0b110907, "test", True],
-            [0x0a03cf40, "signet", True],
-            [0x00000000, "", False],
-            [0xffffffff, "", False],
+            [MAGIC_BYTES["mainnet"], "main", True],
+            [MAGIC_BYTES["testnet4"], "testnet4", True],
+            [MAGIC_BYTES["signet"], "signet", True],
+            [0x00000000.to_bytes(4, 'big'), "", False],
+            [0xffffffff.to_bytes(4, 'big'), "", False],
         ]
         for [magic, name, real] in invalid_magics:
             with open(bad_snapshot_path, 'wb') as f:
-                f.write(valid_snapshot_contents[:7] + magic.to_bytes(4, 'big') + valid_snapshot_contents[11:])
+                f.write(valid_snapshot_contents[:7] + magic + valid_snapshot_contents[11:])
             if real:
                 assert_raises_rpc_error(parsing_error_code, f"Unable to parse metadata: The network of the snapshot ({name}) does not match the network of this node (regtest).", node.loadtxoutset, bad_snapshot_path)
             else:
@@ -132,7 +147,14 @@ class AssumeutxoTest(BitcoinTestFramework):
             [b"\x81", 34, "3da966ba9826fb6d2604260e01607b55ba44e1a5de298606b08704bc62570ea8", None],  # wrong coin code VARINT
             [b"\x80", 34, "091e893b3ccb4334378709578025356c8bcb0a623f37c7c4e493133c988648e5", None],  # another wrong coin code
             [b"\x84\x58", 34, None, "Bad snapshot data after deserializing 0 coins"],  # wrong coin case with height 364 and coinbase 0
-            [b"\xCA\xD2\x8F\x5A", 39, None, "Bad snapshot data after deserializing 0 coins - bad tx out value"],  # Amount exceeds MAX_MONEY
+            [
+                # compressed txout value + scriptpubkey
+                ser_varint(compress_amount(MAX_MONEY + 1)) + ser_varint(0),
+                # txid + coins per txid + vout + coin height
+                32 + 1 + 1 + 2,
+                None,
+                "Bad snapshot data after deserializing 0 coins - bad tx out value"
+            ],  # Amount exceeds MAX_MONEY
         ]
 
         for content, offset, wrong_hash, custom_message in cases:
@@ -164,8 +186,8 @@ class AssumeutxoTest(BitcoinTestFramework):
             with self.nodes[0].assert_debug_log([log_msg]):
                 self.nodes[0].assert_start_raises_init_error(expected_msg=error_msg)
 
-        expected_error_msg = f"Error: A fatal internal error occurred, see debug.log for details: Assumeutxo data not found for the given blockhash '7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a'."
-        error_details = f"Assumeutxo data not found for the given blockhash"
+        expected_error_msg = "Error: A fatal internal error occurred, see debug.log for details: Assumeutxo data not found for the given blockhash '7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a'."
+        error_details = "Assumeutxo data not found for the given blockhash"
         expected_error(log_msg=error_details, error_msg=expected_error_msg)
 
         # resurrect node again
@@ -228,6 +250,12 @@ class AssumeutxoTest(BitcoinTestFramework):
         assert_equal(normal['blocks'], START_HEIGHT + 99)
         assert_equal(snapshot['blocks'], SNAPSHOT_BASE_HEIGHT)
 
+        # Both states should have the same nBits and target
+        assert_equal(normal['bits'], nbits_str(REGTEST_N_BITS))
+        assert_equal(normal['bits'], snapshot['bits'])
+        assert_equal(normal['target'], target_str(REGTEST_TARGET))
+        assert_equal(normal['target'], snapshot['target'])
+
         # Now lets sync the nodes and wait for the background validation to finish
         self.connect_nodes(0, 3)
         self.sync_blocks(nodes=(n0, n3))
@@ -284,7 +312,7 @@ class AssumeutxoTest(BitcoinTestFramework):
         msg = msg_headers()
         for block_num in range(1, miner.getblockcount()+1):
             msg.headers.append(from_hex(CBlockHeader(), miner.getblockheader(miner.getblockhash(block_num), verbose=False)))
-        headers_provider_conn.send_message(msg)
+        headers_provider_conn.send_without_ping(msg)
 
         # Ensure headers arrived
         default_value = {'status': ''}  # No status
@@ -304,15 +332,14 @@ class AssumeutxoTest(BitcoinTestFramework):
         # If it does request such blocks, the snapshot_node will ignore requests it cannot fulfill, causing the ibd_node
         # to stall. This stall could last for up to 10 min, ultimately resulting in an abrupt disconnection due to the
         # ibd_node's perceived unresponsiveness.
-        time.sleep(3)  # Sleep here because we can't detect when a node avoids requesting blocks from other peer.
-        assert_equal(len(ibd_node.getpeerinfo()[0]['inflight']), 0)
+        ensure_for(duration=3, f=lambda: len(ibd_node.getpeerinfo()[0]['inflight']) == 0)
 
         # Now disconnect nodes and finish background chain sync
         self.disconnect_nodes(ibd_node.index, snapshot_node.index)
         self.connect_nodes(snapshot_node.index, miner.index)
         self.sync_blocks(nodes=(miner, snapshot_node))
         # Check the base snapshot block was stored and ensure node signals full-node service support
-        self.wait_until(lambda: not try_rpc(-1, "Block not found", snapshot_node.getblock, snapshot_block_hash))
+        self.wait_until(lambda: not try_rpc(-1, "Block not available (not fully downloaded)", snapshot_node.getblock, snapshot_block_hash))
         self.wait_until(lambda: 'NETWORK' in snapshot_node.getnetworkinfo()['localservicesnames'])
 
         # Now that the snapshot_node is synced, verify the ibd_node can sync from it
@@ -324,6 +351,22 @@ class AssumeutxoTest(BitcoinTestFramework):
         node_services = node.getnetworkinfo()['localservicesnames']
         assert 'NETWORK' not in node_services
         assert 'NETWORK_LIMITED' in node_services
+
+    @contextlib.contextmanager
+    def assert_disk_cleanup(self, node, assumeutxo_used):
+        """
+        Ensure an assumeutxo node is cleaning up the background chainstate
+        """
+        msg = []
+        if assumeutxo_used:
+            # Check that the snapshot actually existed before restart
+            assert (node.datadir_path / node.chain / "chainstate_snapshot").exists()
+            msg = ["cleaning up unneeded background chainstate"]
+
+        with node.assert_debug_log(msg):
+            yield
+
+        assert not (node.datadir_path / node.chain / "chainstate_snapshot").exists()
 
     def run_test(self):
         """
@@ -373,7 +416,7 @@ class AssumeutxoTest(BitcoinTestFramework):
         assert_equal(n1.getblockcount(), START_HEIGHT)
 
         self.log.info(f"Creating a UTXO snapshot at height {SNAPSHOT_BASE_HEIGHT}")
-        dump_output = n0.dumptxoutset('utxos.dat')
+        dump_output = n0.dumptxoutset('utxos.dat', "latest")
 
         self.log.info("Test loading snapshot when the node tip is on the same block as the snapshot")
         assert_equal(n0.getblockcount(), SNAPSHOT_BASE_HEIGHT)
@@ -398,11 +441,15 @@ class AssumeutxoTest(BitcoinTestFramework):
         for n in self.nodes:
             assert_equal(n.getblockchaininfo()["headers"], SNAPSHOT_BASE_HEIGHT)
 
-        assert_equal(
-            dump_output['txoutset_hash'],
-            "a4bf3407ccb2cc0145c49ebba8fa91199f8a3903daf0883875941497d2493c27")
-        assert_equal(dump_output["nchaintx"], blocks[SNAPSHOT_BASE_HEIGHT].chain_tx)
         assert_equal(n0.getblockchaininfo()["blocks"], SNAPSHOT_BASE_HEIGHT)
+
+        def check_dump_output(output):
+            assert_equal(
+                output['txoutset_hash'],
+                "a4bf3407ccb2cc0145c49ebba8fa91199f8a3903daf0883875941497d2493c27")
+            assert_equal(output["nchaintx"], blocks[SNAPSHOT_BASE_HEIGHT].chain_tx)
+
+        check_dump_output(dump_output)
 
         # Mine more blocks on top of the snapshot that n1 hasn't yet seen. This
         # will allow us to test n1's sync-to-tip on top of a snapshot.
@@ -411,6 +458,39 @@ class AssumeutxoTest(BitcoinTestFramework):
         assert_equal(n0.getblockcount(), FINAL_HEIGHT)
         assert_equal(n1.getblockcount(), START_HEIGHT)
 
+        assert_equal(n0.getblockchaininfo()["blocks"], FINAL_HEIGHT)
+
+        self.log.info("Check that dumptxoutset works for past block heights")
+        # rollback defaults to the snapshot base height
+        dump_output2 = n0.dumptxoutset('utxos2.dat', "rollback")
+        check_dump_output(dump_output2)
+        assert_equal(sha256sum_file(dump_output['path']), sha256sum_file(dump_output2['path']))
+
+        # Rollback with specific height
+        dump_output3 = n0.dumptxoutset('utxos3.dat', rollback=SNAPSHOT_BASE_HEIGHT)
+        check_dump_output(dump_output3)
+        assert_equal(sha256sum_file(dump_output['path']), sha256sum_file(dump_output3['path']))
+
+        # Specified height that is not a snapshot height
+        prev_snap_height = SNAPSHOT_BASE_HEIGHT - 1
+        dump_output4 = n0.dumptxoutset(path='utxos4.dat', rollback=prev_snap_height)
+        assert_equal(
+            dump_output4['txoutset_hash'],
+            "8a1db0d6e958ce0d7c963bc6fc91ead596c027129bacec68acc40351037b09d7")
+        assert_not_equal(sha256sum_file(dump_output['path']), sha256sum_file(dump_output4['path']))
+
+        # Use a hash instead of a height
+        prev_snap_hash = n0.getblockhash(prev_snap_height)
+        dump_output5 = n0.dumptxoutset('utxos5.dat', rollback=prev_snap_hash)
+        assert_equal(sha256sum_file(dump_output4['path']), sha256sum_file(dump_output5['path']))
+
+        # TODO: This is a hack to set m_best_header to the correct value after
+        # dumptxoutset/reconsiderblock. Otherwise the wrong error messages are
+        # returned in following tests. It can be removed once this bug is
+        # fixed. See also https://github.com/bitcoin/bitcoin/issues/26245
+        self.restart_node(0, ["-reindex"])
+
+        # Ensure n0 is back at the tip
         assert_equal(n0.getblockchaininfo()["blocks"], FINAL_HEIGHT)
 
         self.test_snapshot_with_less_work(dump_output['path'])
@@ -447,7 +527,7 @@ class AssumeutxoTest(BitcoinTestFramework):
         # find coinbase output at snapshot height on node0 and scan for it on node1,
         # where the block is not available, but the snapshot was loaded successfully
         coinbase_tx = n0.getblock(snapshot_hash, verbosity=2)['tx'][0]
-        assert_raises_rpc_error(-1, "Block not found on disk", n1.getblock, snapshot_hash)
+        assert_raises_rpc_error(-1, "Block not available (not fully downloaded)", n1.getblock, snapshot_hash)
         coinbase_output_descriptor = coinbase_tx['vout'][0]['scriptPubKey']['desc']
         scan_result = n1.scantxoutset('start', [coinbase_output_descriptor])
         assert_equal(scan_result['success'], True)
@@ -519,7 +599,7 @@ class AssumeutxoTest(BitcoinTestFramework):
         self.log.info("Submit a spending transaction for a snapshot chainstate coin to the mempool")
         # spend the coinbase output of the first block that is not available on node1
         spend_coin_blockhash = n1.getblockhash(START_HEIGHT + 1)
-        assert_raises_rpc_error(-1, "Block not found on disk", n1.getblock, spend_coin_blockhash)
+        assert_raises_rpc_error(-1, "Block not available (not fully downloaded)", n1.getblock, spend_coin_blockhash)
         prev_tx = n0.getblock(spend_coin_blockhash, 3)['tx'][0]
         prevout = {"txid": prev_tx['txid'], "vout": 0, "scriptPubKey": prev_tx['vout'][0]['scriptPubKey']['hex']}
         privkey = n0.get_deterministic_priv_key().key
@@ -595,7 +675,8 @@ class AssumeutxoTest(BitcoinTestFramework):
         for i in (0, 1):
             n = self.nodes[i]
             self.log.info(f"Restarting node {i} to ensure (Check|Load)BlockIndex passes")
-            self.restart_node(i, extra_args=self.extra_args[i])
+            with self.assert_disk_cleanup(n, i == 1):
+                self.restart_node(i, extra_args=self.extra_args[i])
 
             assert_equal(n.getblockchaininfo()["blocks"], FINAL_HEIGHT)
 
@@ -672,7 +753,8 @@ class AssumeutxoTest(BitcoinTestFramework):
         for i in (0, 2):
             n = self.nodes[i]
             self.log.info(f"Restarting node {i} to ensure (Check|Load)BlockIndex passes")
-            self.restart_node(i, extra_args=self.extra_args[i])
+            with self.assert_disk_cleanup(n, i == 2):
+                self.restart_node(i, extra_args=self.extra_args[i])
 
             assert_equal(n.getblockchaininfo()["blocks"], FINAL_HEIGHT)
 

@@ -5,14 +5,14 @@ Release Process
 
 ### Before every release candidate
 
-* Update release candidate version in `configure.ac` (`CLIENT_VERSION_RC`).
-* Update manpages (after rebuilding the binaries), see [gen-manpages.py](https://github.com/bitcoin/bitcoin/blob/master/contrib/devtools/README.md#gen-manpagespy).
-* Update bitcoin.conf and commit changes if they exist, see [gen-bitcoin-conf.sh](https://github.com/bitcoin/bitcoin/blob/master/contrib/devtools/README.md#gen-bitcoin-confsh).
+* Update release candidate version in `CMakeLists.txt` (`CLIENT_VERSION_RC`).
+* Update manpages (after rebuilding the binaries), see [gen-manpages.py](/contrib/devtools/README.md#gen-manpagespy).
+* Update bitcoin.conf and commit changes if they exist, see [gen-bitcoin-conf.sh](/contrib/devtools/README.md#gen-bitcoin-confsh).
 
 ### Before every major and minor release
 
 * Update [bips.md](bips.md) to account for changes since the last release.
-* Update version in `configure.ac` (don't forget to set `CLIENT_VERSION_RC` to `0`).
+* Update version in `CMakeLists.txt` (don't forget to set `CLIENT_VERSION_RC` to `0`).
 * Update manpages (see previous section)
 * Write release notes (see "Write the release notes" below) in doc/release-notes.md. If necessary,
   archive the previous release notes as doc/release-notes/release-notes-${VERSION}.md.
@@ -20,15 +20,15 @@ Release Process
 ### Before every major release
 
 * On both the master branch and the new release branch:
-  - update `CLIENT_VERSION_MAJOR` in [`configure.ac`](../configure.ac)
-* On the new release branch in [`configure.ac`](../configure.ac)(see [this commit](https://github.com/bitcoin/bitcoin/commit/742f7dd)):
+  - update `CLIENT_VERSION_MAJOR` in [`CMakeLists.txt`](../CMakeLists.txt)
+* On the new release branch in [`CMakeLists.txt`](../CMakeLists.txt)(see [this commit](https://github.com/bitcoin/bitcoin/commit/742f7dd)):
   - set `CLIENT_VERSION_MINOR` to `0`
   - set `CLIENT_VERSION_BUILD` to `0`
   - set `CLIENT_VERSION_IS_RELEASE` to `true`
 
 #### Before branch-off
 
-* Update translations see [translation_process.md](https://github.com/bitcoin/bitcoin/blob/master/doc/translation_process.md#synchronising-translations).
+* Update translations see [translation_process.md](/doc/translation_process.md#synchronising-translations).
 * Update hardcoded [seeds](/contrib/seeds/README.md), see [this pull request](https://github.com/bitcoin/bitcoin/pull/27488) for an example.
 * Update the following variables in [`src/kernel/chainparams.cpp`](/src/kernel/chainparams.cpp) for mainnet, testnet, and signet:
   - `m_assumed_blockchain_size` and `m_assumed_chain_state_size` with the current size plus some overhead (see
@@ -44,6 +44,8 @@ Release Process
     - On mainnet, the selected value must not be orphaned, so it may be useful to set the height two blocks back from the tip.
     - Testnet should be set with a height some tens of thousands back from the tip, due to reorgs there.
   - `nMinimumChainWork` with the "chainwork" value of RPC `getblockheader` using the same height as that selected for the previous step.
+  - `m_assumeutxo_data` array should be appended to with the values returned by calling `bitcoin-cli -rpcclienttimeout=0 -named dumptxoutset utxo.dat rollback=<height or hash>`
+    The same height considerations for `defaultAssumeValid` apply.
 * Consider updating the headers synchronization tuning parameters to account for the chainparams updates.
   The optimal values change very slowly, so this isn't strictly necessary every release, but doing so doesn't hurt.
   - Update configuration variables in [`contrib/devtools/headerssync-params.py`](/contrib/devtools/headerssync-params.py):
@@ -134,7 +136,7 @@ git -C ./guix.sigs pull
 ### Create the macOS SDK tarball (first time, or when SDK version changes)
 
 Create the macOS SDK tarball, see the [macdeploy
-instructions](/contrib/macdeploy/README.md#deterministic-macos-app-notes) for
+instructions](/contrib/macdeploy/README.md#sdk-extraction) for
 details.
 
 ### Build and attest to build outputs
@@ -164,8 +166,8 @@ Then open a Pull Request to the [guix.sigs repository](https://github.com/bitcoi
 
 In the `guix-build-${VERSION}/output/x86_64-apple-darwin` and `guix-build-${VERSION}/output/arm64-apple-darwin` directories:
 
-    tar xf bitcoin-osx-unsigned.tar.gz
-    ./detached-sig-create.sh /path/to/codesign.p12
+    tar xf bitcoin-${VERSION}-${ARCH}-apple-darwin-codesigning.tar.gz
+    ./detached-sig-create.sh /path/to/codesign.p12 /path/to/AuthKey_foo.p8 uuid
     Enter the keychain password and authorize the signature
     signature-osx.tar.gz will be created
 
@@ -173,8 +175,8 @@ In the `guix-build-${VERSION}/output/x86_64-apple-darwin` and `guix-build-${VERS
 
 In the `guix-build-${VERSION}/output/x86_64-w64-mingw32` directory:
 
-    tar xf bitcoin-win-unsigned.tar.gz
-    ./detached-sig-create.sh -key /path/to/codesign.key
+    tar xf bitcoin-${VERSION}-win64-codesigning.tar.gz
+    ./detached-sig-create.sh /path/to/codesign.key
     Enter the passphrase for the key when prompted
     signature-win.tar.gz will be created
 

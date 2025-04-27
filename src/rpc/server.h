@@ -22,12 +22,6 @@ extern statsd::StatsdClient statsClient;
 
 class CRPCCommand;
 
-namespace RPCServer
-{
-    void OnStarted(std::function<void ()> slot);
-    void OnStopped(std::function<void ()> slot);
-}
-
 /** Query whether RPC is running */
 bool IsRPCRunning();
 

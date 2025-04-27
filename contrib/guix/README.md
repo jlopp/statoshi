@@ -31,7 +31,7 @@ section](#choosing-your-security-model) before proceeding to perform a build.
 
 In order to perform a build for macOS (which is included in the default set of
 platform triples to build), you'll need to extract the macOS SDK tarball using
-tools found in the [`macdeploy` directory](../macdeploy/README.md).
+tools found in the [`macdeploy` directory](../macdeploy/README.md#sdk-extraction).
 
 You can then either point to the SDK using the `SDK_PATH` environment variable:
 
@@ -68,7 +68,7 @@ following from the top of a clean repository:
 
 The `guix-codesign` command attaches codesignatures (produced by codesigners) to
 existing non-codesigned outputs. Please see the [release process
-documentation](/doc/release-process.md) for more context.
+documentation](/doc/release-process.md#codesigning) for more context.
 
 It respects many of the same environment variable flags as `guix-build`, with 2
 crucial differences:
@@ -247,7 +247,7 @@ details.
 * _**SDK_PATH**_
 
   Set the path where _extracted_ SDKs can be found. This is passed through to
-  the depends tree. Note that this is should be set to the _parent_ directory of
+  the depends tree. Note that this should be set to the _parent_ directory of
   the actual SDK (e.g. `SDK_PATH=$HOME/Downloads/macOS-SDKs` instead of
   `$HOME/Downloads/macOS-SDKs/Xcode-12.2-12B45b-extracted-SDK-with-libcxx-headers`).
 
@@ -261,6 +261,7 @@ details.
 
   - `guix` build commands as in `guix shell --cores="$JOBS"`
   - `make` as in `make --jobs="$JOBS"`
+  - `cmake` as in `cmake --build build -j "$JOBS"`
   - `xargs` as in `xargs -P"$JOBS"`
 
   See [here](#controlling-the-number-of-threads-used-by-guix-build-commands) for
