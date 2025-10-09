@@ -88,6 +88,10 @@ $(package)_config_opts += -no-feature-qtplugininfo
 
 $(package)_config_env := CC="$$(build_CC)"
 $(package)_config_env += CXX="$$(build_CXX)"
+ifeq ($(build_os),darwin)
+$(package)_config_env += OBJC="$$(build_CC)"
+$(package)_config_env += OBJCXX="$$(build_CXX)"
+endif
 
 $(package)_cmake_opts := -DCMAKE_EXE_LINKER_FLAGS="$$(build_LDFLAGS)"
 ifneq ($(V),)
@@ -143,10 +147,10 @@ define $(package)_build_cmds
 endef
 
 define $(package)_stage_cmds
-  cmake --install . --prefix $($(package)_staging_prefix_dir)
+  cmake --install . --prefix $($(package)_staging_prefix_dir) --strip
 endef
 
 define $(package)_postprocess_cmds
   rm -rf doc/ && \
-  mv -t .. translations/
+  mv translations/ ..
 endef

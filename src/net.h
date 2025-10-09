@@ -24,6 +24,7 @@
 #include <policy/feerate.h>
 #include <protocol.h>
 #include <random.h>
+#include <semaphore_grant.h>
 #include <span.h>
 #include <streams.h>
 #include <sync.h>
@@ -159,6 +160,7 @@ enum
 /** Returns a local address that we should advertise to this peer. */
 std::optional<CService> GetLocalAddrForPeer(CNode& node);
 
+void ClearLocal();
 bool AddLocal(const CService& addr, int nScore = LOCAL_NONE);
 bool AddLocal(const CNetAddr& addr, int nScore = LOCAL_NONE);
 void RemoveLocal(const CService& addr);
@@ -733,12 +735,16 @@ public:
     // Setting fDisconnect to true will cause the node to be disconnected the
     // next time DisconnectNodes() runs
     std::atomic_bool fDisconnect{false};
-    CSemaphoreGrant grantOutbound;
+    CountingSemaphoreGrant<> grantOutbound;
     std::atomic<int> nRefCount{0};
 
     const uint64_t nKeyedNetGroup;
     std::atomic_bool fPauseRecv{false};
     std::atomic_bool fPauseSend{false};
+
+    /** Network key used to prevent fingerprinting our node across networks.
+     *  Influenced by the network and the bind address (+ bind port for inbounds) */
+    const uint64_t m_network_key;
 
     const ConnectionType m_conn_type;
 
@@ -891,6 +897,7 @@ public:
           const std::string& addrNameIn,
           ConnectionType conn_type_in,
           bool inbound_onion,
+          uint64_t network_key,
           CNodeOptions&& node_opts = {});
     CNode(const CNode&) = delete;
     CNode& operator=(const CNode&) = delete;
@@ -1118,8 +1125,13 @@ public:
         whitelist_relay = connOptions.whitelist_relay;
     }
 
-    CConnman(uint64_t seed0, uint64_t seed1, AddrMan& addrman, const NetGroupManager& netgroupman,
-             const CChainParams& params, bool network_active = true);
+    CConnman(uint64_t seed0,
+             uint64_t seed1,
+             AddrMan& addrman,
+             const NetGroupManager& netgroupman,
+             const CChainParams& params,
+             bool network_active = true,
+             std::shared_ptr<CThreadInterrupt> interrupt_net = std::make_shared<CThreadInterrupt>());
 
     ~CConnman();
 
@@ -1137,7 +1149,28 @@ public:
     bool GetNetworkActive() const { return fNetworkActive; };
     bool GetUseAddrmanOutgoing() const { return m_use_addrman_outgoing; };
     void SetNetworkActive(bool active);
-    void OpenNetworkConnection(const CAddress& addrConnect, bool fCountFailure, CSemaphoreGrant&& grant_outbound, const char* strDest, ConnectionType conn_type, bool use_v2transport) EXCLUSIVE_LOCKS_REQUIRED(!m_unused_i2p_sessions_mutex);
+
+    /**
+     * Open a new P2P connection and initialize it with the PeerManager at `m_msgproc`.
+     * @param[in] addrConnect Address to connect to, if `pszDest` is `nullptr`.
+     * @param[in] fCountFailure Increment the number of connection attempts to this address in Addrman.
+     * @param[in] grant_outbound Take ownership of this grant, to be released later when the connection is closed.
+     * @param[in] pszDest Address to resolve and connect to.
+     * @param[in] conn_type Type of the connection to open, must not be `ConnectionType::INBOUND`.
+     * @param[in] use_v2transport Use P2P encryption, (aka V2 transport, BIP324).
+     * @param[in] proxy_override Optional proxy to use and override normal proxy selection.
+     * @retval true The connection was opened successfully.
+     * @retval false The connection attempt failed.
+     */
+    bool OpenNetworkConnection(const CAddress& addrConnect,
+                               bool fCountFailure,
+                               CountingSemaphoreGrant<>&& grant_outbound,
+                               const char* pszDest,
+                               ConnectionType conn_type,
+                               bool use_v2transport,
+                               const std::optional<Proxy>& proxy_override = std::nullopt)
+        EXCLUSIVE_LOCKS_REQUIRED(!m_unused_i2p_sessions_mutex);
+
     bool CheckIncomingNonce(uint64_t nonce);
     void ASMapHealthCheck();
 
@@ -1171,19 +1204,30 @@ public:
     size_t GetAddressCount() const;
 
     /**
-     * Return all or many randomly selected addresses, optionally by network.
+     * Return randomly selected addresses. This function does not use the address response cache and
+     * should only be used in trusted contexts.
+     *
+     * An untrusted caller (e.g. from p2p) should instead use @ref GetAddresses to use the cache.
      *
      * @param[in] max_addresses  Maximum number of addresses to return (0 = all).
      * @param[in] max_pct        Maximum percentage of addresses to return (0 = all). Value must be from 0 to 100.
      * @param[in] network        Select only addresses of this network (nullopt = all).
      * @param[in] filtered       Select only addresses that are considered high quality (false = all).
      */
-    std::vector<CAddress> GetAddresses(size_t max_addresses, size_t max_pct, std::optional<Network> network, const bool filtered = true) const;
+    std::vector<CAddress> GetAddressesUnsafe(size_t max_addresses, size_t max_pct, std::optional<Network> network, const bool filtered = true) const;
     /**
-     * Cache is used to minimize topology leaks, so it should
-     * be used for all non-trusted calls, for example, p2p.
-     * A non-malicious call (from RPC or a peer with addr permission) should
-     * call the function without a parameter to avoid using the cache.
+     * Return addresses from the per-requestor cache. If no cache entry exists, it is populated with
+     * randomly selected addresses. This function can be used in untrusted contexts.
+     *
+     * A trusted caller (e.g. from RPC or a peer with addr permission) can use
+     * @ref GetAddressesUnsafe to avoid using the cache.
+     *
+     * @param[in] requestor      The requesting peer. Used to key the cache to prevent privacy leaks.
+     * @param[in] max_addresses  Maximum number of addresses to return (0 = all). Ignored when cache
+     *                           already contains an entry for requestor.
+     * @param[in] max_pct        Maximum percentage of addresses to return (0 = all). Value must be
+     *                           from 0 to 100. Ignored when cache already contains an entry for
+     *                           requestor.
      */
     std::vector<CAddress> GetAddresses(CNode& requestor, size_t max_addresses, size_t max_pct);
 
@@ -1355,19 +1399,50 @@ private:
 
     uint64_t CalculateKeyedNetGroup(const CNetAddr& ad) const;
 
-    CNode* FindNode(const CNetAddr& ip);
-    CNode* FindNode(const std::string& addrName);
-    CNode* FindNode(const CService& addr);
+    /**
+     * Determine whether we're already connected to a given "host:port".
+     * Note that for inbound connections, the peer is likely using a random outbound
+     * port on their side, so this will likely not match any inbound connections.
+     * @param[in] host String of the form "host[:port]", e.g. "localhost" or "localhost:8333" or "1.2.3.4:8333".
+     * @return true if connected to `host`.
+     */
+    bool AlreadyConnectedToHost(const std::string& host) const;
 
     /**
-     * Determine whether we're already connected to a given address, in order to
-     * avoid initiating duplicate connections.
+     * Determine whether we're already connected to a given address:port.
+     * Note that for inbound connections, the peer is likely using a random outbound
+     * port on their side, so this will likely not match any inbound connections.
+     * @param[in] addr_port Address and port to check.
+     * @return true if connected to addr_port.
      */
-    bool AlreadyConnectedToAddress(const CAddress& addr);
+    bool AlreadyConnectedToAddressPort(const CService& addr_port) const;
+
+    /**
+     * Determine whether we're already connected to a given address.
+     */
+    bool AlreadyConnectedToAddress(const CNetAddr& addr) const;
 
     bool AttemptToEvictConnection();
-    CNode* ConnectNode(CAddress addrConnect, const char *pszDest, bool fCountFailure, ConnectionType conn_type, bool use_v2transport) EXCLUSIVE_LOCKS_REQUIRED(!m_unused_i2p_sessions_mutex);
-    void AddWhitelistPermissionFlags(NetPermissionFlags& flags, const CNetAddr &addr, const std::vector<NetWhitelistPermissions>& ranges) const;
+
+    /**
+     * Open a new P2P connection.
+     * @param[in] addrConnect Address to connect to, if `pszDest` is `nullptr`.
+     * @param[in] pszDest Address to resolve and connect to.
+     * @param[in] fCountFailure Increment the number of connection attempts to this address in Addrman.
+     * @param[in] conn_type Type of the connection to open, must not be `ConnectionType::INBOUND`.
+     * @param[in] use_v2transport Use P2P encryption, (aka V2 transport, BIP324).
+     * @param[in] proxy_override Optional proxy to use and override normal proxy selection.
+     * @return Newly created CNode object or nullptr if the connection failed.
+     */
+    CNode* ConnectNode(CAddress addrConnect,
+                       const char* pszDest,
+                       bool fCountFailure,
+                       ConnectionType conn_type,
+                       bool use_v2transport,
+                       const std::optional<Proxy>& proxy_override)
+        EXCLUSIVE_LOCKS_REQUIRED(!m_unused_i2p_sessions_mutex);
+
+    void AddWhitelistPermissionFlags(NetPermissionFlags& flags, std::optional<CNetAddr> addr, const std::vector<NetWhitelistPermissions>& ranges) const;
 
     void DeleteNode(CNode* pnode);
 
@@ -1494,8 +1569,8 @@ private:
      */
     std::atomic<ServiceFlags> m_local_services;
 
-    std::unique_ptr<CSemaphore> semOutbound;
-    std::unique_ptr<CSemaphore> semAddnode;
+    std::unique_ptr<std::counting_semaphore<>> semOutbound;
+    std::unique_ptr<std::counting_semaphore<>> semAddnode;
 
     /**
      * Maximum number of automatic connections permitted, excluding manual
@@ -1545,11 +1620,9 @@ private:
 
     /**
      * This is signaled when network activity should cease.
-     * A pointer to it is saved in `m_i2p_sam_session`, so make sure that
-     * the lifetime of `interruptNet` is not shorter than
-     * the lifetime of `m_i2p_sam_session`.
+     * A copy of this is saved in `m_i2p_sam_session`.
      */
-    CThreadInterrupt interruptNet;
+    const std::shared_ptr<CThreadInterrupt> m_interrupt_net;
 
     /**
      * I2P SAM session.
@@ -1638,7 +1711,7 @@ private:
     struct ReconnectionInfo
     {
         CAddress addr_connect;
-        CSemaphoreGrant grant;
+        CountingSemaphoreGrant<> grant;
         std::string destination;
         ConnectionType conn_type;
         bool use_v2transport;

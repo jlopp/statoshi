@@ -23,6 +23,7 @@ from .messages import (
 from .crypto.ripemd160 import ripemd160
 
 MAX_SCRIPT_ELEMENT_SIZE = 520
+MAX_SCRIPT_SIZE = 10000
 MAX_PUBKEYS_PER_MULTI_A = 999
 LOCKTIME_THRESHOLD = 500000000
 ANNEX_TAG = 0x50
@@ -693,7 +694,6 @@ def sign_input_legacy(tx, input_index, input_scriptpubkey, privkey, sighash_type
     assert err is None
     der_sig = privkey.sign_ecdsa(sighash)
     tx.vin[input_index].scriptSig = bytes(CScript([der_sig + bytes([sighash_type])])) + tx.vin[input_index].scriptSig
-    tx.rehash()
 
 def sign_input_segwitv0(tx, input_index, input_scriptpubkey, input_amount, privkey, sighash_type=SIGHASH_ALL):
     """Add segwitv0 ECDSA signature for a given transaction input. Note that the signature
@@ -702,7 +702,6 @@ def sign_input_segwitv0(tx, input_index, input_scriptpubkey, input_amount, privk
     sighash = SegwitV0SignatureHash(input_scriptpubkey, tx, input_index, sighash_type, input_amount)
     der_sig = privkey.sign_ecdsa(sighash)
     tx.wit.vtxinwit[input_index].scriptWitness.stack.insert(0, der_sig + bytes([sighash_type]))
-    tx.rehash()
 
 # TODO: Allow cached hashPrevouts/hashSequence/hashOutputs to be provided.
 # Performance optimization probably not necessary for python tests, however.

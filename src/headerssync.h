@@ -1,4 +1,4 @@
-// Copyright (c) 2022 The Bitcoin Core developers
+// Copyright (c) 2022-present The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -8,7 +8,7 @@
 #include <arith_uint256.h>
 #include <chain.h>
 #include <consensus/params.h>
-#include <net.h> // For NodeId
+#include <net.h>
 #include <primitives/block.h>
 #include <uint256.h>
 #include <util/bitdeque.h>
@@ -224,7 +224,7 @@ private:
     arith_uint256 m_current_chain_work;
 
     /** m_hasher is a salted hasher for making our 1-bit commitments to headers we've seen. */
-    const SaltedTxidHasher m_hasher;
+    const SaltedUint256Hasher m_hasher;
 
     /** A queue of commitment bits, created during the 1st phase, and verified during the 2nd. */
     bitdeque<> m_header_commitments;

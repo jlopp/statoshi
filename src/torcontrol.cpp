@@ -71,7 +71,6 @@ static const float RECONNECT_TIMEOUT_MAX = 600.0;
  * this is belt-and-suspenders sanity limit to prevent memory exhaustion.
  */
 static const int MAX_LINE_LENGTH = 100000;
-static const uint16_t DEFAULT_TOR_SOCKS_PORT = 9050;
 
 /****** Low-level TorControlConnection ********/
 
@@ -404,9 +403,9 @@ void TorController::get_socks_cb(TorControlConnection& _conn, const TorControlRe
     Assume(resolved.IsValid());
     LogDebug(BCLog::TOR, "Configuring onion proxy for %s\n", resolved.ToStringAddrPort());
 
-    // With m_randomize_credentials = true, generates unique SOCKS credentials per proxy connection (e.g., Tor).
-    // Prevents connection correlation and enhances privacy by forcing different Tor circuits.
-    // Requires Tor's IsolateSOCKSAuth (default enabled) for effective isolation (see IsolateSOCKSAuth section in https://2019.www.torproject.org/docs/tor-manual.html.en).
+    // Add Tor as proxy for .onion addresses.
+    // Enable stream isolation to prevent connection correlation and enhance privacy, by forcing a different Tor circuit for every connection.
+    // For this to work, the IsolateSOCKSAuth flag must be enabled on SOCKSPort (which is the default, see the IsolateSOCKSAuth section of Tor's manual page).
     Proxy addrOnion = Proxy(resolved, /*tor_stream_isolation=*/ true);
     SetProxy(NET_ONION, addrOnion);
 

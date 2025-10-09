@@ -27,7 +27,7 @@ static CBlock CreateTestBlock()
     return block;
 }
 
-static void SaveBlockBench(benchmark::Bench& bench)
+static void WriteBlockBench(benchmark::Bench& bench)
 {
     const auto testing_setup{MakeNoLogFileContext<const TestingSetup>(ChainType::MAIN)};
     auto& blockman{testing_setup->m_node.chainman->m_blockman};
@@ -42,10 +42,12 @@ static void ReadBlockBench(benchmark::Bench& bench)
 {
     const auto testing_setup{MakeNoLogFileContext<const TestingSetup>(ChainType::MAIN)};
     auto& blockman{testing_setup->m_node.chainman->m_blockman};
-    const auto pos{blockman.WriteBlock(CreateTestBlock(), 413'567)};
-    CBlock block;
+    const auto& test_block{CreateTestBlock()};
+    const auto& expected_hash{test_block.GetHash()};
+    const auto& pos{blockman.WriteBlock(test_block, 413'567)};
     bench.run([&] {
-        const auto success{blockman.ReadBlock(block, pos)};
+        CBlock block;
+        const auto success{blockman.ReadBlock(block, pos, expected_hash)};
         assert(success);
     });
 }
@@ -55,7 +57,7 @@ static void ReadRawBlockBench(benchmark::Bench& bench)
     const auto testing_setup{MakeNoLogFileContext<const TestingSetup>(ChainType::MAIN)};
     auto& blockman{testing_setup->m_node.chainman->m_blockman};
     const auto pos{blockman.WriteBlock(CreateTestBlock(), 413'567)};
-    std::vector<uint8_t> block_data;
+    std::vector<std::byte> block_data;
     blockman.ReadRawBlock(block_data, pos); // warmup
     bench.run([&] {
         const auto success{blockman.ReadRawBlock(block_data, pos)};
@@ -63,6 +65,6 @@ static void ReadRawBlockBench(benchmark::Bench& bench)
     });
 }
 
-BENCHMARK(SaveBlockBench, benchmark::PriorityLevel::HIGH);
+BENCHMARK(WriteBlockBench, benchmark::PriorityLevel::HIGH);
 BENCHMARK(ReadBlockBench, benchmark::PriorityLevel::HIGH);
 BENCHMARK(ReadRawBlockBench, benchmark::PriorityLevel::HIGH);

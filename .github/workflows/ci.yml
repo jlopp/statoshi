@@ -1,6 +1,6 @@
 # Copyright (c) 2023-present The Bitcoin Core developers
 # Distributed under the MIT software license, see the accompanying
-# file COPYING or http://www.opensource.org/licenses/mit-license.php.
+# file COPYING or https://opensource.org/license/mit.
 
 name: CI
 on:
@@ -19,7 +19,8 @@ concurrency:
 
 env:
   CI_FAILFAST_TEST_LEAVE_DANGLING: 1  # GHA does not care about dangling processes and setting this variable avoids killing the CI script itself on error
-  MAKEJOBS: '-j10'
+  CIRRUS_CACHE_HOST: http://127.0.0.1:12321/ # When using Cirrus Runners this host can be used by the docker `gha` build cache type.
+  REPO_USE_CIRRUS_RUNNERS: 'bitcoin/bitcoin' # Use cirrus runners and cache for this repo, instead of falling back to the slow GHA runners
 
 defaults:
   run:
@@ -28,6 +29,22 @@ defaults:
     shell: bash
 
 jobs:
+  runners:
+    name: 'determine runners'
+    runs-on: ubuntu-latest
+    outputs:
+      provider: ${{ steps.runners.outputs.provider }}
+    steps:
+      - id: runners
+        run: |
+          if [[ "${REPO_USE_CIRRUS_RUNNERS}" == "${{ github.repository }}" ]]; then
+            echo "provider=cirrus" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Runner Selection::Using Cirrus Runners"
+          else
+            echo "provider=gha" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Runner Selection::Using GitHub-hosted runners"
+          fi
+
   test-each-commit:
     name: 'test each commit'
     runs-on: ubuntu-24.04
@@ -38,7 +55,7 @@ jobs:
     steps:
       - name: Determine fetch depth
         run: echo "FETCH_DEPTH=$((${{ github.event.pull_request.commits }} + 2))" >> "$GITHUB_ENV"
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: ${{ env.FETCH_DEPTH }}
@@ -77,17 +94,18 @@ jobs:
           git config user.name "CI"
       - run: |
           sudo apt-get update
-          sudo apt-get install clang ccache build-essential cmake ninja-build pkgconf python3-zmq libevent-dev libboost-dev libsqlite3-dev libdb++-dev systemtap-sdt-dev libzmq3-dev qt6-base-dev qt6-tools-dev qt6-l10n-tools libqrencode-dev -y
+          sudo apt-get install clang mold ccache build-essential cmake ninja-build pkgconf python3-zmq libevent-dev libboost-dev libsqlite3-dev systemtap-sdt-dev libzmq3-dev qt6-base-dev qt6-tools-dev qt6-l10n-tools libqrencode-dev capnproto libcapnp-dev -y
+          sudo pip3 install --break-system-packages pycapnp
       - name: Compile and run tests
         run: |
           # Run tests on commits after the last merge commit and before the PR head commit
-          git rebase --exec "git merge --no-commit origin/${GITHUB_BASE_REF} && ./.github/ci-test-each-commit-exec.sh && git reset --hard" ${{ env.TEST_BASE }}
+          git rebase --exec "git merge --no-commit origin/${GITHUB_BASE_REF} && python3 ./.github/ci-test-each-commit-exec.py && git reset --hard" ${{ env.TEST_BASE }}
 
   macos-native-arm64:
     name: ${{ matrix.job-name }}
     # Use any image to support the xcode-select below, but hardcode version to avoid silent upgrades (and breaks).
     # See: https://github.com/actions/runner-images#available-images.
-    runs-on: macos-14
+    runs-on: macos-15
 
     # When a contributor maintains a fork of the repo, any pull request they make
     # to their own fork, or to the main repository, will trigger two CI runs:
@@ -105,26 +123,30 @@ jobs:
         include:
           - job-type: standard
             file-env: './ci/test/00_setup_env_mac_native.sh'
-            job-name: 'macOS 14 native, arm64, no depends, sqlite only, gui'
+            job-name: 'macOS native, no depends, sqlite only, gui'
           - job-type: fuzz
             file-env: './ci/test/00_setup_env_mac_native_fuzz.sh'
-            job-name: 'macOS 14 native, arm64, fuzz'
+            job-name: 'macOS native, fuzz'
 
     env:
       DANGER_RUN_CI_ON_HOST: 1
       BASE_ROOT_DIR: ${{ github.workspace }}
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - &CHECKOUT
+        name: Checkout
+        uses: actions/checkout@v5
+        with:
+          # Ensure the latest merged pull request state is used, even on re-runs.
+          ref: &CHECKOUT_REF_TMPL ${{ github.event_name == 'pull_request' && github.ref || '' }}
 
       - name: Clang version
         run: |
           # Use the earliest Xcode supported by the version of macOS denoted in
           # doc/release-notes-empty-template.md and providing at least the
           # minimum clang version denoted in doc/dependencies.md.
-          # See: https://developer.apple.com/documentation/xcode-release-notes/xcode-15-release-notes
-          sudo xcode-select --switch /Applications/Xcode_15.0.app
+          # See: https://developer.apple.com/documentation/xcode-release-notes/xcode-16-release-notes
+          sudo xcode-select --switch /Applications/Xcode_16.0.app
           clang --version
 
       - name: Install Homebrew packages
@@ -133,7 +155,12 @@ jobs:
         run: |
           # A workaround for "The `brew link` step did not complete successfully" error.
           brew install --quiet python@3 || brew link --overwrite python@3
-          brew install --quiet coreutils ninja pkgconf gnu-getopt ccache boost libevent zeromq qt@6 qrencode
+          brew install --quiet coreutils ninja pkgconf gnu-getopt ccache boost libevent zeromq qt@6 qrencode capnp
+
+      - name: Install Python packages
+        run: |
+          git clone -b v2.1.0 https://github.com/capnproto/pycapnp
+          pip3 install ./pycapnp -C force-bundled-libcapnp=True --break-system-packages
 
       - name: Set Ccache directory
         run: echo "CCACHE_DIR=${RUNNER_TEMP}/ccache_dir" >> "$GITHUB_ENV"
@@ -175,21 +202,25 @@ jobs:
         job-type: [standard, fuzz]
         include:
           - job-type: standard
-            generate-options: '-DBUILD_GUI=ON -DWITH_BDB=ON -DWITH_ZMQ=ON -DBUILD_BENCH=ON -DWERROR=ON'
+            generate-options: '-DBUILD_GUI=ON -DWITH_ZMQ=ON -DBUILD_BENCH=ON -DWERROR=ON'
             job-name: 'Windows native, VS 2022'
           - job-type: fuzz
             generate-options: '-DVCPKG_MANIFEST_NO_DEFAULT_FEATURES=ON -DVCPKG_MANIFEST_FEATURES="wallet" -DBUILD_GUI=OFF -DBUILD_FOR_FUZZING=ON -DWERROR=ON'
             job-name: 'Windows native, fuzz, VS 2022'
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - *CHECKOUT
 
-      - name: Configure Developer Command Prompt for Microsoft Visual C++
-        # Using microsoft/setup-msbuild is not enough.
-        uses: ilammy/msvc-dev-cmd@v1
-        with:
-          arch: x64
+      - &SET_UP_VS
+        name: Set up VS Developer Prompt
+        shell: pwsh -Command "$PSVersionTable; $PSNativeCommandUseErrorActionPreference = $true; $ErrorActionPreference = 'Stop'; & '{0}'"
+        run: |
+          $vswherePath = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $installationPath = & $vswherePath -latest -property installationPath
+          & "${env:COMSPEC}" /s /c "`"$installationPath\Common7\Tools\vsdevcmd.bat`" -arch=x64 -no_logo && set" | foreach-object {
+            $name, $value = $_ -split '=', 2
+            echo "$name=$value" >> $env:GITHUB_ENV
+          }
 
       - name: Get tool information
         shell: pwsh
@@ -223,7 +254,7 @@ jobs:
 
       - name: Generate build system
         run: |
-          cmake -B build --preset vs2022 -DCMAKE_TOOLCHAIN_FILE="${VCPKG_INSTALLATION_ROOT}/scripts/buildsystems/vcpkg.cmake" ${{ matrix.generate-options }}
+          cmake -B build -Werror=dev --preset vs2022 -DCMAKE_TOOLCHAIN_FILE="${VCPKG_INSTALLATION_ROOT}/scripts/buildsystems/vcpkg.cmake" ${{ matrix.generate-options }}
 
       - name: Save vcpkg binary cache
         uses: actions/cache/save@v4
@@ -237,6 +268,27 @@ jobs:
         run: |
           cmake --build . -j $NUMBER_OF_PROCESSORS --config Release
 
+      - name: Check executable manifests
+        if: matrix.job-type == 'standard'
+        working-directory: build
+        shell: pwsh -Command "$PSVersionTable; $PSNativeCommandUseErrorActionPreference = $true; $ErrorActionPreference = 'Stop'; & '{0}'"
+        run: |
+          mt.exe -nologo -inputresource:bin\Release\bitcoind.exe -out:bitcoind.manifest
+          Get-Content bitcoind.manifest
+
+          Get-ChildItem -Filter "bin\Release\*.exe" | ForEach-Object {
+            $exeName = $_.Name
+
+            # Skip as they currently do not have manifests
+            if ($exeName -eq "fuzz.exe" -or $exeName -eq "bench_bitcoin.exe" -or $exeName -eq "test_bitcoin-qt.exe") {
+              Write-Host "Skipping $exeName (no manifest present)"
+              return
+            }
+
+            Write-Host "Checking $exeName"
+            & mt.exe -nologo -inputresource:$_.FullName -validate_manifest
+          }
+
       - name: Run test suite
         if: matrix.job-type == 'standard'
         working-directory: build
@@ -249,8 +301,10 @@ jobs:
         if: matrix.job-type == 'standard'
         working-directory: build
         env:
+          BITCOIN_BIN: '${{ github.workspace }}\build\bin\Release\bitcoin.exe'
           BITCOIND: '${{ github.workspace }}\build\bin\Release\bitcoind.exe'
           BITCOINCLI: '${{ github.workspace }}\build\bin\Release\bitcoin-cli.exe'
+          BITCOINTX: '${{ github.workspace }}\build\bin\Release\bitcoin-tx.exe'
           BITCOINUTIL: '${{ github.workspace }}\build\bin\Release\bitcoin-util.exe'
           BITCOINWALLET: '${{ github.workspace }}\build\bin\Release\bitcoin-wallet.exe'
           TEST_RUNNER_EXTRA: ${{ github.event_name != 'pull_request' && '--extended' || '' }}
@@ -274,7 +328,8 @@ jobs:
 
   windows-cross:
     name: 'Linux->Windows cross, no tests'
-    runs-on: ubuntu-latest
+    needs: runners
+    runs-on: ${{ needs.runners.outputs.provider == 'cirrus' && 'ghcr.io/cirruslabs/ubuntu-runner-amd64:24.04-sm' || 'ubuntu-24.04' }}
     if: ${{ vars.SKIP_BRANCH_PUSH != 'true' || github.event_name == 'pull_request' }}
 
     env:
@@ -282,39 +337,25 @@ jobs:
       DANGER_CI_ON_HOST_FOLDERS: 1
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - *CHECKOUT
 
-      - name: Set CI directories
-        run: |
-          echo "CCACHE_DIR=${{ runner.temp }}/ccache_dir" >> "$GITHUB_ENV"
-          echo "BASE_ROOT_DIR=${{ runner.temp }}" >> "$GITHUB_ENV"
-          echo "DEPENDS_DIR=${{ runner.temp }}/depends" >> "$GITHUB_ENV"
-          echo "BASE_BUILD_DIR=${{ runner.temp }}/build" >> "$GITHUB_ENV"
+      - name: Configure environment
+        uses: ./.github/actions/configure-environment
 
-      - name: Depends cache
-        uses: actions/cache@v4
+      - name: Restore caches
+        id: restore-cache
+        uses: ./.github/actions/restore-caches
+
+      - name: Configure Docker
+        uses: ./.github/actions/configure-docker
         with:
-          path: ${{ env.DEPENDS_DIR }}/built
-          key: ${{ github.job }}-depends-${{ hashFiles('depends/**', 'ci/test/00_setup_env_win64.sh') }}
-
-      - name: Restore Ccache cache
-        id: ccache-cache
-        uses: actions/cache/restore@v4
-        with:
-          path: ${{ env.CCACHE_DIR }}
-          key: ${{ github.job }}-ccache-${{ github.run_id }}
-          restore-keys: ${{ github.job }}-ccache-
+          cache-provider: ${{ needs.runners.outputs.provider }}
 
       - name: CI script
         run: ./ci/test_run_all.sh
 
-      - name: Save Ccache cache
-        uses: actions/cache/save@v4
-        if: github.event_name != 'pull_request' && steps.ccache-cache.outputs.cache-hit != 'true'
-        with:
-          path: ${{ env.CCACHE_DIR }}
-          key: ${{ github.job }}-ccache-${{ github.run_id }}
+      - name: Save caches
+        uses: ./.github/actions/save-caches
 
       - name: Upload built executables
         uses: actions/upload-artifact@v4
@@ -336,21 +377,41 @@ jobs:
       TEST_RUNNER_TIMEOUT_FACTOR: 40
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - *CHECKOUT
 
       - name: Download built executables
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: x86_64-w64-mingw32-executables-${{ github.run_id }}
 
       - name: Run bitcoind.exe
         run: ./bin/bitcoind.exe -version
 
+      - *SET_UP_VS
+
+      - name: Check executable manifests
+        shell: pwsh -Command "$PSVersionTable; $PSNativeCommandUseErrorActionPreference = $true; $ErrorActionPreference = 'Stop'; & '{0}'"
+        run: |
+          mt.exe -nologo -inputresource:bin\bitcoind.exe -out:bitcoind.manifest
+          Get-Content bitcoind.manifest
+
+          Get-ChildItem -Filter "bin\*.exe" | ForEach-Object {
+            $exeName = $_.Name
+
+            # Skip as they currently do not have manifests
+            if ($exeName -eq "fuzz.exe" -or $exeName -eq "bench_bitcoin.exe") {
+              Write-Host "Skipping $exeName (no manifest present)"
+              return
+            }
+
+            Write-Host "Checking $exeName"
+            & mt.exe -nologo -inputresource:$_.FullName -validate_manifest
+          }
+
       - name: Run unit tests
         # Can't use ctest here like other jobs as we don't have a CMake build tree.
         run: |
-          ./bin/test_bitcoin.exe -l test_suite
+          ./bin/test_bitcoin.exe -l test_suite  # Intentionally run sequentially here, to catch test case failures caused by dirty global state from prior test cases.
           ./src/secp256k1/bin/exhaustive_tests.exe
           ./src/secp256k1/bin/noverify_tests.exe
           ./src/secp256k1/bin/tests.exe
@@ -358,7 +419,7 @@ jobs:
           ./src/univalue/unitester.exe
 
       - name: Run benchmarks
-        run: ./bin/bench_bitcoin.exe -sanity-check -priority-level=high
+        run: ./bin/bench_bitcoin.exe -sanity-check
 
       - name: Adjust paths in test/config.ini
         shell: pwsh
@@ -366,57 +427,162 @@ jobs:
           (Get-Content "test/config.ini") -replace '(?<=^SRCDIR=).*', '${{ github.workspace }}' -replace '(?<=^BUILDDIR=).*', '${{ github.workspace }}' -replace '(?<=^RPCAUTH=).*', '${{ github.workspace }}/share/rpcauth/rpcauth.py' | Set-Content "test/config.ini"
           Get-Content "test/config.ini"
 
-      - name: Run util tests
-        run: py -3 test/util/test_runner.py
+      - name: Set previous release directory
+        run: |
+          echo "PREVIOUS_RELEASES_DIR=${{ runner.temp }}/previous_releases" >> "$GITHUB_ENV"
 
-      - name: Run rpcauth test
-        run: py -3 test/util/rpcauth-test.py
+      - name: Get previous releases
+        working-directory: test
+        run: ./get_previous_releases.py --target-dir $PREVIOUS_RELEASES_DIR
 
       - name: Run functional tests
         env:
           # TODO: Fix the excluded test and re-enable it.
-          EXCLUDE: '--exclude wallet_multiwallet.py'
+          # feature_unsupported_utxo_db.py fails on windows because of emojis in the test data directory
+          EXCLUDE: '--exclude wallet_multiwallet.py,feature_unsupported_utxo_db.py'
           TEST_RUNNER_EXTRA: ${{ github.event_name != 'pull_request' && '--extended' || '' }}
         run: py -3 test/functional/test_runner.py --jobs $NUMBER_OF_PROCESSORS --ci --quiet --tmpdirprefix="$RUNNER_TEMP" --combinedlogslen=99999999 --timeout-factor=$TEST_RUNNER_TIMEOUT_FACTOR $EXCLUDE $TEST_RUNNER_EXTRA
 
-  asan-lsan-ubsan-integer-no-depends-usdt:
-    name: 'ASan + LSan + UBSan + integer, no depends, USDT'
-    runs-on: ubuntu-24.04 # has to match container in ci/test/00_setup_env_native_asan.sh for tracing tools
+  ci-matrix:
+    name: ${{ matrix.name }}
+    needs: runners
+    runs-on: ${{ needs.runners.outputs.provider == 'cirrus' && matrix.cirrus-runner || matrix.fallback-runner }}
     if: ${{ vars.SKIP_BRANCH_PUSH != 'true' || github.event_name == 'pull_request' }}
-    timeout-minutes: 120
+    timeout-minutes: ${{ matrix.timeout-minutes }}
+
     env:
-      FILE_ENV: "./ci/test/00_setup_env_native_asan.sh"
       DANGER_CI_ON_HOST_FOLDERS: 1
+      FILE_ENV: ${{ matrix.file-env }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: '32 bit ARM, unit tests, no functional tests'
+            cirrus-runner: 'ubuntu-24.04-arm' # Cirrus' Arm runners are Apple (with virtual Linux aarch64), which doesn't support 32-bit mode
+            fallback-runner: 'ubuntu-24.04-arm'
+            timeout-minutes: 120
+            file-env: './ci/test/00_setup_env_arm.sh'
+            provider: 'gha'
+
+          - name: 'ASan + LSan + UBSan + integer, no depends, USDT'
+            cirrus-runner: 'ghcr.io/cirruslabs/ubuntu-runner-amd64:24.04-md' # has to match container in ci/test/00_setup_env_native_asan.sh for tracing tools
+            fallback-runner: 'ubuntu-24.04'
+            timeout-minutes: 120
+            file-env: './ci/test/00_setup_env_native_asan.sh'
+
+          - name: 'macOS-cross, gui, no tests'
+            cirrus-runner: 'ghcr.io/cirruslabs/ubuntu-runner-amd64:24.04-sm'
+            fallback-runner: 'ubuntu-24.04'
+            timeout-minutes: 120
+            file-env: './ci/test/00_setup_env_mac_cross.sh'
+
+          - name: 'No wallet, libbitcoinkernel'
+            cirrus-runner: 'ghcr.io/cirruslabs/ubuntu-runner-amd64:24.04-sm'
+            fallback-runner: 'ubuntu-24.04'
+            timeout-minutes: 120
+            file-env: './ci/test/00_setup_env_native_nowallet_libbitcoinkernel.sh'
+
+          - name: 'no IPC, i686, DEBUG'
+            cirrus-runner: 'ghcr.io/cirruslabs/ubuntu-runner-amd64:24.04-md'
+            fallback-runner: 'ubuntu-24.04'
+            timeout-minutes: 120
+            file-env: './ci/test/00_setup_env_i686_no_ipc.sh'
+
+          - name: 'fuzzer,address,undefined,integer, no depends'
+            cirrus-runner: 'ghcr.io/cirruslabs/ubuntu-runner-amd64:24.04-lg'
+            fallback-runner: 'ubuntu-24.04'
+            timeout-minutes: 240
+            file-env: './ci/test/00_setup_env_native_fuzz.sh'
+
+          - name: 'previous releases, depends DEBUG'
+            cirrus-runner: 'ghcr.io/cirruslabs/ubuntu-runner-amd64:24.04-md'
+            fallback-runner: 'ubuntu-24.04'
+            timeout-minutes: 120
+            file-env: './ci/test/00_setup_env_native_previous_releases.sh'
+
+          - name: 'CentOS, depends, gui'
+            cirrus-runner: 'ghcr.io/cirruslabs/ubuntu-runner-amd64:24.04-lg'
+            fallback-runner: 'ubuntu-24.04'
+            timeout-minutes: 120
+            file-env: './ci/test/00_setup_env_native_centos.sh'
+
+          - name: 'tidy'
+            cirrus-runner: 'ghcr.io/cirruslabs/ubuntu-runner-amd64:24.04-md'
+            fallback-runner: 'ubuntu-24.04'
+            timeout-minutes: 120
+            file-env: './ci/test/00_setup_env_native_tidy.sh'
+
+          - name: 'TSan, depends, no gui'
+            cirrus-runner: 'ghcr.io/cirruslabs/ubuntu-runner-amd64:24.04-md'
+            fallback-runner: 'ubuntu-24.04'
+            timeout-minutes: 120
+            file-env: './ci/test/00_setup_env_native_tsan.sh'
+
+          - name: 'MSan, depends'
+            cirrus-runner: 'ghcr.io/cirruslabs/ubuntu-runner-amd64:24.04-lg'
+            fallback-runner: 'ubuntu-24.04'
+            timeout-minutes: 120
+            file-env: './ci/test/00_setup_env_native_msan.sh'
+
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - *CHECKOUT
 
-      - name: Set CI directories
-        run: |
-          echo "CCACHE_DIR=${{ runner.temp }}/ccache_dir" >> "$GITHUB_ENV"
-          echo "BASE_ROOT_DIR=${{ runner.temp }}" >> "$GITHUB_ENV"
-          echo "BASE_BUILD_DIR=${{ runner.temp }}/build-asan" >> "$GITHUB_ENV"
+      - name: Configure environment
+        uses: ./.github/actions/configure-environment
 
-      - name: Restore Ccache cache
-        id: ccache-cache
-        uses: actions/cache/restore@v4
+      - name: Restore caches
+        id: restore-cache
+        uses: ./.github/actions/restore-caches
+
+      - name: Configure Docker
+        uses: ./.github/actions/configure-docker
         with:
-          path: ${{ env.CCACHE_DIR }}
-          key: ${{ github.job }}-ccache-${{ github.run_id }}
-          restore-keys: ${{ github.job }}-ccache-
+          cache-provider: ${{ matrix.provider || needs.runners.outputs.provider }}
 
       - name: Enable bpfcc script
+        if: ${{ env.CONTAINER_NAME == 'ci_native_asan' }}
         # In the image build step, no external environment variables are available,
         # so any settings will need to be written to the settings env file:
         run: sed -i "s|\${INSTALL_BCC_TRACING_TOOLS}|true|g" ./ci/test/00_setup_env_native_asan.sh
 
+      - name: Set mmap_rnd_bits
+        if: ${{ env.CONTAINER_NAME == 'ci_native_tsan' || env.CONTAINER_NAME == 'ci_native_msan' }}
+        # Prevents crashes due to high ASLR entropy
+        run: sudo sysctl -w vm.mmap_rnd_bits=28
+
       - name: CI script
         run: ./ci/test_run_all.sh
 
-      - name: Save Ccache cache
-        uses: actions/cache/save@v4
-        if: github.event_name != 'pull_request' && steps.ccache-cache.outputs.cache-hit != 'true'
+      - name: Save caches
+        uses: ./.github/actions/save-caches
+
+  lint:
+    name: 'lint'
+    needs: runners
+    runs-on: ${{ needs.runners.outputs.use-cirrus-runners == 'true' && 'ghcr.io/cirruslabs/ubuntu-runner-amd64:24.04-xs' || 'ubuntu-24.04' }}
+    if: ${{ vars.SKIP_BRANCH_PUSH != 'true' || github.event_name == 'pull_request' }}
+    timeout-minutes: 20
+    env:
+      CONTAINER_NAME: "bitcoin-linter"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
         with:
-          path: ${{ env.CCACHE_DIR }}
-          # https://github.com/actions/cache/blob/main/tips-and-workarounds.md#update-a-cache
-          key: ${{ github.job }}-ccache-${{ github.run_id }}
+          ref: *CHECKOUT_REF_TMPL
+          fetch-depth: 0
+
+      - name: Configure Docker
+        uses: ./.github/actions/configure-docker
+        with:
+          cache-provider: ${{ needs.runners.outputs.provider }}
+
+      - name: CI script
+        run: |
+          set -o xtrace
+          docker buildx build -t "$CONTAINER_NAME" $DOCKER_BUILD_CACHE_ARG --file "./ci/lint_imagefile" .
+          CIRRUS_PR_FLAG=""
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            CIRRUS_PR_FLAG="-e CIRRUS_PR=1"
+          fi
+          docker run --rm $CIRRUS_PR_FLAG -v "$(pwd)":/bitcoin "$CONTAINER_NAME"

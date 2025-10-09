@@ -1,5 +1,5 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
-// Copyright (c) 2009-2022 The Bitcoin Core developers
+// Copyright (c) 2009-present The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -19,9 +19,9 @@
 #include <util/string.h>
 
 #ifdef WIN32
-#include <codecvt>    /* for codecvt_utf8_utf16 */
-#include <shellapi.h> /* for CommandLineToArgvW */
-#include <shlobj.h>   /* for CSIDL_APPDATA */
+#include <codecvt>
+#include <shellapi.h>
+#include <shlobj.h>
 #endif
 
 #include <algorithm>
@@ -85,7 +85,7 @@ KeyInfo InterpretKey(std::string key)
         result.section = key.substr(0, option_index);
         key.erase(0, option_index + 1);
     }
-    if (key.substr(0, 2) == "no") {
+    if (key.starts_with("no")) {
         key.erase(0, 2);
         result.negated = true;
     }
@@ -189,7 +189,7 @@ bool ArgsManager::ParseParameters(int argc, const char* const argv[], std::strin
         // internet" warning, and clicks the Open button, macOS passes
         // a unique process serial number (PSN) as -psn_... command-line
         // argument, which we filter out.
-        if (key.substr(0, 5) == "-psn_") continue;
+        if (key.starts_with("-psn_")) continue;
 #endif
 
         if (key == "-") break; //bitcoin-tx using stdin
@@ -266,7 +266,13 @@ std::optional<unsigned int> ArgsManager::GetArgFlags(const std::string& name) co
             return search->second.m_flags;
         }
     }
-    return std::nullopt;
+    return m_default_flags;
+}
+
+void ArgsManager::SetDefaultFlags(std::optional<unsigned int> flags)
+{
+    LOCK(cs_args);
+    m_default_flags = flags;
 }
 
 fs::path ArgsManager::GetPathArg(std::string arg, const fs::path& default_value) const
@@ -589,6 +595,14 @@ void ArgsManager::AddHiddenArgs(const std::vector<std::string>& names)
     }
 }
 
+void ArgsManager::ClearArgs()
+{
+    LOCK(cs_args);
+    m_settings = {};
+    m_available_args.clear();
+    m_network_only_args.clear();
+}
+
 void ArgsManager::CheckMultipleCLIArgs() const
 {
     LOCK(cs_args);
@@ -709,6 +723,7 @@ std::string HelpMessageOpt(const std::string &option, const std::string &message
 
 const std::vector<std::string> TEST_OPTIONS_DOC{
     "addrman (use deterministic addrman)",
+    "reindex_after_failure_noninteractive_yes (When asked for a reindex after failure interactively, simulate as-if answered with 'yes')",
     "bip94 (enforce BIP94 consensus rules)",
 };
 

@@ -18,9 +18,6 @@ from test_framework import util
 
 
 class ConfArgsTest(BitcoinTestFramework):
-    def add_options(self, parser):
-        self.add_wallet_options(parser)
-
     def set_test_params(self):
         self.setup_clean_chain = True
         self.num_nodes = 1
@@ -30,6 +27,7 @@ class ConfArgsTest(BitcoinTestFramework):
         self.supports_cli = False
         self.wallet_names = []
         self.disable_autoconnect = False
+        self.uses_wallet = None
 
     # Overridden to avoid attempt to sync not yet started nodes.
     def setup_network(self):
@@ -84,7 +82,7 @@ class ConfArgsTest(BitcoinTestFramework):
 
         self.log.debug('Verifying that disabling of the config file means garbage inside of it does ' \
             'not prevent the node from starting, and message about existing config file is logged')
-        ignored_file_message = [f'[InitConfig] Data directory "{self.nodes[0].datadir_path}" contains a "bitcoin.conf" file which is explicitly ignored using -noconf.']
+        ignored_file_message = [f'Data directory "{self.nodes[0].datadir_path}" contains a "bitcoin.conf" file which is explicitly ignored using -noconf.']
         with self.nodes[0].assert_debug_log(timeout=60, expected_msgs=ignored_file_message):
             self.start_node(0, extra_args=settings + ['-noconf'])
         self.stop_node(0)

@@ -29,6 +29,7 @@ from .messages import (
     tx_from_hex,
     uint256_from_compact,
     WITNESS_SCALE_FACTOR,
+    MAX_SEQUENCE_NONFINAL,
 )
 from .script import (
     CScript,
@@ -48,6 +49,7 @@ from .util import assert_equal
 
 MAX_BLOCK_SIGOPS = 20000
 MAX_BLOCK_SIGOPS_WEIGHT = MAX_BLOCK_SIGOPS * WITNESS_SCALE_FACTOR
+MAX_STANDARD_TX_SIGOPS = 4000
 MAX_STANDARD_TX_WEIGHT = 400000
 
 # Genesis block time (regtest)
@@ -79,6 +81,9 @@ DIFF_4_N_BITS = 0x1c3fffc0
 DIFF_4_TARGET = int(DIFF_1_TARGET / 4)
 assert_equal(uint256_from_compact(DIFF_4_N_BITS), DIFF_4_TARGET)
 
+# From BIP325
+SIGNET_HEADER = b"\xec\xc7\xda\xa2"
+
 def nbits_str(nbits):
     return f"{nbits:08x}"
 
@@ -102,11 +107,10 @@ def create_block(hashprev=None, coinbase=None, ntime=None, *, version=None, tmpl
     block.vtx.append(coinbase)
     if txlist:
         for tx in txlist:
-            if not hasattr(tx, 'calc_sha256'):
+            if type(tx) is str:
                 tx = tx_from_hex(tx)
             block.vtx.append(tx)
     block.hashMerkleRoot = block.calc_merkle_root()
-    block.calc_sha256()
     return block
 
 def get_witness_script(witness_root, witness_nonce):
@@ -129,9 +133,7 @@ def add_witness_commitment(block, nonce=0):
 
     # witness commitment is the last OP_RETURN output in coinbase
     block.vtx[0].vout.append(CTxOut(0, get_witness_script(witness_root, witness_nonce)))
-    block.vtx[0].rehash()
     block.hashMerkleRoot = block.calc_merkle_root()
-    block.rehash()
 
 
 def script_BIP34_coinbase_height(height):
@@ -142,7 +144,7 @@ def script_BIP34_coinbase_height(height):
     return CScript([CScriptNum(height)])
 
 
-def create_coinbase(height, pubkey=None, *, script_pubkey=None, extra_output_script=None, fees=0, nValue=50, retarget_period=REGTEST_RETARGET_PERIOD):
+def create_coinbase(height, pubkey=None, *, script_pubkey=None, extra_output_script=None, fees=0, nValue=50, halving_period=REGTEST_RETARGET_PERIOD):
     """Create a coinbase transaction.
 
     If pubkey is passed in, the coinbase output will be a P2PK output;
@@ -151,11 +153,12 @@ def create_coinbase(height, pubkey=None, *, script_pubkey=None, extra_output_scr
     If extra_output_script is given, make a 0-value output to that
     script. This is useful to pad block weight/sigops as needed. """
     coinbase = CTransaction()
-    coinbase.vin.append(CTxIn(COutPoint(0, 0xffffffff), script_BIP34_coinbase_height(height), SEQUENCE_FINAL))
+    coinbase.nLockTime = height - 1
+    coinbase.vin.append(CTxIn(COutPoint(0, 0xffffffff), script_BIP34_coinbase_height(height), MAX_SEQUENCE_NONFINAL))
     coinbaseoutput = CTxOut()
     coinbaseoutput.nValue = nValue * COIN
     if nValue == 50:
-        halvings = int(height / retarget_period)
+        halvings = int(height / halving_period)
         coinbaseoutput.nValue >>= halvings
         coinbaseoutput.nValue += fees
     if pubkey is not None:
@@ -170,7 +173,6 @@ def create_coinbase(height, pubkey=None, *, script_pubkey=None, extra_output_scr
         coinbaseoutput2.nValue = 0
         coinbaseoutput2.scriptPubKey = extra_output_script
         coinbase.vout.append(coinbaseoutput2)
-    coinbase.calc_sha256()
     return coinbase
 
 def create_tx_with_script(prevtx, n, script_sig=b"", *, amount, output_script=None):
@@ -183,9 +185,8 @@ def create_tx_with_script(prevtx, n, script_sig=b"", *, amount, output_script=No
         output_script = CScript()
     tx = CTransaction()
     assert n < len(prevtx.vout)
-    tx.vin.append(CTxIn(COutPoint(prevtx.sha256, n), script_sig, SEQUENCE_FINAL))
+    tx.vin.append(CTxIn(COutPoint(prevtx.txid_int, n), script_sig, SEQUENCE_FINAL))
     tx.vout.append(CTxOut(amount, output_script))
-    tx.calc_sha256()
     return tx
 
 def get_legacy_sigopcount_block(block, accurate=True):

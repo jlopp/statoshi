@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2022 The Bitcoin Core developers
+// Copyright (c) 2015-present The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -11,7 +11,7 @@
 #include <logging.h>
 #include <netbase.h>
 #include <node/interface_ui.h>
-#include <rpc/protocol.h> // For HTTP status codes
+#include <rpc/protocol.h>
 #include <sync.h>
 #include <util/check.h>
 #include <util/signalinterrupt.h>
@@ -27,7 +27,9 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <thread>
 #include <unordered_map>
+#include <vector>
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -227,7 +229,7 @@ static bool InitHTTPAllowList()
         const CSubNet subnet{LookupSubNet(strAllow)};
         if (!subnet.IsValid()) {
             uiInterface.ThreadSafeMessageBox(
-                Untranslated(strprintf("Invalid -rpcallowip subnet specification: %s. Valid are a single IP (e.g. 1.2.3.4), a network/netmask (e.g. 1.2.3.4/255.255.255.0) or a network/CIDR (e.g. 1.2.3.4/24).", strAllow)),
+                Untranslated(strprintf("Invalid -rpcallowip subnet specification: %s. Valid values are a single IP (e.g. 1.2.3.4), a network/netmask (e.g. 1.2.3.4/255.255.255.0), a network/CIDR (e.g. 1.2.3.4/24), all ipv4 (0.0.0.0/0), or all ipv6 (::/0). RFC4193 is allowed only if -cjdnsreachable=0.", strAllow)),
                 "", CClientUIInterface::MSG_ERROR);
             return false;
         }
@@ -389,7 +391,7 @@ static bool HTTPBindAddresses(struct evhttp* http)
 
     // Bind addresses
     for (std::vector<std::pair<std::string, uint16_t> >::iterator i = endpoints.begin(); i != endpoints.end(); ++i) {
-        LogPrintf("Binding RPC on address %s port %i\n", i->first, i->second);
+        LogInfo("Binding RPC on address %s port %i", i->first, i->second);
         evhttp_bound_socket *bind_handle = evhttp_bind_socket_with_handle(http, i->first.empty() ? nullptr : i->first.c_str(), i->second);
         if (bind_handle) {
             const std::optional<CNetAddr> addr{LookupHost(i->first, false)};
@@ -399,7 +401,7 @@ static bool HTTPBindAddresses(struct evhttp* http)
             // Set the no-delay option (disable Nagle's algorithm) on the TCP socket.
             evutil_socket_t fd = evhttp_bound_socket_get_fd(bind_handle);
             int one = 1;
-            if (setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (sockopt_arg_type)&one, sizeof(one)) == SOCKET_ERROR) {
+            if (setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, reinterpret_cast<char*>(&one), sizeof(one)) == SOCKET_ERROR) {
                 LogInfo("WARNING: Unable to set TCP_NODELAY on RPC server socket, continuing anyway\n");
             }
             boundSockets.push_back(bind_handle);

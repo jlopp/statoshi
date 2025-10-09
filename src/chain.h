@@ -292,7 +292,7 @@ public:
     std::string ToString() const;
 
     //! Check whether this block index entry is valid up to the passed validity level.
-    bool IsValid(enum BlockStatus nUpTo = BLOCK_VALID_TRANSACTIONS) const
+    bool IsValid(enum BlockStatus nUpTo) const
         EXCLUSIVE_LOCKS_REQUIRED(::cs_main)
     {
         AssertLockHeld(::cs_main);
@@ -466,9 +466,6 @@ public:
 
     /** Set/initialize a chain with a given tip. */
     void SetTip(CBlockIndex& block);
-
-    /** Return a CBlockLocator that refers to the tip in of this chain. */
-    CBlockLocator GetLocator() const;
 
     /** Find the last common block between this chain and a block index entry. */
     const CBlockIndex* FindFork(const CBlockIndex* pindex) const;

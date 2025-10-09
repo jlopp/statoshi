@@ -42,6 +42,7 @@ void initialize_tx_pool()
 {
     static const auto testing_setup = MakeNoLogFileContext<const TestingSetup>();
     g_setup = testing_setup.get();
+    SetMockTime(WITH_LOCK(g_setup->m_node.chainman->GetMutex(), return g_setup->m_node.chainman->ActiveTip()->Time()));
 
     BlockAssembler::Options options;
     options.coinbase_output_script = P2WSH_EMPTY;
@@ -310,10 +311,10 @@ FUZZ_TARGET(ephemeral_package_eval, .init = initialize_tx_pool)
             const auto delta = fuzzed_data_provider.ConsumeIntegralInRange<CAmount>(-50 * COIN, +50 * COIN);
             // We only prioritise out of mempool transactions since PrioritiseTransaction doesn't
             // filter for ephemeral dust
-            if (tx_pool.exists(GenTxid::Txid(txid))) {
-                const auto tx_info{tx_pool.info(GenTxid::Txid(txid))};
+            if (tx_pool.exists(txid)) {
+                const auto tx_info{tx_pool.info(txid)};
                 if (GetDust(*tx_info.tx, tx_pool.m_opts.dust_relay_feerate).empty()) {
-                    tx_pool.PrioritiseTransaction(txid.ToUint256(), delta);
+                    tx_pool.PrioritiseTransaction(txid, delta);
                 }
             }
         }
@@ -324,7 +325,7 @@ FUZZ_TARGET(ephemeral_package_eval, .init = initialize_tx_pool)
                                     return ProcessNewPackage(chainstate, tx_pool, txs, /*test_accept=*/single_submit, /*client_maxfeerate=*/{}));
 
         const auto res = WITH_LOCK(::cs_main, return AcceptToMemoryPool(chainstate, txs.back(), GetTime(),
-                                   /*bypass_limits=*/fuzzed_data_provider.ConsumeBool(), /*test_accept=*/!single_submit));
+                                   /*bypass_limits=*/false, /*test_accept=*/!single_submit));
 
         if (!single_submit && result_package.m_state.GetResult() != PackageValidationResult::PCKG_POLICY) {
             // We don't know anything about the validity since transactions were randomly generated, so
@@ -476,7 +477,7 @@ FUZZ_TARGET(tx_package_eval, .init = initialize_tx_pool)
                                    txs.back()->GetHash() :
                                    PickValue(fuzzed_data_provider, mempool_outpoints).hash;
             const auto delta = fuzzed_data_provider.ConsumeIntegralInRange<CAmount>(-50 * COIN, +50 * COIN);
-            tx_pool.PrioritiseTransaction(txid.ToUint256(), delta);
+            tx_pool.PrioritiseTransaction(txid, delta);
         }
 
         // Remember all added transactions

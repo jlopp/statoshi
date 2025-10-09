@@ -38,7 +38,7 @@ sign_multisig(const CScript& scriptPubKey, const std::vector<CKey>& keys, const 
 
 BOOST_AUTO_TEST_CASE(multisig_verify)
 {
-    unsigned int flags = SCRIPT_VERIFY_P2SH | SCRIPT_VERIFY_STRICTENC;
+    script_verify_flags flags = SCRIPT_VERIFY_P2SH | SCRIPT_VERIFY_STRICTENC;
 
     ScriptError err;
     CKey key[4];
@@ -144,7 +144,7 @@ BOOST_AUTO_TEST_CASE(multisig_IsStandard)
 
     const auto is_standard{[](const CScript& spk) {
         TxoutType type;
-        bool res{::IsStandard(spk, std::nullopt, type)};
+        bool res{::IsStandard(spk, type)};
         if (res) {
             BOOST_CHECK_EQUAL(type, TxoutType::MULTISIG);
         }

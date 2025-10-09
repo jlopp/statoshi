@@ -17,6 +17,7 @@
 #include <util/task_runner.h>
 
 #include <future>
+#include <memory>
 #include <unordered_map>
 #include <utility>
 
@@ -83,7 +84,7 @@ public:
         for (auto it = m_list.begin(); it != m_list.end();) {
             ++it->count;
             {
-                REVERSE_LOCK(lock);
+                REVERSE_LOCK(lock, m_mutex);
                 f(*it->callbacks);
             }
             it = --it->count ? std::next(it) : m_list.erase(it);
@@ -245,9 +246,10 @@ void ValidationSignals::ChainStateFlushed(ChainstateRole role, const CBlockLocat
                           locator.IsNull() ? "null" : locator.vHave.front().ToString());
 }
 
-void ValidationSignals::BlockChecked(const CBlock& block, const BlockValidationState& state) {
+void ValidationSignals::BlockChecked(const std::shared_ptr<const CBlock>& block, const BlockValidationState& state)
+{
     LOG_EVENT("%s: block hash=%s state=%s", __func__,
-              block.GetHash().ToString(), state.ToString());
+              block->GetHash().ToString(), state.ToString());
     m_internals->Iterate([&](CValidationInterface& callbacks) { callbacks.BlockChecked(block, state); });
 }
 

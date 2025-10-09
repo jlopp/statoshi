@@ -5,6 +5,7 @@
 #ifndef BITCOIN_QT_SENDCOINSDIALOG_H
 #define BITCOIN_QT_SENDCOINSDIALOG_H
 
+#include <primitives/transaction_identifier.h>
 #include <qt/clientmodel.h>
 #include <qt/walletmodel.h>
 
@@ -61,7 +62,7 @@ public Q_SLOTS:
     void setBalance(const interfaces::WalletBalances& balances);
 
 Q_SIGNALS:
-    void coinsSent(const uint256& txid);
+    void coinsSent(const Txid& txid);
 
 private:
     Ui::SendCoinsDialog *ui;

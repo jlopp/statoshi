@@ -119,7 +119,7 @@ namespace sam {
 
 Session::Session(const fs::path& private_key_file,
                  const Proxy& control_host,
-                 CThreadInterrupt* interrupt)
+                 std::shared_ptr<CThreadInterrupt> interrupt)
     : m_private_key_file{private_key_file},
       m_control_host{control_host},
       m_interrupt{interrupt},
@@ -127,7 +127,7 @@ Session::Session(const fs::path& private_key_file,
 {
 }
 
-Session::Session(const Proxy& control_host, CThreadInterrupt* interrupt)
+Session::Session(const Proxy& control_host, std::shared_ptr<CThreadInterrupt> interrupt)
     : m_control_host{control_host},
       m_interrupt{interrupt},
       m_transient{true}
@@ -162,7 +162,7 @@ bool Session::Accept(Connection& conn)
     std::string errmsg;
     bool disconnect{false};
 
-    while (!*m_interrupt) {
+    while (!m_interrupt->interrupted()) {
         Sock::Event occurred;
         if (!conn.sock->Wait(MAX_WAIT_FOR_IO, Sock::RECV, &occurred)) {
             errmsg = "wait on socket failed";
@@ -205,7 +205,7 @@ bool Session::Accept(Connection& conn)
         return true;
     }
 
-    if (*m_interrupt) {
+    if (m_interrupt->interrupted()) {
         LogPrintLevel(BCLog::I2P, BCLog::Level::Debug, "Accept was interrupted\n");
     } else {
         LogPrintLevel(BCLog::I2P, BCLog::Level::Debug, "Error accepting%s: %s\n", disconnect ? " (will close the session)" : "", errmsg);
@@ -299,7 +299,7 @@ Session::Reply Session::SendRequestAndGetReply(const Sock& sock,
     Reply reply;
 
     // Don't log the full "SESSION CREATE ..." because it contains our private key.
-    reply.request = request.substr(0, 14) == "SESSION CREATE" ? "SESSION CREATE ..." : request;
+    reply.request = request.starts_with("SESSION CREATE") ? "SESSION CREATE ..." : request;
 
     // It could take a few minutes for the I2P router to reply as it is querying the I2P network
     // (when doing name lookup, for example). Notice: `RecvUntilTerminator()` is checking

@@ -212,15 +212,14 @@ class ZMQTest (BitcoinTestFramework):
 
             # Should receive the coinbase raw transaction.
             tx = tx_from_hex(rawtx.receive().hex())
-            tx.calc_sha256()
-            assert_equal(tx.hash, txid.hex())
+            assert_equal(tx.txid_hex, txid.hex())
 
             # Should receive the generated raw block.
             hex = rawblock.receive()
             block = CBlock()
             block.deserialize(BytesIO(hex))
             assert block.is_valid()
-            assert_equal(block.vtx[0].hash, tx.hash)
+            assert_equal(block.vtx[0].txid_hex, tx.txid_hex)
             assert_equal(len(block.vtx), 1)
             assert_equal(genhashes[x], hash256_reversed(hex[:80]).hex())
 
@@ -425,7 +424,7 @@ class ZMQTest (BitcoinTestFramework):
         block.solve()
         assert_equal(self.nodes[0].submitblock(block.serialize().hex()), None)
         tip = self.nodes[0].getbestblockhash()
-        assert_equal(int(tip, 16), block.sha256)
+        assert_equal(int(tip, 16), block.hash_int)
         orig_txid_2 = self.wallet.send_self_transfer(from_node=self.nodes[0])['txid']
 
         # Flush old notifications until evicted tx original entry

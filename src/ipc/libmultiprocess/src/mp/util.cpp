@@ -1,21 +1,22 @@
-// Copyright (c) 2018-2019 The Bitcoin Core developers
+// Copyright (c) The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <mp/config.h>
 #include <mp/util.h>
 
-#include <errno.h>
+#include <cerrno>
+#include <cstdio>
 #include <kj/common.h>
 #include <kj/string-tree.h>
 #include <pthread.h>
 #include <sstream>
-#include <stdio.h>
 #include <string>
 #include <sys/resource.h>
 #include <sys/socket.h>
 #include <sys/wait.h>
 #include <system_error>
+#include <thread> // NOLINT(misc-include-cleaner) // IWYU pragma: keep
 #include <unistd.h>
 #include <utility>
 #include <vector>
@@ -75,12 +76,11 @@ std::string ThreadName(const char* exe_name)
     return std::move(buffer).str();
 }
 
-std::string LogEscape(const kj::StringTree& string)
+std::string LogEscape(const kj::StringTree& string, size_t max_size)
 {
-    const int MAX_SIZE = 1000;
     std::string result;
     string.visit([&](const kj::ArrayPtr<const char>& piece) {
-        if (result.size() > MAX_SIZE) return;
+        if (result.size() > max_size) return;
         for (const char c : piece) {
             if (c == '\\') {
                 result.append("\\\\");
@@ -91,7 +91,7 @@ std::string LogEscape(const kj::StringTree& string)
             } else {
                 result.push_back(c);
             }
-            if (result.size() > MAX_SIZE) {
+            if (result.size() > max_size) {
                 result += "...";
                 break;
             }
@@ -137,7 +137,7 @@ void ExecProcess(const std::vector<std::string>& args)
     }
     argv.push_back(nullptr);
     if (execvp(argv[0], argv.data()) != 0) {
-        perror("execlp failed");
+        perror("execvp failed");
         _exit(1);
     }
 }

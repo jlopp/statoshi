@@ -50,7 +50,7 @@ FUZZ_TARGET(mini_miner, .init = initialize_miner)
     std::deque<COutPoint> available_coins = g_available_coins;
     LOCK2(::cs_main, pool.cs);
     // Cluster size cannot exceed 500
-    LIMITED_WHILE(!available_coins.empty(), 500)
+    LIMITED_WHILE(!available_coins.empty(), 100)
     {
         CMutableTransaction mtx = CMutableTransaction();
         const size_t num_inputs = fuzzed_data_provider.ConsumeIntegralInRange<size_t>(1, available_coins.size());
@@ -173,7 +173,7 @@ FUZZ_TARGET(mini_miner_selection, .init = initialize_miner)
         if (!pool.GetConflictTx(coin)) outpoints.push_back(coin);
     }
     for (const auto& tx : transactions) {
-        assert(pool.exists(GenTxid::Txid(tx->GetHash())));
+        assert(pool.exists(tx->GetHash()));
         for (uint32_t n{0}; n < tx->vout.size(); ++n) {
             COutPoint coin{tx->GetHash(), n};
             if (!pool.GetConflictTx(coin)) outpoints.push_back(coin);

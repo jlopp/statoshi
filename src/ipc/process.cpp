@@ -13,11 +13,11 @@
 
 #include <cstdint>
 #include <cstdlib>
-#include <errno.h>
+#include <cstring>
+#include <cerrno>
 #include <exception>
 #include <iostream>
 #include <stdexcept>
-#include <string.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
@@ -55,9 +55,11 @@ public:
         // in combination with other arguments because the parent process
         // should be able to control the child process through the IPC protocol
         // without passing information out of band.
-        if (!ParseInt32(argv[2], &fd)) {
+        const auto maybe_fd{ToIntegral<int32_t>(argv[2])};
+        if (!maybe_fd) {
             throw std::runtime_error(strprintf("Invalid -ipcfd number '%s'", argv[2]));
         }
+        fd = *maybe_fd;
         return true;
     }
     int connect(const fs::path& data_dir,

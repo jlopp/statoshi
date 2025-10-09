@@ -196,7 +196,7 @@ BOOST_FIXTURE_TEST_CASE(rbf_helper_functions, TestChain100Setup)
                                        entry5_low, entry6_low_prioritised, entry7_high, entry8_high};
     CTxMemPool::setEntries empty_set;
 
-    const auto unused_txid{GetRandHash()};
+    const auto unused_txid = Txid::FromUint256(GetRandHash());
 
     // Tests for PaysMoreThanConflicts
     // These tests use feerate, not absolute fee.
@@ -238,10 +238,10 @@ BOOST_FIXTURE_TEST_CASE(rbf_helper_functions, TestChain100Setup)
     BOOST_CHECK(PaysForRBF(high_fee, high_fee - 1, 1, CFeeRate(0), unused_txid).has_value());
     BOOST_CHECK(PaysForRBF(high_fee + 1, high_fee, 1, CFeeRate(0), unused_txid).has_value());
     // Additional fees must cover the replacement's vsize at incremental relay fee
-    BOOST_CHECK(PaysForRBF(high_fee, high_fee + 1, 2, incremental_relay_feerate, unused_txid).has_value());
-    BOOST_CHECK(PaysForRBF(high_fee, high_fee + 2, 2, incremental_relay_feerate, unused_txid) == std::nullopt);
-    BOOST_CHECK(PaysForRBF(high_fee, high_fee + 2, 2, higher_relay_feerate, unused_txid).has_value());
-    BOOST_CHECK(PaysForRBF(high_fee, high_fee + 4, 2, higher_relay_feerate, unused_txid) == std::nullopt);
+    BOOST_CHECK(PaysForRBF(high_fee, high_fee + 1, 11, incremental_relay_feerate, unused_txid).has_value());
+    BOOST_CHECK(PaysForRBF(high_fee, high_fee + 1, 10, incremental_relay_feerate, unused_txid) == std::nullopt);
+    BOOST_CHECK(PaysForRBF(high_fee, high_fee + 2, 11, higher_relay_feerate, unused_txid).has_value());
+    BOOST_CHECK(PaysForRBF(high_fee, high_fee + 4, 20, higher_relay_feerate, unused_txid) == std::nullopt);
     BOOST_CHECK(PaysForRBF(low_fee, high_fee, 99999999, incremental_relay_feerate, unused_txid).has_value());
     BOOST_CHECK(PaysForRBF(low_fee, high_fee + 99999999, 99999999, incremental_relay_feerate, unused_txid) == std::nullopt);
 
@@ -293,7 +293,7 @@ BOOST_FIXTURE_TEST_CASE(rbf_helper_functions, TestChain100Setup)
     const auto spends_unconfirmed = make_tx({tx1}, {36 * CENT});
     for (const auto& input : spends_unconfirmed->vin) {
         // Spends unconfirmed inputs.
-        BOOST_CHECK(pool.exists(GenTxid::Txid(input.prevout.hash)));
+        BOOST_CHECK(pool.exists(input.prevout.hash));
     }
     BOOST_CHECK(HasNoNewUnconfirmed(/*tx=*/ *spends_unconfirmed.get(),
                                     /*pool=*/ pool,
@@ -311,7 +311,7 @@ BOOST_FIXTURE_TEST_CASE(rbf_helper_functions, TestChain100Setup)
     // Tests for CheckConflictTopology
 
     // Tx4 has 23 descendants
-    BOOST_CHECK_EQUAL(pool.CheckConflictTopology(set_34_cpfp).value(), strprintf("%s has 23 descendants, max 1 allowed", entry4_high->GetSharedTx()->GetHash().ToString()));
+    BOOST_CHECK_EQUAL(pool.CheckConflictTopology(set_34_cpfp).value(), strprintf("%s has 24 descendants, max 1 allowed", entry3_low->GetSharedTx()->GetHash().ToString()));
 
     // No descendants yet
     BOOST_CHECK(pool.CheckConflictTopology({entry9_unchained}) == std::nullopt);
@@ -441,7 +441,7 @@ BOOST_FIXTURE_TEST_CASE(improves_feerate, TestChain100Setup)
     const auto res3 = ImprovesFeerateDiagram(*changeset);
     BOOST_CHECK(res3.has_value());
     BOOST_CHECK(res3.value().first == DiagramCheckError::UNCALCULABLE);
-    BOOST_CHECK(res3.value().second == strprintf("%s has 2 ancestors, max 1 allowed", tx5->GetHash().GetHex()));
+    BOOST_CHECK_MESSAGE(res3.value().second == strprintf("%s has 2 descendants, max 1 allowed", tx1->GetHash().GetHex()), res3.value().second);
 }
 
 BOOST_FIXTURE_TEST_CASE(calc_feerate_diagram_rbf, TestChain100Setup)
@@ -536,7 +536,7 @@ BOOST_FIXTURE_TEST_CASE(calc_feerate_diagram_rbf, TestChain100Setup)
         changeset->StageAddition(replacement_tx, high_fee, 0, 1, 0, false, 4, LockPoints());
         const auto replace_too_large{changeset->CalculateChunksForRBF()};
         BOOST_CHECK(!replace_too_large.has_value());
-        BOOST_CHECK_EQUAL(util::ErrorString(replace_too_large).original, strprintf("%s has 2 ancestors, max 1 allowed", normal_tx->GetHash().GetHex()));
+        BOOST_CHECK_EQUAL(util::ErrorString(replace_too_large).original, strprintf("%s has both ancestor and descendant, exceeding cluster limit of 2", high_tx->GetHash().GetHex()));
     }
 
     // Make a size 2 cluster that is itself two chunks; evict both txns
@@ -563,7 +563,7 @@ BOOST_FIXTURE_TEST_CASE(calc_feerate_diagram_rbf, TestChain100Setup)
         BOOST_CHECK(replace_two_chunks_single_cluster->second == expected_new_chunks);
     }
 
-    // You can have more than two direct conflicts if the there are multiple affected clusters, all of size 2 or less
+    // You can have more than two direct conflicts if there are multiple affected clusters, all of size 2 or less
     const auto conflict_1 = make_tx(/*inputs=*/ {m_coinbase_txns[2]}, /*output_values=*/ {10 * COIN});
     AddToMempool(pool, entry.Fee(low_fee).FromTx(conflict_1));
     const auto conflict_1_entry = pool.GetIter(conflict_1->GetHash()).value();
@@ -623,7 +623,7 @@ BOOST_FIXTURE_TEST_CASE(calc_feerate_diagram_rbf, TestChain100Setup)
         const auto replace_cluster_size_3{changeset->CalculateChunksForRBF()};
 
         BOOST_CHECK(!replace_cluster_size_3.has_value());
-        BOOST_CHECK_EQUAL(util::ErrorString(replace_cluster_size_3).original, strprintf("%s has both ancestor and descendant, exceeding cluster limit of 2", conflict_1_child->GetHash().GetHex()));
+        BOOST_CHECK_EQUAL(util::ErrorString(replace_cluster_size_3).original, strprintf("%s has 2 descendants, max 1 allowed", conflict_1->GetHash().GetHex()));
     }
 }
 

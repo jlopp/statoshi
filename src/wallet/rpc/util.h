@@ -38,14 +38,16 @@ static const RPCResult RESULT_LAST_PROCESSED_BLOCK { RPCResult::Type::OBJ, "last
  */
 std::shared_ptr<CWallet> GetWalletForJSONRPCRequest(const JSONRPCRequest& request);
 bool GetWalletNameFromJSONRPCRequest(const JSONRPCRequest& request, std::string& wallet_name);
+/**
+ * Ensures that a wallet name is specified across the endpoint and wallet_name.
+ * Throws `RPC_INVALID_PARAMETER` if none or different wallet names are specified.
+ */
+std::string EnsureUniqueWalletName(const JSONRPCRequest& request, const std::string* wallet_name);
 
 void EnsureWalletIsUnlocked(const CWallet&);
 WalletContext& EnsureWalletContext(const std::any& context);
-LegacyScriptPubKeyMan& EnsureLegacyScriptPubKeyMan(CWallet& wallet, bool also_create = false);
-const LegacyScriptPubKeyMan& EnsureConstLegacyScriptPubKeyMan(const CWallet& wallet);
 
 bool GetAvoidReuseFlag(const CWallet& wallet, const UniValue& param);
-bool ParseIncludeWatchonly(const UniValue& include_watchonly, const CWallet& wallet);
 std::string LabelFromValue(const UniValue& value);
 //! Fetch parent descriptors of this scriptPubKey.
 void PushParentDescriptors(const CWallet& wallet, const CScript& script_pubkey, UniValue& entry);

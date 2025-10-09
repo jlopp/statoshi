@@ -53,7 +53,7 @@ FUZZ_TARGET(script, .init = initialize_script)
     }
 
     TxoutType which_type;
-    bool is_standard_ret = IsStandard(script, std::nullopt, which_type);
+    bool is_standard_ret = IsStandard(script, which_type);
     if (!is_standard_ret) {
         assert(which_type == TxoutType::NONSTANDARD ||
                which_type == TxoutType::NULL_DATA ||
@@ -118,8 +118,8 @@ FUZZ_TARGET(script, .init = initialize_script)
             (void)FindAndDelete(script_mut, *other_script);
         }
         const std::vector<std::string> random_string_vector = ConsumeRandomLengthStringVector(fuzzed_data_provider);
-        const uint32_t u32{fuzzed_data_provider.ConsumeIntegral<uint32_t>()};
-        const uint32_t flags{u32 | SCRIPT_VERIFY_P2SH};
+        const auto flags_rand{fuzzed_data_provider.ConsumeIntegral<script_verify_flags::value_type>()};
+        const auto flags = script_verify_flags::from_int(flags_rand) | SCRIPT_VERIFY_P2SH;
         {
             CScriptWitness wit;
             for (const auto& s : random_string_vector) {

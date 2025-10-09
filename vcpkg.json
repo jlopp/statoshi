@@ -1,7 +1,7 @@
 {
-  "$comment": "The builtin-baseline corresponds to 2024.09.30 Release",
+  "$comment": "The builtin-baseline corresponds to 2025.08.27 Release",
   "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
-  "builtin-baseline": "c82f74667287d3dc386bce81e44964370c91a289",
+  "builtin-baseline": "120deac3062162151622ca4860575a33844ba10b",
   "dependencies": [
     "boost-multi-index",
     "boost-signals2",
@@ -11,20 +11,23 @@
     "qt",
     "tests",
     "wallet",
-    "berkeleydb",
     "zeromq"
   ],
   "features": {
-    "berkeleydb": {
-      "description": "Enable Berkeley DB wallet support",
-      "dependencies": [
-        "berkeleydb"
-      ]
-    },
     "qt": {
       "description": "Build GUI, Qt 6",
       "dependencies": [
-        "qtbase",
+        {
+          "name": "qtbase",
+          "default-features": false,
+          "features": [
+            "gui",
+            "network",
+            "png",
+            "testlib",
+            "widgets"
+          ]
+        },
         "qttools",
         "libqrencode"
       ]

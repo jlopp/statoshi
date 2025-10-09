@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2022 The Bitcoin Core developers
+// Copyright (c) 2017-present The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -13,7 +13,7 @@
 #include <validation.h>
 
 #include <any>
-#include <stdint.h>
+#include <cstdint>
 #include <vector>
 
 class CBlock;
@@ -51,7 +51,7 @@ void CalculatePercentilesByWeight(CAmount result[NUM_GETBLOCKSTATS_PERCENTILES],
 UniValue CreateUTXOSnapshot(
     node::NodeContext& node,
     Chainstate& chainstate,
-    AutoFile& afile,
+    AutoFile&& afile,
     const fs::path& path,
     const fs::path& tmppath);
 

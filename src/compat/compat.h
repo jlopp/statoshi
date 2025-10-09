@@ -20,7 +20,6 @@
 #else
 #include <arpa/inet.h>   // IWYU pragma: export
 #include <fcntl.h>       // IWYU pragma: export
-#include <ifaddrs.h>     // IWYU pragma: export
 #include <net/if.h>      // IWYU pragma: export
 #include <netdb.h>       // IWYU pragma: export
 #include <netinet/in.h>  // IWYU pragma: export
@@ -74,14 +73,6 @@ typedef unsigned int SOCKET;
 #ifdef _MSC_VER
 #include <BaseTsd.h>
 typedef SSIZE_T ssize_t;
-#endif
-
-// The type of the option value passed to getsockopt & setsockopt
-// differs between Windows and non-Windows.
-#ifndef WIN32
-typedef void* sockopt_arg_type;
-#else
-typedef char* sockopt_arg_type;
 #endif
 
 #ifdef WIN32

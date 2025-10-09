@@ -7,7 +7,8 @@ $(package)_sha256_hash=$(qt_details_qtbase_sha256_hash)
 ifneq ($(host),$(build))
 $(package)_dependencies := native_$(package)
 endif
-$(package)_linux_dependencies=freetype fontconfig libxcb libxkbcommon libxcb_util libxcb_util_cursor libxcb_util_render libxcb_util_keysyms libxcb_util_image libxcb_util_wm
+$(package)_linux_dependencies := freetype fontconfig libxcb libxkbcommon libxcb_util libxcb_util_cursor libxcb_util_render libxcb_util_keysyms libxcb_util_image libxcb_util_wm
+$(package)_freebsd_dependencies := $($(package)_linux_dependencies)
 $(package)_patches_path := $(qt_details_patches_path)
 $(package)_patches := dont_hardcode_pwd.patch
 $(package)_patches += qtbase-moc-ignore-gcc-macro.patch
@@ -146,13 +147,11 @@ $(package)_config_opts_linux += -xcb
 ifneq ($(LTO),)
 $(package)_config_opts_linux += -ltcg
 endif
+$(package)_config_opts_freebsd := $$($(package)_config_opts_linux)
 
 $(package)_config_opts_mingw32 := -no-dbus
 $(package)_config_opts_mingw32 += -no-freetype
 $(package)_config_opts_mingw32 += -no-pkg-config
-ifneq ($(LTO),)
-$(package)_config_opts_mingw32 += -ltcg
-endif
 
 # CMake build options.
 $(package)_config_env := CC="$$($(package)_cc)"
@@ -190,6 +189,14 @@ ifneq ($(host),$(build))
 $(package)_cmake_opts += -DCMAKE_SYSTEM_NAME=$($(host_os)_cmake_system_name)
 $(package)_cmake_opts += -DCMAKE_SYSTEM_VERSION=$($(host_os)_cmake_system_version)
 $(package)_cmake_opts += -DCMAKE_SYSTEM_PROCESSOR=$(host_arch)
+# Native packages cannot be used during cross-compiling. However,
+# Qt still unconditionally tries to find them, which causes issues
+# in some cases, such as when cross-compiling from macOS to Windows.
+# Explicitly disable this unnecessary Qt behaviour.
+$(package)_cmake_opts += -DCMAKE_DISABLE_FIND_PACKAGE_Libb2=TRUE
+$(package)_cmake_opts += -DCMAKE_DISABLE_FIND_PACKAGE_WrapSystemDoubleConversion=TRUE
+$(package)_cmake_opts += -DCMAKE_DISABLE_FIND_PACKAGE_WrapSystemMd4c=TRUE
+$(package)_cmake_opts += -DCMAKE_DISABLE_FIND_PACKAGE_WrapZSTD=TRUE
 endif
 ifeq ($(host_os),darwin)
 $(package)_cmake_opts += -DCMAKE_INSTALL_NAME_TOOL=true
@@ -271,7 +278,7 @@ define $(package)_build_cmds
 endef
 
 define $(package)_stage_cmds
-  cmake --install . --prefix $($(package)_staging_prefix_dir)
+  cmake --install . --prefix $($(package)_staging_prefix_dir) --strip
 endef
 
 define $(package)_postprocess_cmds

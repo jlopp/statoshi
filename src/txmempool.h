@@ -17,11 +17,12 @@
 #include <policy/feerate.h>
 #include <policy/packages.h>
 #include <primitives/transaction.h>
+#include <primitives/transaction_identifier.h>
 #include <sync.h>
 #include <util/epochguard.h>
+#include <util/feefrac.h>
 #include <util/hasher.h>
 #include <util/result.h>
-#include <util/feefrac.h>
 
 #include <boost/multi_index/hashed_index.hpp>
 #include <boost/multi_index/identity.hpp>
@@ -56,7 +57,7 @@ bool TestLockPointValidity(CChain& active_chain, const LockPoints& lp) EXCLUSIVE
 // extracts a transaction hash from CTxMemPoolEntry or CTransactionRef
 struct mempoolentry_txid
 {
-    typedef uint256 result_type;
+    typedef Txid result_type;
     result_type operator() (const CTxMemPoolEntry &entry) const
     {
         return entry.GetTx().GetHash();
@@ -71,7 +72,7 @@ struct mempoolentry_txid
 // extracts a transaction witness-hash from CTxMemPoolEntry or CTransactionRef
 struct mempoolentry_wtxid
 {
-    typedef uint256 result_type;
+    typedef Wtxid result_type;
     result_type operator() (const CTxMemPoolEntry &entry) const
     {
         return entry.GetTx().GetWitnessHash();
@@ -93,36 +94,24 @@ class CompareTxMemPoolEntryByDescendantScore
 public:
     bool operator()(const CTxMemPoolEntry& a, const CTxMemPoolEntry& b) const
     {
-        double a_mod_fee, a_size, b_mod_fee, b_size;
+        FeeFrac f1 = GetModFeeAndSize(a);
+        FeeFrac f2 = GetModFeeAndSize(b);
 
-        GetModFeeAndSize(a, a_mod_fee, a_size);
-        GetModFeeAndSize(b, b_mod_fee, b_size);
-
-        // Avoid division by rewriting (a/b > c/d) as (a*d > c*b).
-        double f1 = a_mod_fee * b_size;
-        double f2 = a_size * b_mod_fee;
-
-        if (f1 == f2) {
+        if (FeeRateCompare(f1, f2) == 0) {
             return a.GetTime() >= b.GetTime();
         }
         return f1 < f2;
     }
 
     // Return the fee/size we're using for sorting this entry.
-    void GetModFeeAndSize(const CTxMemPoolEntry &a, double &mod_fee, double &size) const
+    FeeFrac GetModFeeAndSize(const CTxMemPoolEntry &a) const
     {
         // Compare feerate with descendants to feerate of the transaction, and
         // return the fee/size for the max.
-        double f1 = (double)a.GetModifiedFee() * a.GetSizeWithDescendants();
-        double f2 = (double)a.GetModFeesWithDescendants() * a.GetTxSize();
-
-        if (f2 > f1) {
-            mod_fee = a.GetModFeesWithDescendants();
-            size = a.GetSizeWithDescendants();
-        } else {
-            mod_fee = a.GetModifiedFee();
-            size = a.GetTxSize();
-        }
+        return std::max<FeeFrac>(
+            FeeFrac(a.GetModFeesWithDescendants(), a.GetSizeWithDescendants()),
+            FeeFrac(a.GetModifiedFee(), a.GetTxSize())
+        );
     }
 };
 
@@ -138,9 +127,9 @@ class CompareTxMemPoolEntryByScore
 public:
     bool operator()(const CTxMemPoolEntry& a, const CTxMemPoolEntry& b) const
     {
-        double f1 = (double)a.GetFee() * b.GetTxSize();
-        double f2 = (double)b.GetFee() * a.GetTxSize();
-        if (f1 == f2) {
+        FeeFrac f1(a.GetFee(), a.GetTxSize());
+        FeeFrac f2(b.GetFee(), b.GetTxSize());
+        if (FeeRateCompare(f1, f2) == 0) {
             return b.GetTx().GetHash() < a.GetTx().GetHash();
         }
         return f1 > f2;
@@ -166,16 +155,10 @@ public:
     template<typename T>
     bool operator()(const T& a, const T& b) const
     {
-        double a_mod_fee, a_size, b_mod_fee, b_size;
+        FeeFrac f1 = GetModFeeAndSize(a);
+        FeeFrac f2 = GetModFeeAndSize(b);
 
-        GetModFeeAndSize(a, a_mod_fee, a_size);
-        GetModFeeAndSize(b, b_mod_fee, b_size);
-
-        // Avoid division by rewriting (a/b > c/d) as (a*d > c*b).
-        double f1 = a_mod_fee * b_size;
-        double f2 = a_size * b_mod_fee;
-
-        if (f1 == f2) {
+        if (FeeRateCompare(f1, f2) == 0) {
             return a.GetTx().GetHash() < b.GetTx().GetHash();
         }
         return f1 > f2;
@@ -183,20 +166,14 @@ public:
 
     // Return the fee/size we're using for sorting this entry.
     template <typename T>
-    void GetModFeeAndSize(const T &a, double &mod_fee, double &size) const
+    FeeFrac GetModFeeAndSize(const T &a) const
     {
         // Compare feerate with ancestors to feerate of the transaction, and
         // return the fee/size for the min.
-        double f1 = (double)a.GetModifiedFee() * a.GetSizeWithAncestors();
-        double f2 = (double)a.GetModFeesWithAncestors() * a.GetTxSize();
-
-        if (f1 > f2) {
-            mod_fee = a.GetModFeesWithAncestors();
-            size = a.GetSizeWithAncestors();
-        } else {
-            mod_fee = a.GetModifiedFee();
-            size = a.GetTxSize();
-        }
+        return std::min<FeeFrac>(
+            FeeFrac(a.GetModFeesWithAncestors(), a.GetSizeWithAncestors()),
+            FeeFrac(a.GetModifiedFee(), a.GetTxSize())
+        );
     }
 };
 
@@ -336,7 +313,7 @@ public:
             boost::multi_index::hashed_unique<
                 boost::multi_index::tag<index_by_wtxid>,
                 mempoolentry_wtxid,
-                SaltedTxidHasher
+                SaltedWtxidHasher
             >,
             // sorted by fee rate
             boost::multi_index::ordered_non_unique<
@@ -391,7 +368,7 @@ public:
     indexed_transaction_set mapTx GUARDED_BY(cs);
 
     using txiter = indexed_transaction_set::nth_index<0>::type::const_iterator;
-    std::vector<CTransactionRef> txns_randomized GUARDED_BY(cs); //!< All transactions in mapTx, in random order
+    std::vector<std::pair<Wtxid, txiter>> txns_randomized GUARDED_BY(cs); //!< All transactions in mapTx with their wtxids, in arbitrary order
 
     typedef std::set<txiter, CompareIteratorByHash> setEntries;
 
@@ -410,7 +387,7 @@ private:
     /**
      * Track locally submitted transactions to periodically retry initial broadcast.
      */
-    std::set<uint256> m_unbroadcast_txids GUARDED_BY(cs);
+    std::set<Txid> m_unbroadcast_txids GUARDED_BY(cs);
 
 
     /**
@@ -430,9 +407,14 @@ private:
                                                               const Limits& limits
                                                               ) const EXCLUSIVE_LOCKS_REQUIRED(cs);
 
+    static TxMempoolInfo GetInfo(CTxMemPool::indexed_transaction_set::const_iterator it)
+    {
+        return TxMempoolInfo{it->GetSharedTx(), it->GetTime(), it->GetFee(), it->GetTxSize(), it->GetModifiedFee() - it->GetFee()};
+    }
+
 public:
     indirectmap<COutPoint, const CTransaction*> mapNextTx GUARDED_BY(cs);
-    std::map<uint256, CAmount> mapDeltas GUARDED_BY(cs);
+    std::map<Txid, CAmount> mapDeltas GUARDED_BY(cs);
 
     using Options = kernel::MemPoolOptions;
 
@@ -466,7 +448,7 @@ public:
     void removeConflicts(const CTransaction& tx) EXCLUSIVE_LOCKS_REQUIRED(cs);
     void removeForBlock(const std::vector<CTransactionRef>& vtx, unsigned int nBlockHeight) EXCLUSIVE_LOCKS_REQUIRED(cs);
 
-    bool CompareDepthAndScore(const uint256& hasha, const uint256& hashb, bool wtxid=false);
+    bool CompareDepthAndScore(const Wtxid& hasha, const Wtxid& hashb) const;
     bool isSpent(const COutPoint& outpoint) const;
     unsigned int GetTransactionsUpdated() const;
     void AddTransactionsUpdated(unsigned int n);
@@ -477,9 +459,9 @@ public:
     bool HasNoInputsOf(const CTransaction& tx) const EXCLUSIVE_LOCKS_REQUIRED(cs);
 
     /** Affect CreateNewBlock prioritisation of transactions */
-    void PrioritiseTransaction(const uint256& hash, const CAmount& nFeeDelta);
-    void ApplyDelta(const uint256& hash, CAmount &nFeeDelta) const EXCLUSIVE_LOCKS_REQUIRED(cs);
-    void ClearPrioritisation(const uint256& hash) EXCLUSIVE_LOCKS_REQUIRED(cs);
+    void PrioritiseTransaction(const Txid& hash, const CAmount& nFeeDelta);
+    void ApplyDelta(const Txid& hash, CAmount &nFeeDelta) const EXCLUSIVE_LOCKS_REQUIRED(cs);
+    void ClearPrioritisation(const Txid& hash) EXCLUSIVE_LOCKS_REQUIRED(cs);
 
     struct delta_info {
         /** Whether this transaction is in the mempool. */
@@ -489,7 +471,7 @@ public:
         /** The modified fee (base fee + delta) of this entry. Only present if in_mempool=true. */
         std::optional<CAmount> modified_fee;
         /** The prioritised transaction's txid. */
-        const uint256 txid;
+        const Txid txid;
     };
     /** Return a vector of all entries in mapDeltas with their corresponding delta_info. */
     std::vector<delta_info> GetPrioritisedTransactions() const EXCLUSIVE_LOCKS_REQUIRED(!cs);
@@ -498,7 +480,8 @@ public:
     const CTransaction* GetConflictTx(const COutPoint& prevout) const EXCLUSIVE_LOCKS_REQUIRED(cs);
 
     /** Returns an iterator to the given hash, if found */
-    std::optional<txiter> GetIter(const uint256& txid) const EXCLUSIVE_LOCKS_REQUIRED(cs);
+    std::optional<txiter> GetIter(const Txid& txid) const EXCLUSIVE_LOCKS_REQUIRED(cs);
+    std::optional<txiter> GetIter(const Wtxid& wtxid) const EXCLUSIVE_LOCKS_REQUIRED(cs);
 
     /** Translate a set of hashes into a set of pool iterators to avoid repeated lookups.
      * Does not require that all of the hashes correspond to actual transactions in the mempool,
@@ -508,7 +491,7 @@ public:
     /** Translate a list of hashes into a list of mempool iterators to avoid repeated lookups.
      * The nth element in txids becomes the nth element in the returned vector. If any of the txids
      * don't actually exist in the mempool, returns an empty vector. */
-    std::vector<txiter> GetIterVec(const std::vector<uint256>& txids) const EXCLUSIVE_LOCKS_REQUIRED(cs);
+    std::vector<txiter> GetIterVec(const std::vector<Txid>& txids) const EXCLUSIVE_LOCKS_REQUIRED(cs);
 
     /** UpdateTransactionsFromBlock is called when adding transactions from a
      * disconnected block back to the mempool, new mempool entries may have
@@ -523,7 +506,7 @@ public:
      * @param[in] vHashesToUpdate          The set of txids from the
      *     disconnected block that have been accepted back into the mempool.
      */
-    void UpdateTransactionsFromBlock(const std::vector<uint256>& vHashesToUpdate) EXCLUSIVE_LOCKS_REQUIRED(cs, cs_main) LOCKS_EXCLUDED(m_epoch);
+    void UpdateTransactionsFromBlock(const std::vector<Txid>& vHashesToUpdate) EXCLUSIVE_LOCKS_REQUIRED(cs, cs_main) LOCKS_EXCLUDED(m_epoch);
 
     /**
      * Try to calculate all in-mempool ancestors of entry.
@@ -565,7 +548,7 @@ public:
      * All txids must correspond to transaction entries in the mempool, otherwise this returns an
      * empty vector. This call will also exit early and return an empty vector if it collects 500 or
      * more transactions as a DoS protection. */
-    std::vector<txiter> GatherClusters(const std::vector<uint256>& txids) const EXCLUSIVE_LOCKS_REQUIRED(cs);
+    std::vector<txiter> GatherClusters(const std::vector<Txid>& txids) const EXCLUSIVE_LOCKS_REQUIRED(cs);
 
     /** Calculate all in-mempool ancestors of a set of transactions not already in the mempool and
      * check ancestor and descendant limits. Heuristics are used to estimate the ancestor and
@@ -612,7 +595,7 @@ public:
      * When ancestors is non-zero (ie, the transaction itself is in the mempool),
      * ancestorsize and ancestorfees will also be set to the appropriate values.
      */
-    void GetTransactionAncestry(const uint256& txid, size_t& ancestors, size_t& descendants, size_t* ancestorsize = nullptr, CAmount* ancestorfees = nullptr) const;
+    void GetTransactionAncestry(const Txid& txid, size_t& ancestors, size_t& descendants, size_t* ancestorsize = nullptr, CAmount* ancestorfees = nullptr) const;
 
     /**
      * @returns true if an initial attempt to load the persisted mempool was made, regardless of
@@ -644,27 +627,38 @@ public:
         return m_total_fee;
     }
 
-    bool exists(const GenTxid& gtxid) const
+    bool exists(const Txid& txid) const
     {
         LOCK(cs);
-        if (gtxid.IsWtxid()) {
-            return (mapTx.get<index_by_wtxid>().count(gtxid.GetHash()) != 0);
-        }
-        return (mapTx.count(gtxid.GetHash()) != 0);
+        return (mapTx.count(txid) != 0);
+    }
+
+    bool exists(const Wtxid& wtxid) const
+    {
+        LOCK(cs);
+        return (mapTx.get<index_by_wtxid>().count(wtxid) != 0);
     }
 
     const CTxMemPoolEntry* GetEntry(const Txid& txid) const LIFETIMEBOUND EXCLUSIVE_LOCKS_REQUIRED(cs);
 
-    CTransactionRef get(const uint256& hash) const;
-    txiter get_iter_from_wtxid(const uint256& wtxid) const EXCLUSIVE_LOCKS_REQUIRED(cs)
+    CTransactionRef get(const Txid& hash) const;
+
+    template <TxidOrWtxid T>
+    TxMempoolInfo info(const T& id) const
     {
-        AssertLockHeld(cs);
-        return mapTx.project<0>(mapTx.get<index_by_wtxid>().find(wtxid));
+        LOCK(cs);
+        auto i{GetIter(id)};
+        return i.has_value() ? GetInfo(*i) : TxMempoolInfo{};
     }
-    TxMempoolInfo info(const GenTxid& gtxid) const;
 
     /** Returns info for a transaction if its entry_sequence < last_sequence */
-    TxMempoolInfo info_for_relay(const GenTxid& gtxid, uint64_t last_sequence) const;
+    template <TxidOrWtxid T>
+    TxMempoolInfo info_for_relay(const T& id, uint64_t last_sequence) const
+    {
+        LOCK(cs);
+        auto i{GetIter(id)};
+        return (i.has_value() && i.value()->GetSequence() < last_sequence) ? GetInfo(*i) : TxMempoolInfo{};
+    }
 
     std::vector<CTxMemPoolEntryRef> entryAll() const EXCLUSIVE_LOCKS_REQUIRED(cs);
     std::vector<TxMempoolInfo> infoAll() const;
@@ -672,26 +666,26 @@ public:
     size_t DynamicMemoryUsage() const;
 
     /** Adds a transaction to the unbroadcast set */
-    void AddUnbroadcastTx(const uint256& txid)
+    void AddUnbroadcastTx(const Txid& txid)
     {
         LOCK(cs);
         // Sanity check the transaction is in the mempool & insert into
         // unbroadcast set.
-        if (exists(GenTxid::Txid(txid))) m_unbroadcast_txids.insert(txid);
+        if (exists(txid)) m_unbroadcast_txids.insert(txid);
     };
 
     /** Removes a transaction from the unbroadcast set */
-    void RemoveUnbroadcastTx(const uint256& txid, const bool unchecked = false);
+    void RemoveUnbroadcastTx(const Txid& txid, const bool unchecked = false);
 
     /** Returns transactions in unbroadcast set */
-    std::set<uint256> GetUnbroadcastTxs() const
+    std::set<Txid> GetUnbroadcastTxs() const
     {
         LOCK(cs);
         return m_unbroadcast_txids;
     }
 
     /** Returns whether a txid is in the unbroadcast set */
-    bool IsUnbroadcastTx(const uint256& txid) const EXCLUSIVE_LOCKS_REQUIRED(cs)
+    bool IsUnbroadcastTx(const Txid& txid) const EXCLUSIVE_LOCKS_REQUIRED(cs)
     {
         AssertLockHeld(cs);
         return m_unbroadcast_txids.count(txid) != 0;
@@ -750,7 +744,7 @@ private:
      *     removeRecursive them.
      */
     void UpdateForDescendants(txiter updateIt, cacheMap& cachedDescendants,
-                              const std::set<uint256>& setExclude, std::set<uint256>& descendants_to_remove) EXCLUSIVE_LOCKS_REQUIRED(cs);
+                              const std::set<Txid>& setExclude, std::set<Txid>& descendants_to_remove) EXCLUSIVE_LOCKS_REQUIRED(cs);
     /** Update ancestors of hash to add/remove it as a descendant transaction. */
     void UpdateAncestorsOf(bool add, txiter hash, setEntries &setAncestors) EXCLUSIVE_LOCKS_REQUIRED(cs);
     /** Set ancestor state for an entry */
@@ -946,7 +940,7 @@ public:
      * m_temp_added and cannot be flushed to the back end. Only used for package validation. */
     void PackageAddTransaction(const CTransactionRef& tx);
     /** Get all coins in m_non_base_coins. */
-    std::unordered_set<COutPoint, SaltedOutpointHasher> GetNonBaseCoins() const { return m_non_base_coins; }
+    const std::unordered_set<COutPoint, SaltedOutpointHasher>& GetNonBaseCoins() const { return m_non_base_coins; }
     /** Clear m_temp_added and m_non_base_coins. */
     void Reset();
 };

@@ -10,10 +10,6 @@ export CI_IMAGE_LABEL="bitcoin-ci-test"
 set -o errexit -o pipefail -o xtrace
 
 if [ -z "$DANGER_RUN_CI_ON_HOST" ]; then
-  # Export all env vars to avoid missing some.
-  # Though, exclude those with newlines to avoid parsing problems.
-  python3 -c 'import os; [print(f"{key}={value}") for key, value in os.environ.items() if "\n" not in value and "HOME" != key and "PATH" != key and "USER" != key]' | tee "/tmp/env-$USER-$CONTAINER_NAME"
-
   # Env vars during the build can not be changed. For example, a modified
   # $MAKEJOBS is ignored in the build process. Use --cpuset-cpus as an
   # approximation to respect $MAKEJOBS somewhat, if cpuset is available.
@@ -23,49 +19,20 @@ if [ -z "$DANGER_RUN_CI_ON_HOST" ]; then
   fi
   echo "Creating $CI_IMAGE_NAME_TAG container to run in"
 
-  DOCKER_BUILD_CACHE_ARG=""
-  DOCKER_BUILD_CACHE_TEMPDIR=""
-  DOCKER_BUILD_CACHE_OLD_DIR=""
-  DOCKER_BUILD_CACHE_NEW_DIR=""
-  # If set, use an `docker build` cache directory on the CI host
-  # to cache docker image layers for the CI container image.
-  # This cache can be multiple GB in size. Prefixed with DANGER
-  # as setting it removes (old cache) files from the host.
-  if [ "$DANGER_DOCKER_BUILD_CACHE_HOST_DIR" ]; then
-    # Directory where the current cache for this run could be. If not existing
-    # or empty, "docker build" will warn, but treat it as cache-miss and continue.
-    DOCKER_BUILD_CACHE_OLD_DIR="${DANGER_DOCKER_BUILD_CACHE_HOST_DIR}/${CONTAINER_NAME}"
-    # Temporary directory for a newly created cache. We can't write the new
-    # cache into OLD_DIR directly, as old cache layers would not be removed.
-    # The NEW_DIR contents are moved to OLD_DIR after OLD_DIR has been cleared.
-    # This happens after `docker build`. If a task fails or is aborted, the
-    # DOCKER_BUILD_CACHE_TEMPDIR might be retained on the host. If the host isn't
-    # ephemeral, it has to take care of cleaning old TEMPDIR's up.
-    DOCKER_BUILD_CACHE_TEMPDIR="$(mktemp --directory ci-docker-build-cache-XXXXXXXXXX)"
-    DOCKER_BUILD_CACHE_NEW_DIR="${DOCKER_BUILD_CACHE_TEMPDIR}/${CONTAINER_NAME}"
-    DOCKER_BUILD_CACHE_ARG="--cache-from type=local,src=${DOCKER_BUILD_CACHE_OLD_DIR} --cache-to type=local,dest=${DOCKER_BUILD_CACHE_NEW_DIR},mode=max"
-  fi
-
+  # Use buildx unconditionally
+  # Using buildx is required to properly load the correct driver, for use with registry caching. Neither build, nor BUILDKIT=1 currently do this properly
   # shellcheck disable=SC2086
-  DOCKER_BUILDKIT=1 docker build \
+  docker buildx build \
       --file "${BASE_READ_ONLY_DIR}/ci/test_imagefile" \
       --build-arg "CI_IMAGE_NAME_TAG=${CI_IMAGE_NAME_TAG}" \
       --build-arg "FILE_ENV=${FILE_ENV}" \
+      --build-arg "BASE_ROOT_DIR=${BASE_ROOT_DIR}" \
       $MAYBE_CPUSET \
       --platform="${CI_IMAGE_PLATFORM}" \
       --label="${CI_IMAGE_LABEL}" \
       --tag="${CONTAINER_NAME}" \
       $DOCKER_BUILD_CACHE_ARG \
       "${BASE_READ_ONLY_DIR}"
-
-  if [ "$DANGER_DOCKER_BUILD_CACHE_HOST_DIR" ]; then
-    if [ -e "${DOCKER_BUILD_CACHE_NEW_DIR}/index.json" ]; then
-      echo "Removing the existing docker build cache in ${DOCKER_BUILD_CACHE_OLD_DIR}"
-      rm -rf "${DOCKER_BUILD_CACHE_OLD_DIR}"
-      echo "Moving the contents of ${DOCKER_BUILD_CACHE_NEW_DIR} to ${DOCKER_BUILD_CACHE_OLD_DIR}"
-      mv "${DOCKER_BUILD_CACHE_NEW_DIR}" "${DOCKER_BUILD_CACHE_OLD_DIR}"
-    fi
-  fi
 
   docker volume create "${CONTAINER_NAME}_ccache" || true
   docker volume create "${CONTAINER_NAME}_depends" || true
@@ -118,8 +85,6 @@ if [ -z "$DANGER_RUN_CI_ON_HOST" ]; then
   # When detecting podman-docker, `--external` should be added.
   docker image prune --force --filter "label=$CI_IMAGE_LABEL"
 
-  # Append $USER to /tmp/env to support multi-user systems and $CONTAINER_NAME
-  # to allow support starting multiple runs simultaneously by the same user.
   # shellcheck disable=SC2086
   CI_CONTAINER_ID=$(docker run --cap-add LINUX_IMMUTABLE $CI_CONTAINER_CAP --rm --interactive --detach --tty \
                   --mount "type=bind,src=$BASE_READ_ONLY_DIR,dst=$BASE_READ_ONLY_DIR,readonly" \
@@ -153,12 +118,8 @@ CI_EXEC () {
 export -f CI_EXEC
 
 # Normalize all folders to BASE_ROOT_DIR
-CI_EXEC rsync --archive --stats --human-readable "${BASE_READ_ONLY_DIR}/" "${BASE_ROOT_DIR}" || echo "Nothing to copy from ${BASE_READ_ONLY_DIR}/"
+CI_EXEC rsync --recursive --perms --stats --human-readable "${BASE_READ_ONLY_DIR}/" "${BASE_ROOT_DIR}" || echo "Nothing to copy from ${BASE_READ_ONLY_DIR}/"
 CI_EXEC "${BASE_ROOT_DIR}/ci/test/01_base_install.sh"
-
-# Fixes permission issues when there is a container UID/GID mismatch with the owner
-# of the git source code directory.
-CI_EXEC git config --global --add safe.directory \"*\"
 
 CI_EXEC mkdir -p "${BINS_SCRATCH_DIR}"
 

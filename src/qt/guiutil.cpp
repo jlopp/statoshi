@@ -1,4 +1,4 @@
-// Copyright (c) 2011-2022 The Bitcoin Core developers
+// Copyright (c) 2011-present The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -64,7 +64,7 @@
 #include <QSize>
 #include <QStandardPaths>
 #include <QString>
-#include <QTextDocument> // for Qt::mightBeRichText
+#include <QTextDocument>
 #include <QThread>
 #include <QUrlQuery>
 #include <QtGlobal>
@@ -435,7 +435,7 @@ void handleCloseWindowShortcut(QWidget* w)
 
 void openDebugLogfile()
 {
-    fs::path pathDebug = gArgs.GetDataDirNet() / "debug.log";
+    fs::path pathDebug = LogInstance().m_file_path;
 
     /* Open debug.log with the associated application */
     if (fs::exists(pathDebug))

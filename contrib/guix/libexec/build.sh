@@ -74,7 +74,7 @@ build_CC="${NATIVE_GCC}/bin/gcc -isystem ${NATIVE_GCC}/include"
 build_CXX="${NATIVE_GCC}/bin/g++ -isystem ${NATIVE_GCC}/include/c++ -isystem ${NATIVE_GCC}/include"
 
 case "$HOST" in
-    *darwin*) export LIBRARY_PATH="${NATIVE_GCC}/lib" ;; # Required for qt/qmake
+    *darwin*) export LIBRARY_PATH="${NATIVE_GCC}/lib" ;; # Required for native packages
     *mingw*) export LIBRARY_PATH="${NATIVE_GCC}/lib" ;;
     *)
         NATIVE_GCC_STATIC="$(store_path gcc-toolchain static)"
@@ -137,8 +137,7 @@ export GUIX_LD_WRAPPER_DISABLE_RPATH=yes
 # Make /usr/bin if it doesn't exist
 [ -e /usr/bin ] || mkdir -p /usr/bin
 
-# Symlink file and env to a conventional path
-[ -e /usr/bin/file ] || ln -s --no-dereference "$(command -v file)" /usr/bin/file
+# Symlink env to a conventional path
 [ -e /usr/bin/env ]  || ln -s --no-dereference "$(command -v env)"  /usr/bin/env
 
 # Determine the correct value for -Wl,--dynamic-linker for the current $HOST
@@ -243,6 +242,7 @@ mkdir -p "$DISTSRC"
     cmake -S . -B build \
           --toolchain "${BASEPREFIX}/${HOST}/toolchain.cmake" \
           -DWITH_CCACHE=OFF \
+          -Werror=dev \
           ${CONFIGFLAGS}
 
     # Build Bitcoin Core
@@ -290,7 +290,7 @@ mkdir -p "$DISTSRC"
             *)
                 # Split binaries from their debug symbols
                 {
-                    find "${DISTNAME}/bin" -type f -executable -print0
+                    find "${DISTNAME}/bin" "${DISTNAME}/libexec" -type f -executable -print0
                 } | xargs -0 -P"$JOBS" -I{} "${DISTSRC}/build/split-debug.sh" {} {} {}.dbg
                 ;;
         esac
@@ -369,7 +369,7 @@ mkdir -p "$DISTSRC"
             ;;
         *darwin*)
             cmake --build build --target deploy ${V:+--verbose}
-            mv build/dist/Bitcoin-Core.zip "${OUTDIR}/${DISTNAME}-${HOST}-unsigned.zip"
+            mv build/dist/bitcoin-macos-app.zip "${OUTDIR}/${DISTNAME}-${HOST}-unsigned.zip"
             mkdir -p "unsigned-app-${HOST}"
             cp  --target-directory="unsigned-app-${HOST}" \
                 contrib/macdeploy/detached-sig-create.sh

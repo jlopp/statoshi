@@ -1,5 +1,5 @@
 // Copyright (c) 2010 Satoshi Nakamoto
-// Copyright (c) 2009-2022 The Bitcoin Core developers
+// Copyright (c) 2009-present The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -7,8 +7,8 @@
 #include <rpc/client.h>
 #include <tinyformat.h>
 
+#include <cstdint>
 #include <set>
-#include <stdint.h>
 #include <string>
 #include <string_view>
 
@@ -18,6 +18,7 @@ public:
     std::string methodName; //!< method whose params want conversion
     int paramIdx;           //!< 0-based idx of param to convert
     std::string paramName;  //!< parameter name
+    bool also_string{false}; //!< The parameter is also a string
 };
 
 // clang-format off
@@ -48,7 +49,6 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "sendtoaddress", 9, "fee_rate"},
     { "sendtoaddress", 10, "verbose"},
     { "settxfee", 0, "amount" },
-    { "sethdseed", 0, "newkeypool" },
     { "getreceivedbyaddress", 1, "minconf" },
     { "getreceivedbyaddress", 2, "include_immature_coinbase" },
     { "getreceivedbylabel", 1, "minconf" },
@@ -96,8 +96,6 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "getdescriptoractivity", 1, "scanobjects" },
     { "getdescriptoractivity", 2, "include_mempool" },
     { "scantxoutset", 1, "scanobjects" },
-    { "addmultisigaddress", 0, "nrequired" },
-    { "addmultisigaddress", 1, "keys" },
     { "createmultisig", 0, "nrequired" },
     { "createmultisig", 1, "keys" },
     { "listunspent", 0, "minconf" },
@@ -122,6 +120,7 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "createrawtransaction", 1, "outputs" },
     { "createrawtransaction", 2, "locktime" },
     { "createrawtransaction", 3, "replaceable" },
+    { "createrawtransaction", 4, "version" },
     { "decoderawtransaction", 1, "iswitness" },
     { "signrawtransactionwithkey", 1, "privkeys" },
     { "signrawtransactionwithkey", 2, "prevtxs" },
@@ -170,6 +169,7 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "walletcreatefundedpsbt", 3, "solving_data"},
     { "walletcreatefundedpsbt", 3, "max_tx_weight"},
     { "walletcreatefundedpsbt", 4, "bip32derivs" },
+    { "walletcreatefundedpsbt", 5, "version" },
     { "walletprocesspsbt", 1, "sign" },
     { "walletprocesspsbt", 3, "bip32derivs" },
     { "walletprocesspsbt", 4, "finalize" },
@@ -180,6 +180,7 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "createpsbt", 1, "outputs" },
     { "createpsbt", 2, "locktime" },
     { "createpsbt", 3, "replaceable" },
+    { "createpsbt", 4, "version" },
     { "combinepsbt", 0, "txs"},
     { "joinpsbts", 0, "txs"},
     { "finalizepsbt", 1, "extract"},
@@ -188,10 +189,10 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "gettxout", 1, "n" },
     { "gettxout", 2, "include_mempool" },
     { "gettxoutproof", 0, "txids" },
-    { "gettxoutsetinfo", 1, "hash_or_height" },
+    { "gettxoutsetinfo", 1, "hash_or_height", /*also_string=*/true },
     { "gettxoutsetinfo", 2, "use_index"},
     { "dumptxoutset", 2, "options" },
-    { "dumptxoutset", 2, "rollback" },
+    { "dumptxoutset", 2, "rollback", /*also_string=*/true },
     { "lockunspent", 0, "unlock" },
     { "lockunspent", 1, "transactions" },
     { "lockunspent", 2, "persistent" },
@@ -216,6 +217,7 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "send", 4, "replaceable"},
     { "send", 4, "solving_data"},
     { "send", 4, "max_tx_weight"},
+    { "send", 5, "version"},
     { "sendall", 0, "recipients" },
     { "sendall", 1, "conf_target" },
     { "sendall", 3, "fee_rate"},
@@ -233,25 +235,19 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "sendall", 4, "conf_target"},
     { "sendall", 4, "replaceable"},
     { "sendall", 4, "solving_data"},
+    { "sendall", 4, "version"},
     { "simulaterawtransaction", 0, "rawtxs" },
     { "simulaterawtransaction", 1, "options" },
     { "simulaterawtransaction", 1, "include_watchonly"},
-    { "importprivkey", 2, "rescan" },
-    { "importaddress", 2, "rescan" },
-    { "importaddress", 3, "p2sh" },
-    { "importpubkey", 2, "rescan" },
     { "importmempool", 1, "options" },
     { "importmempool", 1, "apply_fee_delta_priority" },
     { "importmempool", 1, "use_current_time" },
     { "importmempool", 1, "apply_unbroadcast_set" },
-    { "importmulti", 0, "requests" },
-    { "importmulti", 1, "options" },
-    { "importmulti", 1, "rescan" },
     { "importdescriptors", 0, "requests" },
     { "listdescriptors", 0, "private" },
     { "verifychain", 0, "checklevel" },
     { "verifychain", 1, "nblocks" },
-    { "getblockstats", 0, "hash_or_height" },
+    { "getblockstats", 0, "hash_or_height", /*also_string=*/true },
     { "getblockstats", 1, "stats" },
     { "pruneblockchain", 0, "height" },
     { "keypoolrefill", 0, "newsize" },
@@ -285,7 +281,6 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "logging", 0, "include" },
     { "logging", 1, "exclude" },
     { "disconnectnode", 1, "nodeid" },
-    { "upgradewallet", 0, "version" },
     { "gethdkeys", 0, "active_only" },
     { "gethdkeys", 0, "options" },
     { "gethdkeys", 0, "private" },
@@ -324,18 +319,21 @@ static const CRPCConvertParam vRPCConvertParams[] =
 // clang-format on
 
 /** Parse string to UniValue or throw runtime_error if string contains invalid JSON */
-static UniValue Parse(std::string_view raw)
+static UniValue Parse(std::string_view raw, bool also_string)
 {
     UniValue parsed;
-    if (!parsed.read(raw)) throw std::runtime_error(tfm::format("Error parsing JSON: %s", raw));
+    if (!parsed.read(raw)) {
+        if (!also_string) throw std::runtime_error(tfm::format("Error parsing JSON: %s", raw));
+        return raw;
+    }
     return parsed;
 }
 
 class CRPCConvertTable
 {
 private:
-    std::set<std::pair<std::string, int>> members;
-    std::set<std::pair<std::string, std::string>> membersByName;
+    std::map<std::pair<std::string, int>, bool> members;
+    std::map<std::pair<std::string, std::string>, bool> membersByName;
 
 public:
     CRPCConvertTable();
@@ -343,21 +341,29 @@ public:
     /** Return arg_value as UniValue, and first parse it if it is a non-string parameter */
     UniValue ArgToUniValue(std::string_view arg_value, const std::string& method, int param_idx)
     {
-        return members.count({method, param_idx}) > 0 ? Parse(arg_value) : arg_value;
+        const auto& it = members.find({method, param_idx});
+        if (it != members.end()) {
+            return Parse(arg_value, it->second);
+        }
+        return arg_value;
     }
 
     /** Return arg_value as UniValue, and first parse it if it is a non-string parameter */
     UniValue ArgToUniValue(std::string_view arg_value, const std::string& method, const std::string& param_name)
     {
-        return membersByName.count({method, param_name}) > 0 ? Parse(arg_value) : arg_value;
+        const auto& it = membersByName.find({method, param_name});
+        if (it != membersByName.end()) {
+            return Parse(arg_value, it->second);
+        }
+        return arg_value;
     }
 };
 
 CRPCConvertTable::CRPCConvertTable()
 {
     for (const auto& cp : vRPCConvertParams) {
-        members.emplace(cp.methodName, cp.paramIdx);
-        membersByName.emplace(cp.methodName, cp.paramName);
+        members.emplace(std::make_pair(cp.methodName, cp.paramIdx), cp.also_string);
+        membersByName.emplace(std::make_pair(cp.methodName, cp.paramName), cp.also_string);
     }
 }
 
