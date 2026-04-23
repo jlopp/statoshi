@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2016-2022 The Bitcoin Core developers
+# Copyright (c) 2016-present The Bitcoin Core developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 """Test Hierarchical Deterministic wallet function."""
@@ -70,8 +70,8 @@ class WalletHDTest(BitcoinTestFramework):
         self.stop_node(1)
         # we need to delete the complete chain directory
         # otherwise node1 would auto-recover all funds in flag the keypool keys as used
-        shutil.rmtree(self.nodes[1].blocks_path)
-        shutil.rmtree(self.nodes[1].chain_path / "chainstate")
+        self.cleanup_folder(self.nodes[1].blocks_path)
+        self.cleanup_folder(self.nodes[1].chain_path / "chainstate")
         shutil.copyfile(
             self.nodes[1].datadir_path / "hd.bak",
             self.nodes[1].wallets_path / self.default_wallet_name / self.wallet_data_filename
@@ -95,8 +95,8 @@ class WalletHDTest(BitcoinTestFramework):
 
         # Try a RPC based rescan
         self.stop_node(1)
-        shutil.rmtree(self.nodes[1].blocks_path)
-        shutil.rmtree(self.nodes[1].chain_path / "chainstate")
+        self.cleanup_folder(self.nodes[1].blocks_path)
+        self.cleanup_folder(self.nodes[1].chain_path / "chainstate")
         shutil.copyfile(
             self.nodes[1].datadir_path / "hd.bak",
             self.nodes[1].wallets_path / self.default_wallet_name / self.wallet_data_filename

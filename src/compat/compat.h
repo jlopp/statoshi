@@ -1,5 +1,5 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
-// Copyright (c) 2009-2022 The Bitcoin Core developers
+// Copyright (c) 2009-present The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -36,6 +36,18 @@
 // See https://learn.microsoft.com/en-us/windows/win32/api/winsock/ns-winsock-sockaddr#syntax
 #ifdef WIN32
 typedef u_short sa_family_t;
+#endif
+
+// Brace style in the IN6ADDR_*_INIT macros differs across platforms.
+#if defined(__illumos__)
+#define COMPAT_IN6ADDR_ANY_INIT {{IN6ADDR_ANY_INIT}}
+#else
+#define COMPAT_IN6ADDR_ANY_INIT IN6ADDR_ANY_INIT
+#endif
+#if defined(__illumos__) || defined(_MSC_VER)
+#define COMPAT_IN6ADDR_LOOPBACK_INIT {{IN6ADDR_LOOPBACK_INIT}}
+#else
+#define COMPAT_IN6ADDR_LOOPBACK_INIT IN6ADDR_LOOPBACK_INIT
 #endif
 
 // We map Linux / BSD error functions and codes, to the equivalent

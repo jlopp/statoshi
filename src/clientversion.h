@@ -1,4 +1,4 @@
-// Copyright (c) 2009-2022 The Bitcoin Core developers
+// Copyright (c) 2009-present The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -33,11 +33,6 @@ extern const std::string UA_NAME;
 
 std::string FormatFullVersion();
 std::string FormatSubVersion(const std::string& name, int nClientVersion, const std::vector<std::string>& comments);
-
-std::string CopyrightHolders(const std::string& strPrefix);
-
-/** Returns licensing information (for -version) */
-std::string LicenseInfo();
 
 #endif // RC_INVOKED
 

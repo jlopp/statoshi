@@ -9,8 +9,10 @@
 #include <script/parsing.h>
 #include <span.h>
 #include <sync.h>
+#include <test/util/common.h>
 #include <test/util/random.h>
 #include <test/util/setup_common.h>
+#include <test/util/time.h>
 #include <uint256.h>
 #include <util/bitdeque.h>
 #include <util/byte_units.h>
@@ -385,6 +387,21 @@ BOOST_AUTO_TEST_CASE(util_FormatISO8601Date)
     BOOST_CHECK_EQUAL(FormatISO8601Date(1317425777), "2011-09-30");
 }
 
+
+BOOST_AUTO_TEST_CASE(util_FormatRFC1123DateTime)
+{
+    BOOST_CHECK_EQUAL(FormatRFC1123DateTime(std::numeric_limits<int64_t>::max()), "");
+    BOOST_CHECK_EQUAL(FormatRFC1123DateTime(253402300800), "");
+    BOOST_CHECK_EQUAL(FormatRFC1123DateTime(253402300799), "Fri, 31 Dec 9999 23:59:59 GMT");
+    BOOST_CHECK_EQUAL(FormatRFC1123DateTime(253402214400), "Fri, 31 Dec 9999 00:00:00 GMT");
+    BOOST_CHECK_EQUAL(FormatRFC1123DateTime(1717429609), "Mon, 03 Jun 2024 15:46:49 GMT");
+    BOOST_CHECK_EQUAL(FormatRFC1123DateTime(0), "Thu, 01 Jan 1970 00:00:00 GMT");
+    BOOST_CHECK_EQUAL(FormatRFC1123DateTime(-1), "Wed, 31 Dec 1969 23:59:59 GMT");
+    BOOST_CHECK_EQUAL(FormatRFC1123DateTime(-1717429609), "Sat, 31 Jul 1915 08:13:11 GMT");
+    BOOST_CHECK_EQUAL(FormatRFC1123DateTime(-62167219200), "Sat, 01 Jan 0000 00:00:00 GMT");
+    BOOST_CHECK_EQUAL(FormatRFC1123DateTime(-62167219201), "");
+}
+
 BOOST_AUTO_TEST_CASE(util_FormatMoney)
 {
     BOOST_CHECK_EQUAL(FormatMoney(0), "0.00");
@@ -569,7 +586,7 @@ BOOST_AUTO_TEST_CASE(strprintf_numbers)
 
 BOOST_AUTO_TEST_CASE(util_mocktime)
 {
-    SetMockTime(111s);
+    NodeClockContext clock_ctx{111s};
     // Check that mock time does not change after a sleep
     for (const auto& num_sleep : {0ms, 1ms}) {
         UninterruptibleSleep(num_sleep);
@@ -582,7 +599,15 @@ BOOST_AUTO_TEST_CASE(util_mocktime)
         BOOST_CHECK_EQUAL(111000, TicksSinceEpoch<std::chrono::milliseconds>(NodeClock::now()));
         BOOST_CHECK_EQUAL(111000000, GetTime<std::chrono::microseconds>().count());
     }
-    SetMockTime(0s);
+}
+
+BOOST_AUTO_TEST_CASE(util_ticksseconds)
+{
+    BOOST_CHECK_EQUAL(TicksSeconds(0s), 0);
+    BOOST_CHECK_EQUAL(TicksSeconds(1s), 1);
+    BOOST_CHECK_EQUAL(TicksSeconds(999ms), 0);
+    BOOST_CHECK_EQUAL(TicksSeconds(1000ms), 1);
+    BOOST_CHECK_EQUAL(TicksSeconds(1500ms), 1);
 }
 
 BOOST_AUTO_TEST_CASE(test_IsDigit)
@@ -835,6 +860,39 @@ BOOST_AUTO_TEST_CASE(test_LocaleIndependentAtoi)
     BOOST_CHECK_EQUAL(LocaleIndependentAtoi<uint8_t>("256"), 255U);
 }
 
+BOOST_AUTO_TEST_CASE(test_ToIntegralHex)
+{
+    std::optional<uint64_t> n;
+    // Valid values
+    n = ToIntegral<uint64_t>("1234", 16);
+    BOOST_CHECK_EQUAL(*n, 0x1234);
+    n = ToIntegral<uint64_t>("a", 16);
+    BOOST_CHECK_EQUAL(*n, 0xA);
+    n = ToIntegral<uint64_t>("0000000a", 16);
+    BOOST_CHECK_EQUAL(*n, 0xA);
+    n = ToIntegral<uint64_t>("100", 16);
+    BOOST_CHECK_EQUAL(*n, 0x100);
+    n = ToIntegral<uint64_t>("DEADbeef", 16);
+    BOOST_CHECK_EQUAL(*n, 0xDEADbeef);
+    n = ToIntegral<uint64_t>("FfFfFfFf", 16);
+    BOOST_CHECK_EQUAL(*n, 0xFfFfFfFf);
+    n = ToIntegral<uint64_t>("123456789", 16);
+    BOOST_CHECK_EQUAL(*n, 0x123456789ULL);
+    n = ToIntegral<uint64_t>("0", 16);
+    BOOST_CHECK_EQUAL(*n, 0);
+    n = ToIntegral<uint64_t>("FfFfFfFfFfFfFfFf", 16);
+    BOOST_CHECK_EQUAL(*n, 0xFfFfFfFfFfFfFfFfULL);
+    n = ToIntegral<int64_t>("-1", 16);
+    BOOST_CHECK_EQUAL(*n, -1);
+    // Invalid values
+    BOOST_CHECK(!ToIntegral<uint64_t>("", 16));
+    BOOST_CHECK(!ToIntegral<uint64_t>("-1", 16));
+    BOOST_CHECK(!ToIntegral<uint64_t>("10 00", 16));
+    BOOST_CHECK(!ToIntegral<uint64_t>("1 ", 16));
+    BOOST_CHECK(!ToIntegral<uint64_t>("0xAB", 16));
+    BOOST_CHECK(!ToIntegral<uint64_t>("FfFfFfFfFfFfFfFf0", 16));
+}
+
 BOOST_AUTO_TEST_CASE(test_FormatParagraph)
 {
     BOOST_CHECK_EQUAL(FormatParagraph("", 79, 0), "");
@@ -1080,7 +1138,8 @@ BOOST_AUTO_TEST_CASE(test_LockDirectory)
 #endif
     // Clean up
     ReleaseDirectoryLocks();
-    fs::remove_all(dirname);
+    fs::remove(dirname / lockname);
+    fs::remove(dirname);
 }
 
 BOOST_AUTO_TEST_CASE(test_ToLower)
@@ -1619,7 +1678,7 @@ BOOST_AUTO_TEST_CASE(util_ReadBinaryFile)
         expected_text += "0123456789";
     }
     {
-        std::ofstream file{tmpfile};
+        std::ofstream file{tmpfile.std_path()};
         file << expected_text;
     }
     {
@@ -1650,7 +1709,7 @@ BOOST_AUTO_TEST_CASE(util_WriteBinaryFile)
     std::string expected_text = "bitcoin";
     auto valid = WriteBinaryFile(tmpfile, expected_text);
     std::string actual_text;
-    std::ifstream file{tmpfile};
+    std::ifstream file{tmpfile.std_path()};
     file >> actual_text;
     BOOST_CHECK(valid);
     BOOST_CHECK_EQUAL(actual_text, expected_text);
@@ -1774,6 +1833,43 @@ BOOST_AUTO_TEST_CASE(mib_string_literal_test)
     BOOST_CHECK_EQUAL(1_MiB, 1024 * 1024);
     const auto max_mib{std::numeric_limits<size_t>::max() >> 20};
     BOOST_CHECK_EXCEPTION(operator""_MiB(static_cast<unsigned long long>(max_mib) + 1), std::overflow_error, HasReason("MiB value too large for size_t byte conversion"));
+}
+
+BOOST_AUTO_TEST_CASE(ceil_div_test)
+{
+    // Type combinations used by current CeilDiv callsites.
+    BOOST_CHECK((std::is_same_v<decltype(CeilDiv(uint32_t{0}, 8u)), uint32_t>));
+    BOOST_CHECK((std::is_same_v<decltype(CeilDiv(size_t{0}, 8u)), size_t>));
+    BOOST_CHECK((std::is_same_v<decltype(CeilDiv(unsigned{0}, size_t{1})), size_t>));
+
+    // `common/bloom.cpp` and `cuckoocache.h` patterns.
+    BOOST_CHECK_EQUAL(CeilDiv(uint32_t{3}, 2u), uint32_t{2});
+    BOOST_CHECK_EQUAL(CeilDiv(uint32_t{65}, 64u), uint32_t{2});
+    BOOST_CHECK_EQUAL(CeilDiv(uint32_t{9}, 8u), uint32_t{2});
+
+    // `key_io.cpp`, `rest.cpp`, `merkleblock.cpp`, `strencodings.cpp` patterns.
+    BOOST_CHECK_EQUAL(CeilDiv(size_t{9}, 8u), size_t{2});
+    BOOST_CHECK_EQUAL(CeilDiv(size_t{10}, 3u), size_t{4});
+    BOOST_CHECK_EQUAL(CeilDiv(size_t{11}, 5u), size_t{3});
+    BOOST_CHECK_EQUAL(CeilDiv(size_t{41} * 8, 5u), size_t{66});
+
+    // `flatfile.cpp` mixed unsigned/size_t pattern.
+    BOOST_CHECK_EQUAL(CeilDiv(unsigned{10}, size_t{4}), size_t{3});
+
+    // `util/feefrac.h` fast-path rounding-up pattern.
+    constexpr int64_t fee{12345};
+    constexpr int32_t at_size{67};
+    constexpr int32_t size{10};
+    BOOST_CHECK_EQUAL(CeilDiv(uint64_t(fee) * at_size, uint32_t(size)),
+                      (uint64_t(fee) * at_size + uint32_t(size) - 1) / uint32_t(size));
+
+    // `bitset.h` template parameter pattern.
+    constexpr unsigned bits{129};
+    constexpr size_t digits{std::numeric_limits<size_t>::digits};
+    BOOST_CHECK_EQUAL(CeilDiv(bits, digits), (bits + digits - 1) / digits);
+
+    // `serialize.h` varint scratch-buffer pattern.
+    BOOST_CHECK_EQUAL(CeilDiv(sizeof(uint64_t) * 8, 7u), (sizeof(uint64_t) * 8 + 6) / 7);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

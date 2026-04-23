@@ -1,4 +1,6 @@
 .NOTPARALLEL :
+# Disable builtin variables, rules and suffixes.
+MAKEFLAGS += --no-builtin-rules --no-builtin-variables
 
 # Pattern rule to print variables, e.g. make print-top_srcdir
 print-%: FORCE
@@ -47,7 +49,7 @@ FALLBACK_DOWNLOAD_PATH ?= https://bitcoincore.org/depends-sources
 C_STANDARD ?= c11
 CXX_STANDARD ?= c++20
 
-BUILD = $(shell ./config.guess)
+BUILD = $(shell unset CC && ./config.guess)
 PATCHES_PATH = $(BASEDIR)/patches
 BASEDIR = $(CURDIR)
 HASH_LENGTH:=11

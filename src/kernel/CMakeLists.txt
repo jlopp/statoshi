@@ -25,7 +25,6 @@ add_library(bitcoinkernel
   ../consensus/merkle.cpp
   ../consensus/tx_check.cpp
   ../consensus/tx_verify.cpp
-  ../core_read.cpp
   ../dbwrapper.cpp
   ../deploymentinfo.cpp
   ../deploymentstatus.cpp
@@ -55,23 +54,21 @@ add_library(bitcoinkernel
   ../script/solver.cpp
   ../signet.cpp
   ../streams.cpp
-  ../support/lockedpool.cpp
   ../sync.cpp
   ../txdb.cpp
+  ../txgraph.cpp
   ../txmempool.cpp
   ../uint256.cpp
   ../util/chaintype.cpp
   ../util/check.cpp
+  ../util/expected.cpp
   ../util/feefrac.cpp
   ../util/fs.cpp
   ../util/fs_helpers.cpp
   ../util/hasher.cpp
   ../util/moneystr.cpp
   ../util/rbf.cpp
-  ../util/serfloat.cpp
   ../util/signalinterrupt.cpp
-  ../util/strencodings.cpp
-  ../util/string.cpp
   ../util/syserror.cpp
   ../util/threadnames.cpp
   ../util/time.cpp
@@ -84,31 +81,41 @@ add_library(bitcoinkernel
   $<TARGET_OBJECTS:leveldb>
   $<TARGET_OBJECTS:crc32c>
 )
+
+# Compiler warnings that apply only to the kernel and its dependencies.
+# These can be more strict and/or warnings that only apply to shared
+# libs.
+add_library(kernel_warn_interface INTERFACE)
+if(NOT MSVC)
+  try_append_cxx_flags("-Wunique-object-duplication" TARGET kernel_warn_interface SKIP_LINK)
+endif()
+
+# Also manually apply the warnings to the kernel's internal dependencies
+target_link_libraries(bitcoin_clientversion PRIVATE kernel_warn_interface)
+target_link_libraries(bitcoin_crypto PRIVATE kernel_warn_interface)
+target_link_libraries(leveldb PRIVATE kernel_warn_interface)
+target_link_libraries(crc32c PRIVATE kernel_warn_interface)
+
 target_link_libraries(bitcoinkernel
   PRIVATE
     core_interface
+    kernel_warn_interface
     secp256k1_objs
     $<$<PLATFORM_ID:Windows>:bcrypt>
     $<TARGET_NAME_IF_EXISTS:USDT::headers>
-  PUBLIC
     Boost::headers
 )
 
 target_include_directories(bitcoinkernel PRIVATE $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/src/leveldb/include>)
 
-# libbitcoinkernel requires default symbol visibility, explicitly
-# specify that here so that things still work even when user
-# configures with -DREDUCE_EXPORTS=ON
-#
-# Note this is a quick hack that will be removed as we
-# incrementally define what to export from the library.
-set_target_properties(bitcoinkernel PROPERTIES
-  CXX_VISIBILITY_PRESET default
-)
-
 # Add a convenience libbitcoinkernel target as a synonym for bitcoinkernel.
 add_custom_target(libbitcoinkernel)
 add_dependencies(libbitcoinkernel bitcoinkernel)
+
+get_target_property(bitcoinkernel_type bitcoinkernel TYPE)
+if(bitcoinkernel_type STREQUAL "STATIC_LIBRARY")
+  target_compile_definitions(bitcoinkernel PUBLIC BITCOINKERNEL_STATIC)
+endif()
 
 configure_file(${PROJECT_SOURCE_DIR}/libbitcoinkernel.pc.in ${PROJECT_BINARY_DIR}/libbitcoinkernel.pc @ONLY)
 install(FILES ${PROJECT_BINARY_DIR}/libbitcoinkernel.pc DESTINATION "${CMAKE_INSTALL_LIBDIR}/pkgconfig" COMPONENT libbitcoinkernel)
@@ -124,3 +131,5 @@ install(TARGETS bitcoinkernel
     DESTINATION ${CMAKE_INSTALL_LIBDIR}
     COMPONENT libbitcoinkernel
 )
+
+install(FILES bitcoinkernel.h DESTINATION ${CMAKE_INSTALL_INCLUDEDIR} COMPONENT libbitcoinkernel)

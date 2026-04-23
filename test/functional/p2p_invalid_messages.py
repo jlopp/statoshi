@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2015-2021 The Bitcoin Core developers
+# Copyright (c) 2015-present The Bitcoin Core developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 """Test node responses to invalid network messages."""
@@ -331,7 +331,7 @@ class InvalidMessagesTest(BitcoinTestFramework):
         conn = self.nodes[0].add_p2p_connection(P2PDataStore(), supports_v2_p2p=False)
         conn2 = self.nodes[0].add_p2p_connection(P2PDataStore(), supports_v2_p2p=False)
         msg_at_size = msg_unrecognized(str_data="b" * VALID_DATA_LIMIT)
-        assert len(msg_at_size.serialize()) == MAX_PROTOCOL_MESSAGE_LENGTH
+        assert_equal(len(msg_at_size.serialize()), MAX_PROTOCOL_MESSAGE_LENGTH)
 
         self.log.info("(a) Send 80 messages, each of maximum valid data size (4MB)")
         for _ in range(80):

@@ -37,7 +37,7 @@ You can then either point to the SDK using the `SDK_PATH` environment variable:
 
 ```sh
 # Extract the SDK tarball to /path/to/parent/dir/of/extracted/SDK/Xcode-<foo>-<bar>-extracted-SDK-with-libcxx-headers
-tar -C /path/to/parent/dir/of/extracted/SDK -xaf /path/to/Xcode-<foo>-<bar>-extracted-SDK-with-libcxx-headers.tar.gz
+tar -C /path/to/parent/dir/of/extracted/SDK -xaf /path/to/Xcode-<foo>-<bar>-extracted-SDK-with-libcxx-headers.tar
 
 # Indicate where to locate the SDK tarball
 export SDK_PATH=/path/to/parent/dir/of/extracted/SDK
@@ -103,6 +103,18 @@ worktree to save disk space:
 ./contrib/guix/guix-clean
 ```
 
+## Gathering shasums of build outputs
+
+After a successful build, the shasums of the build outputs are gathered
+into files named `SHA256SUMS`. These files are located in each of the
+architecture-specific output directories.
+
+To gather all shasums and output them together to console, for e.g.
+inclusion in a Guix pull request comment, run:
+
+``` sh
+source contrib/shell/git-utils.bash && uname -m && find guix-build-$(git_head_version)/output/ -type f -print0 | env LC_ALL=C sort -z | xargs -r0 sha256sum
+```
 
 ## Attesting to build outputs
 
@@ -249,7 +261,7 @@ details.
   Set the path where _extracted_ SDKs can be found. This is passed through to
   the depends tree. Note that this should be set to the _parent_ directory of
   the actual SDK (e.g. `SDK_PATH=$HOME/Downloads/macOS-SDKs` instead of
-  `$HOME/Downloads/macOS-SDKs/Xcode-12.2-12B45b-extracted-SDK-with-libcxx-headers`).
+  `$HOME/Downloads/macOS-SDKs/Xcode-26.1.1-17B100-extracted-SDK-with-libcxx-headers`).
 
   The path that this environment variable points to **must be a directory**, and
   **NOT a symlink to a directory**.

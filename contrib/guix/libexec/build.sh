@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
-# Copyright (c) 2019-2022 The Bitcoin Core developers
+# Copyright (c) 2019-present The Bitcoin Core developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 export LC_ALL=C
 set -e -o pipefail
+
+# Environment variables for determinism
+export TAR_OPTIONS="--no-same-owner --owner=0 --group=0 --numeric-owner --mtime='@${SOURCE_DATE_EPOCH}' --sort=name"
 export TZ=UTC
 
 # Although Guix _does_ set umask when building its own packages (in our case,
@@ -157,10 +160,6 @@ case "$HOST" in
         ;;
 esac
 
-# Environment variables for determinism
-export TAR_OPTIONS="--owner=0 --group=0 --numeric-owner --mtime='@${SOURCE_DATE_EPOCH}' --sort=name"
-export TZ="UTC"
-
 ####################
 # Depends Building #
 ####################
@@ -206,11 +205,12 @@ mkdir -p "$OUTDIR"
 ###########################
 
 # CONFIGFLAGS
-CONFIGFLAGS="-DREDUCE_EXPORTS=ON -DBUILD_BENCH=OFF -DBUILD_GUI_TESTS=OFF -DBUILD_FUZZ_BINARY=OFF"
+CONFIGFLAGS="-DREDUCE_EXPORTS=ON -DBUILD_BENCH=OFF -DBUILD_GUI_TESTS=OFF -DBUILD_FUZZ_BINARY=OFF -DCMAKE_SKIP_RPATH=TRUE"
 
 # CFLAGS
 HOST_CFLAGS="-O2 -g"
 HOST_CFLAGS+=$(find /gnu/store -maxdepth 1 -mindepth 1 -type d -exec echo -n " -ffile-prefix-map={}=/usr" \;)
+HOST_CFLAGS+=" -fdebug-prefix-map=${DISTSRC}/src=."
 case "$HOST" in
     *mingw*)  HOST_CFLAGS+=" -fno-ident" ;;
     *darwin*) unset HOST_CFLAGS ;;
@@ -225,8 +225,13 @@ esac
 
 # LDFLAGS
 case "$HOST" in
-    *linux*)  HOST_LDFLAGS="-Wl,--as-needed -Wl,--dynamic-linker=$glibc_dynamic_linker -static-libstdc++ -Wl,-O2" ;;
+    *linux*)  HOST_LDFLAGS="-Wl,--as-needed -Wl,--dynamic-linker=$glibc_dynamic_linker -Wl,-O2" ;;
     *mingw*)  HOST_LDFLAGS="-Wl,--no-insert-timestamp" ;;
+esac
+
+# EXE FLAGS
+case "$HOST" in
+    *linux*)  CMAKE_EXE_LINKER_FLAGS="-DCMAKE_EXE_LINKER_FLAGS=${HOST_LDFLAGS} -static-libstdc++ -static-libgcc" ;;
 esac
 
 mkdir -p "$DISTSRC"
@@ -243,15 +248,11 @@ mkdir -p "$DISTSRC"
           --toolchain "${BASEPREFIX}/${HOST}/toolchain.cmake" \
           -DWITH_CCACHE=OFF \
           -Werror=dev \
-          ${CONFIGFLAGS}
+          ${CONFIGFLAGS} \
+          "${CMAKE_EXE_LINKER_FLAGS}"
 
     # Build Bitcoin Core
     cmake --build build -j "$JOBS" ${V:+--verbose}
-
-    # Perform basic security checks on a series of executables.
-    cmake --build build -j 1 --target check-security ${V:+--verbose}
-    # Check that executables only contain allowed version symbols.
-    cmake --build build -j 1 --target check-symbols ${V:+--verbose}
 
     mkdir -p "$OUTDIR"
 
@@ -271,16 +272,19 @@ mkdir -p "$DISTSRC"
     # Install built Bitcoin Core to $INSTALLPATH
     case "$HOST" in
         *darwin*)
-            # This workaround can be dropped for CMake >= 3.27.
-            # See the upstream commit 689616785f76acd844fd448c51c5b2a0711aafa2.
-            find build -name 'cmake_install.cmake' -exec sed -i 's| -u -r | |g' {} +
-
             cmake --install build --strip --prefix "${INSTALLPATH}" ${V:+--verbose}
             ;;
         *)
             cmake --install build --prefix "${INSTALLPATH}" ${V:+--verbose}
             ;;
     esac
+
+    # Perform basic security checks on installed executables.
+    echo "Checking binary security on installed executables..."
+    python3 "${DISTSRC}/contrib/guix/security-check.py" "${INSTALLPATH}/bin/"* "${INSTALLPATH}/libexec/"*
+    # Check that executables only contain allowed version symbols.
+    echo "Running symbol and dynamic library checks on installed executables..."
+    python3 "${DISTSRC}/contrib/guix/symbol-check.py" "${INSTALLPATH}/bin/"* "${INSTALLPATH}/libexec/"*
 
     (
         cd installed
@@ -301,6 +305,7 @@ mkdir -p "$DISTSRC"
                 ;;
             *linux*)
                 cp "${DISTSRC}/README.md" "${DISTNAME}/"
+                cp "${DISTSRC}/doc/INSTALL_linux.md" "${DISTNAME}/INSTALL.md"
                 ;;
         esac
 
@@ -392,12 +397,14 @@ mv --no-target-directory "$OUTDIR" "$ACTUAL_OUTDIR" \
     || ( rm -rf "$ACTUAL_OUTDIR" && exit 1 )
 
 (
+    tmp="$(mktemp)"
     cd /outdir-base
     {
         echo "$GIT_ARCHIVE"
         find "$ACTUAL_OUTDIR" -type f
     } | xargs realpath --relative-base="$PWD" \
-      | xargs sha256sum \
-      | sort -k2 \
-      | sponge "$ACTUAL_OUTDIR"/SHA256SUMS.part
+        | xargs sha256sum \
+        | sort -k2 \
+        > "$tmp";
+    mv "$tmp" "$ACTUAL_OUTDIR"/SHA256SUMS.part
 )

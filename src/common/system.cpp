@@ -12,6 +12,7 @@
 #include <util/time.h>
 
 #ifdef WIN32
+#include <cassert>
 #include <codecvt>
 #include <compat/compat.h>
 #include <windows.h>
@@ -36,9 +37,6 @@
 
 using util::ReplaceAll;
 
-// Application startup time (used for uptime calculation)
-const int64_t nStartupTime = GetTime();
-
 #ifndef WIN32
 std::string ShellEscape(const std::string& arg)
 {
@@ -57,8 +55,9 @@ void runCommand(const std::string& strCommand)
 #else
     int nErr = ::_wsystem(std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>,wchar_t>().from_bytes(strCommand).c_str());
 #endif
-    if (nErr)
-        LogPrintf("runCommand error: system(%s) returned %d\n", strCommand, nErr);
+    if (nErr) {
+        LogWarning("runCommand error: system(%s) returned %d", strCommand, nErr);
+    }
 }
 #endif
 
@@ -83,6 +82,7 @@ void SetupEnvironment()
         setenv("LC_ALL", "C.UTF-8", 1);
     }
 #elif defined(WIN32)
+    assert(GetACP() == CP_UTF8);
     // Set the default input/output charset is utf-8
     SetConsoleCP(CP_UTF8);
     SetConsoleOutputCP(CP_UTF8);
@@ -127,8 +127,8 @@ std::optional<size_t> GetTotalRAM()
     return std::nullopt;
 }
 
-// Obtain the application startup time (used for uptime calculation)
-int64_t GetStartupTime()
-{
-    return nStartupTime;
-}
+namespace {
+    const auto g_startup_time{SteadyClock::now()};
+} // namespace
+
+SteadyClock::duration GetUptime() { return SteadyClock::now() - g_startup_time; }

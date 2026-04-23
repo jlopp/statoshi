@@ -37,8 +37,6 @@
 __AFL_FUZZ_INIT();
 #endif
 
-const std::function<void(const std::string&)> G_TEST_LOG_FUN{};
-
 /**
  * A copy of the command line arguments that start with `--`.
  * First `LLVMFuzzerInitialize()` is called, which saves the arguments to `g_args`.
@@ -51,7 +49,7 @@ static std::vector<const char*> g_args;
 static void SetArgs(int argc, char** argv) {
     for (int i = 1; i < argc; ++i) {
         // Only take into account arguments that start with `--`. The others are for the fuzz engine:
-        // `fuzz -runs=1 fuzz_corpora/address_deserialize_v2 --checkaddrman=5`
+        // `fuzz -runs=1 fuzz_corpora/address_deserialize --checkaddrman=5`
         if (strlen(argv[i]) > 2 && argv[i][0] == '-' && argv[i][1] == '-') {
             g_args.push_back(argv[i]);
         }

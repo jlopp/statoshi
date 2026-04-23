@@ -1,5 +1,5 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
-// Copyright (c) 2009-2022 The Bitcoin Core developers
+// Copyright (c) 2009-present The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -9,6 +9,7 @@
 #include <clientversion.h>
 #include <common/args.h>
 #include <common/init.h>
+#include <common/license_info.h>
 #include <common/system.h>
 #include <compat/compat.h>
 #include <init.h>
@@ -224,7 +225,7 @@ static bool AppInit(NodeContext& node)
                 if (token) { // Success
                     exit(EXIT_SUCCESS);
                 } else { // fRet = false or token read error (premature exit).
-                    tfm::format(std::cerr, "Error during initialization - check debug.log for details\n");
+                    tfm::format(std::cerr, "Error during initialization - check %s for details\n", fs::PathToString(LogInstance().m_file_path.filename()));
                     exit(EXIT_FAILURE);
                 }
             }
@@ -259,11 +260,6 @@ static bool AppInit(NodeContext& node)
 
 MAIN_FUNCTION
 {
-#ifdef WIN32
-    common::WinCmdLineArgs winArgs;
-    std::tie(argc, argv) = winArgs.get();
-#endif
-
     NodeContext node;
     int exit_status;
     std::unique_ptr<interfaces::Init> init = interfaces::MakeNodeInit(node, argc, argv, exit_status);

@@ -1,4 +1,4 @@
-// Copyright (c) 2011-2022 The Bitcoin Core developers
+// Copyright (c) 2011-present The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -72,6 +72,9 @@ namespace {
 
 // don't add private key handling cmd's to the history
 const QStringList historyFilter = QStringList()
+    << "createwallet"
+    << "createwalletdescriptor"
+    << "migratewallet"
     << "signmessagewithprivkey"
     << "signrawtransactionwithkey"
     << "walletpassphrase"
@@ -481,7 +484,10 @@ RPCConsole::RPCConsole(interfaces::Node& node, const PlatformStyle *_platformSty
         tr("Outbound Feeler: short-lived, for testing addresses"),
         /*: Explanatory text for a short-lived outbound peer connection that is used
             to request addresses from a peer. */
-        tr("Outbound Address Fetch: short-lived, for soliciting addresses")};
+        tr("Outbound Address Fetch: short-lived, for soliciting addresses"),
+        /*: Explanatory text for a short-lived outbound peer connection that is used
+            to broadcast privacy-sensitive data (like our transactions). */
+        tr("Private broadcast: short-lived, for broadcasting privacy-sensitive transactions")};
     const QString connection_types_list{"<ul><li>" + Join(CONNECTION_TYPE_DOC, QString("</li><li>")) + "</li></ul>"};
     ui->peerConnectionTypeLabel->setToolTip(ui->peerConnectionTypeLabel->toolTip().arg(connection_types_list));
     const std::vector<QString> TRANSPORT_TYPE_DOC{
@@ -1159,22 +1165,19 @@ void RPCConsole::updateDetailWidget()
     if (stats->nodeStats.m_bip152_highbandwidth_from) bip152_hb_settings += (bip152_hb_settings.isEmpty() ? ts.from : QLatin1Char('/') + ts.from);
     if (bip152_hb_settings.isEmpty()) bip152_hb_settings = ts.no;
     ui->peerHighBandwidth->setText(bip152_hb_settings);
+    const auto now{NodeClock::now()};
     const auto time_now{GetTime<std::chrono::seconds>()};
-    ui->peerConnTime->setText(GUIUtil::formatDurationStr(time_now - stats->nodeStats.m_connected));
+    ui->peerConnTime->setText(GUIUtil::formatDurationStr(now - stats->nodeStats.m_connected));
     ui->peerLastBlock->setText(TimeDurationField(time_now, stats->nodeStats.m_last_block_time));
     ui->peerLastTx->setText(TimeDurationField(time_now, stats->nodeStats.m_last_tx_time));
-    ui->peerLastSend->setText(TimeDurationField(time_now, stats->nodeStats.m_last_send));
-    ui->peerLastRecv->setText(TimeDurationField(time_now, stats->nodeStats.m_last_recv));
+    ui->peerLastSend->setText(TimeDurationField(now, stats->nodeStats.m_last_send));
+    ui->peerLastRecv->setText(TimeDurationField(now, stats->nodeStats.m_last_recv));
     ui->peerBytesSent->setText(GUIUtil::formatBytes(stats->nodeStats.nSendBytes));
     ui->peerBytesRecv->setText(GUIUtil::formatBytes(stats->nodeStats.nRecvBytes));
     ui->peerPingTime->setText(GUIUtil::formatPingTime(stats->nodeStats.m_last_ping_time));
     ui->peerMinPing->setText(GUIUtil::formatPingTime(stats->nodeStats.m_min_ping_time));
-    if (stats->nodeStats.nVersion) {
-        ui->peerVersion->setText(QString::number(stats->nodeStats.nVersion));
-    }
-    if (!stats->nodeStats.cleanSubVer.empty()) {
-        ui->peerSubversion->setText(QString::fromStdString(stats->nodeStats.cleanSubVer));
-    }
+    ui->peerVersion->setText(stats->nodeStats.nVersion ? QString::number(stats->nodeStats.nVersion) : ts.na);
+    ui->peerSubversion->setText(!stats->nodeStats.cleanSubVer.empty() ? QString::fromStdString(stats->nodeStats.cleanSubVer) : ts.na);
     ui->peerConnectionType->setText(GUIUtil::ConnectionTypeToQString(stats->nodeStats.m_conn_type, /*prepend_direction=*/true));
     ui->peerTransportType->setText(QString::fromStdString(TransportTypeAsString(stats->nodeStats.m_transport_type)));
     if (stats->nodeStats.m_transport_type == TransportProtocolType::V2) {
@@ -1214,7 +1217,6 @@ void RPCConsole::updateDetailWidget()
         } else {
             ui->peerCommonHeight->setText(ts.unknown);
         }
-        ui->peerHeight->setText(QString::number(stats->nodeStateStats.m_starting_height));
         ui->peerPingWait->setText(GUIUtil::formatPingTime(stats->nodeStateStats.m_ping_wait));
         ui->peerAddrRelayEnabled->setText(stats->nodeStateStats.m_addr_relay_enabled ? ts.yes : ts.no);
         ui->peerAddrProcessed->setText(QString::number(stats->nodeStateStats.m_addr_processed));

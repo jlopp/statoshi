@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2020-2022 The Bitcoin Core developers
+# Copyright (c) 2020-present The Bitcoin Core developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 """Test coinstatsindex across nodes.
@@ -194,7 +194,7 @@ class CoinStatsIndexTest(BitcoinTestFramework):
         # Generate a block that includes previous coinbase
         tip = self.nodes[0].getbestblockhash()
         block_time = self.nodes[0].getblock(tip)['time'] + 1
-        block = create_block(int(tip, 16), cb, block_time)
+        block = create_block(int(tip, 16), cb, ntime=block_time)
         block.solve()
         self.nodes[0].submitblock(block.serialize().hex())
         self.sync_all()

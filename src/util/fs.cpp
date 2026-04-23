@@ -3,23 +3,20 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <util/fs.h>
+
+#include <util/check.h>
 #include <util/syserror.h>
 
+#include <cerrno>
+#include <string>
+
 #ifndef WIN32
-#include <cstring>
 #include <fcntl.h>
-#include <sys/file.h>
-#include <sys/utsname.h>
 #include <unistd.h>
 #else
-#include <codecvt>
 #include <limits>
 #include <windows.h>
 #endif
-
-#include <cassert>
-#include <cerrno>
-#include <string>
 
 namespace fsbridge {
 
@@ -28,8 +25,7 @@ FILE *fopen(const fs::path& p, const char *mode)
 #ifndef WIN32
     return ::fopen(p.c_str(), mode);
 #else
-    std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>,wchar_t> utf8_cvt;
-    return ::_wfopen(p.wstring().c_str(), utf8_cvt.from_bytes(mode).c_str());
+    return ::fopen(p.utf8string().c_str(), mode);
 #endif
 }
 

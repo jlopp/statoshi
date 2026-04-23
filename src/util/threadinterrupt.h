@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2022 The Bitcoin Core developers
+// Copyright (c) 2016-present The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -6,10 +6,9 @@
 #define BITCOIN_UTIL_THREADINTERRUPT_H
 
 #include <sync.h>
-#include <threadsafety.h>
+#include <util/time.h>
 
 #include <atomic>
-#include <chrono>
 #include <condition_variable>
 
 /**

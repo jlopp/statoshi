@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-# Copyright (c) 2022 The Bitcoin Core developers
+# Copyright (c) 2022-present The Bitcoin Core developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 import base64
 
+from .util import assert_equal
 from .messages import (
     CTransaction,
     deser_string,
@@ -110,7 +111,7 @@ class PSBT:
         self.tx = None
 
     def deserialize(self, f):
-        assert f.read(5) == b"psbt\xff"
+        assert_equal(f.read(5), b"psbt\xff")
         self.g = from_binary(PSBTMap, f)
         assert PSBT_GLOBAL_UNSIGNED_TX in self.g.map
         self.tx = from_binary(CTransaction, self.g.map[PSBT_GLOBAL_UNSIGNED_TX])
@@ -124,8 +125,8 @@ class PSBT:
         assert isinstance(self.o, list) and all(isinstance(x, PSBTMap) for x in self.o)
         assert PSBT_GLOBAL_UNSIGNED_TX in self.g.map
         tx = from_binary(CTransaction, self.g.map[PSBT_GLOBAL_UNSIGNED_TX])
-        assert len(tx.vin) == len(self.i)
-        assert len(tx.vout) == len(self.o)
+        assert_equal(len(tx.vin), len(self.i))
+        assert_equal(len(tx.vout), len(self.o))
 
         psbt = [x.serialize() for x in [self.g] + self.i + self.o]
         return b"psbt\xff" + b"".join(psbt)

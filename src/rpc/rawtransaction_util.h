@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2022 The Bitcoin Core developers
+// Copyright (c) 2017-present The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -7,6 +7,7 @@
 
 #include <addresstype.h>
 #include <consensus/amount.h>
+#include <rpc/util.h>
 #include <map>
 #include <string>
 #include <optional>
@@ -53,6 +54,17 @@ std::vector<std::pair<CTxDestination, CAmount>> ParseOutputs(const UniValue& out
 void AddOutputs(CMutableTransaction& rawTx, const UniValue& outputs_in);
 
 /** Create a transaction from univalue parameters */
-CMutableTransaction ConstructTransaction(const UniValue& inputs_in, const UniValue& outputs_in, const UniValue& locktime, std::optional<bool> rbf, const uint32_t version);
+CMutableTransaction ConstructTransaction(const UniValue& inputs_in, const UniValue& outputs_in, const UniValue& locktime, std::optional<bool> rbf, uint32_t version);
+
+struct TxDocOptions {
+    /// The description of the txid field
+    std::string txid_field_doc{"The transaction id"};
+    /// Include wallet-related fields (e.g. ischange on outputs)
+    bool wallet{false};
+    /// Treat this as an elided Result in the help
+    std::optional<std::string> elision_description{};
+};
+/** Explain the UniValue "decoded" transaction object, may include extra fields if processed by wallet **/
+std::vector<RPCResult> TxDoc(const TxDocOptions& opts = {});
 
 #endif // BITCOIN_RPC_RAWTRANSACTION_UTIL_H

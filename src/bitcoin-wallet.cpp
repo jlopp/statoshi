@@ -8,6 +8,7 @@
 #include <chainparamsbase.h>
 #include <clientversion.h>
 #include <common/args.h>
+#include <common/license_info.h>
 #include <common/system.h>
 #include <compat/compat.h>
 #include <interfaces/init.h>
@@ -94,10 +95,6 @@ static std::optional<int> WalletAppInit(ArgsManager& args, int argc, char* argv[
 MAIN_FUNCTION
 {
     ArgsManager& args = gArgs;
-#ifdef WIN32
-    common::WinCmdLineArgs winArgs;
-    std::tie(argc, argv) = winArgs.get();
-#endif
 
     int exit_status;
     std::unique_ptr<interfaces::Init> init = interfaces::MakeWalletInit(argc, argv, exit_status);

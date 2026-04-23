@@ -48,6 +48,19 @@ struct ServerInvokeContext : InvokeContext
     ProxyServer& proxy_server;
     CallContext& call_context;
     int req;
+    //! For IPC methods that execute asynchronously, not on the event-loop
+    //! thread: lock preventing the event-loop thread from freeing the params or
+    //! results structs if the request is canceled while the worker thread is
+    //! reading params (`call_context.getParams()`) or writing results
+    //! (`call_context.getResults()`).
+    Lock* cancel_lock{nullptr};
+    //! For IPC methods that execute asynchronously, not on the event-loop
+    //! thread, this is set to true if the IPC call was canceled by the client
+    //! or canceled by a disconnection. If the call runs on the event-loop
+    //! thread, it can't be canceled. This should be accessed with cancel_lock
+    //! held if it is not null, since in the asynchronous case it is accessed
+    //! from multiple threads.
+    bool request_canceled{false};
 
     ServerInvokeContext(ProxyServer& proxy_server, CallContext& call_context, int req)
         : InvokeContext{*proxy_server.m_context.connection}, proxy_server{proxy_server}, call_context{call_context}, req{req}
@@ -82,11 +95,23 @@ template <>
 struct ProxyServer<Thread> final : public Thread::Server
 {
 public:
-    ProxyServer(ThreadContext& thread_context, std::thread&& thread);
+    ProxyServer(Connection& connection, ThreadContext& thread_context, std::thread&& thread);
     ~ProxyServer();
     kj::Promise<void> getName(GetNameContext context) override;
+
+    //! Run a callback function fn returning T on this thread. The function will
+    //! be queued and executed as soon as the thread is idle, and when fn
+    //! returns, the promise returned by this method will be fulfilled with the
+    //! value fn returned.
+    template<typename T, typename Fn>
+    kj::Promise<T> post(Fn&& fn);
+
+    EventLoopRef m_loop;
     ThreadContext& m_thread_context;
     std::thread m_thread;
+    //! Promise signaled when m_thread_context.waiter is ready and there is no
+    //! post() callback function waiting to execute.
+    kj::Promise<void> m_thread_ready{kj::READY_NOW};
 };
 
 //! Handler for kj::TaskSet failed task events.
@@ -98,35 +123,28 @@ public:
     EventLoop& m_loop;
 };
 
-using LogFn = std::function<void(bool raise, std::string message)>;
-
-class Logger
-{
-public:
-    Logger(bool raise, LogFn& fn) : m_raise(raise), m_fn(fn) {}
-    Logger(Logger&& logger) : m_raise(logger.m_raise), m_fn(logger.m_fn), m_buffer(std::move(logger.m_buffer)) {}
-    ~Logger() noexcept(false)
-    {
-        if (m_fn) m_fn(m_raise, m_buffer.str());
-    }
-
-    template <typename T>
-    friend Logger& operator<<(Logger& logger, T&& value)
-    {
-        if (logger.m_fn) logger.m_buffer << std::forward<T>(value);
-        return logger;
-    }
-
-    template <typename T>
-    friend Logger& operator<<(Logger&& logger, T&& value)
-    {
-        return logger << std::forward<T>(value);
-    }
-
-    bool m_raise;
-    LogFn& m_fn;
-    std::ostringstream m_buffer;
+//! Log flags. Update stringify function if changed!
+enum class Log {
+    Trace = 0,
+    Debug,
+    Info,
+    Warning,
+    Error,
+    Raise,
 };
+
+kj::StringPtr KJ_STRINGIFY(Log flags);
+
+struct LogMessage {
+
+    //! Message to be logged
+    std::string message;
+
+    //! The severity level of this message
+    Log level;
+};
+
+using LogFn = std::function<void(LogMessage)>;
 
 struct LogOptions {
 
@@ -136,7 +154,59 @@ struct LogOptions {
     //! Maximum number of characters to use when representing
     //! request and response structs as strings.
     size_t max_chars{200};
+
+    //! Messages with a severity level less than log_level will not be
+    //! reported.
+    Log log_level{Log::Trace};
 };
+
+class Logger
+{
+public:
+    Logger(const LogOptions& options, Log log_level) : m_options(options), m_log_level(log_level) {}
+
+    Logger(Logger&&) = delete;
+    Logger& operator=(Logger&&) = delete;
+    Logger(const Logger&) = delete;
+    Logger& operator=(const Logger&) = delete;
+
+    ~Logger() noexcept(false)
+    {
+        if (enabled()) m_options.log_fn({std::move(m_buffer).str(), m_log_level});
+    }
+
+    template <typename T>
+    friend Logger& operator<<(Logger& logger, T&& value)
+    {
+        if (logger.enabled()) logger.m_buffer << std::forward<T>(value);
+        return logger;
+    }
+
+    template <typename T>
+    friend Logger& operator<<(Logger&& logger, T&& value)
+    {
+        return logger << std::forward<T>(value);
+    }
+
+    explicit operator bool() const
+    {
+        return enabled();
+    }
+
+private:
+    bool enabled() const
+    {
+        return m_options.log_fn && m_log_level >= m_options.log_level;
+    }
+
+    const LogOptions& m_options;
+    Log m_log_level;
+    std::ostringstream m_buffer;
+};
+
+#define MP_LOGPLAIN(loop, ...) if (mp::Logger logger{(loop).m_log_opts, __VA_ARGS__}; logger) logger
+
+#define MP_LOG(loop, ...) MP_LOGPLAIN(loop, __VA_ARGS__) << "{" << LongThreadName((loop).m_exe_name) << "} "
 
 std::string LongThreadName(const char* exe_name);
 
@@ -168,8 +238,19 @@ std::string LongThreadName(const char* exe_name);
 class EventLoop
 {
 public:
-    //! Construct event loop object.
-    EventLoop(const char* exe_name, LogFn log_fn, void* context = nullptr);
+    //! Construct event loop object with default logging options.
+    EventLoop(const char* exe_name, LogFn log_fn, void* context = nullptr)
+        : EventLoop(exe_name, LogOptions{std::move(log_fn)}, context){}
+
+    //! Construct event loop object with specified logging options.
+    EventLoop(const char* exe_name, LogOptions log_opts, void* context = nullptr);
+
+    //! Backwards-compatible constructor for previous (deprecated) logging callback signature
+    EventLoop(const char* exe_name, std::function<void(bool, std::string)> old_callback, void* context = nullptr)
+        : EventLoop(exe_name,
+                LogFn{[old_callback = std::move(old_callback)](LogMessage log_data) {old_callback(log_data.level == Log::Raise, std::move(log_data.message));}},
+                context){}
+
     ~EventLoop();
 
     //! Run event loop. Does not return until shutdown. This should only be
@@ -209,15 +290,6 @@ public:
 
     //! Check if loop should exit.
     bool done() const MP_REQUIRES(m_mutex);
-
-    Logger log()
-    {
-        Logger logger(false, m_log_opts.log_fn);
-        logger << "{" << LongThreadName(m_exe_name) << "} ";
-        return logger;
-    }
-    Logger logPlain() { return {false, m_log_opts.log_fn}; }
-    Logger raise() { return {true, m_log_opts.log_fn}; }
 
     //! Process name included in thread names so combined debug output from
     //! multiple processes is easier to understand.
@@ -268,25 +340,47 @@ public:
 
     //! External context pointer.
     void* m_context;
+
+    //! Hook called when ProxyServer<ThreadMap>::makeThread() is called.
+    std::function<void()> testing_hook_makethread;
+
+    //! Hook called on the worker thread inside makeThread(), after the thread
+    //! context is set up and thread_context promise is fulfilled, but before it
+    //! starts waiting for requests.
+    std::function<void()> testing_hook_makethread_created;
+
+    //! Hook called on the worker thread when it starts to execute an async
+    //! request. Used by tests to control timing or inject behavior at this
+    //! point in execution.
+    std::function<void()> testing_hook_async_request_start;
+
+    //! Hook called on the worker thread just before returning results.
+    std::function<void()> testing_hook_async_request_done;
 };
 
-//! Single element task queue used to handle recursive capnp calls. (If server
-//! makes an callback into the client in the middle of a request, while client
+//! Single element task queue used to handle recursive capnp calls. (If the
+//! server makes a callback into the client in the middle of a request, while the client
 //! thread is blocked waiting for server response, this is what allows the
-//! client to run the request in the same thread, the same way code would run in
-//! single process, with the callback sharing same thread stack as the original
-//! call.
+//! client to run the request in the same thread, the same way code would run in a
+//! single process, with the callback sharing the same thread stack as the original
+//! call.) To support this, the clientInvoke function calls Waiter::wait() to
+//! block the client IPC thread while initial request is in progress. Then if
+//! there is a callback, it is executed with Waiter::post().
+//!
+//! The Waiter class is also used server-side by `ProxyServer<Thread>::post()`
+//! to execute IPC calls on worker threads.
 struct Waiter
 {
     Waiter() = default;
 
     template <typename Fn>
-    void post(Fn&& fn)
+    bool post(Fn&& fn)
     {
         const Lock lock(m_mutex);
-        assert(!m_fn);
+        if (m_fn) return false;
         m_fn = std::forward<Fn>(fn);
         m_cv.notify_all();
+        return true;
     }
 
     template <class Predicate>
@@ -356,11 +450,11 @@ public:
     template <typename F>
     void onDisconnect(F&& f)
     {
-        // Add disconnect handler to local TaskSet to ensure it is cancelled and
+        // Add disconnect handler to local TaskSet to ensure it is canceled and
         // will never run after connection object is destroyed. But when disconnect
         // handler fires, do not call the function f right away, instead add it
         // to the EventLoop TaskSet to avoid "Promise callback destroyed itself"
-        // error in cases where f deletes this Connection object.
+        // error in the typical case where f deletes this Connection object.
         m_on_disconnect.add(m_network.onDisconnect().then(
             [f = std::forward<F>(f), this]() mutable { m_loop->m_task_set->add(kj::evalLater(kj::mv(f))); }));
     }
@@ -368,6 +462,9 @@ public:
     EventLoopRef m_loop;
     kj::Own<kj::AsyncIoStream> m_stream;
     LoggingErrorHandler m_error_handler{*m_loop};
+    //! TaskSet used to cancel the m_network.onDisconnect() handler for remote
+    //! disconnections, if the connection is closed locally first by deleting
+    //! this Connection object.
     kj::TaskSet m_on_disconnect{m_error_handler};
     ::capnp::TwoPartyVatNetwork m_network;
     std::optional<::capnp::RpcSystem<::capnp::rpc::twoparty::VatId>> m_rpc_system;
@@ -379,6 +476,11 @@ public:
     //! Collection of server-side IPC worker threads (ProxyServer<Thread> objects previously returned by
     //! ThreadMap.makeThread) used to service requests to clients.
     ::capnp::CapabilityServerSet<Thread> m_threads;
+
+    //! Canceler for canceling promises that we want to discard when the
+    //! connection is destroyed. This is used to interrupt method calls that are
+    //! still executing at time of disconnection.
+    kj::Canceler m_canceler;
 
     //! Cleanup functions to run if connection is broken unexpectedly.  List
     //! will be empty if all ProxyClient are destroyed cleanly before the
@@ -627,6 +729,70 @@ struct ThreadContext
     bool loop_thread = false;
 };
 
+template<typename T, typename Fn>
+kj::Promise<T> ProxyServer<Thread>::post(Fn&& fn)
+{
+    auto ready = kj::newPromiseAndFulfiller<void>(); // Signaled when waiter is ready to post again.
+    auto cancel_monitor_ptr = kj::heap<CancelMonitor>();
+    CancelMonitor& cancel_monitor = *cancel_monitor_ptr;
+    // Keep a reference to the ProxyServer<Thread> instance by assigning it to
+    // the self variable. ProxyServer instances are reference-counted and if the
+    // client drops its reference, this variable keeps the instance alive until
+    // the thread finishes executing. The self variable needs to be destroyed on
+    // the event loop thread so it is freed in a sync() call below.
+    auto self = thisCap();
+    auto ret = m_thread_ready.then([this, self = std::move(self), fn = std::forward<Fn>(fn), ready_fulfiller = kj::mv(ready.fulfiller), cancel_monitor_ptr = kj::mv(cancel_monitor_ptr)]() mutable {
+        auto result = kj::newPromiseAndFulfiller<T>(); // Signaled when fn() is called, with its return value.
+        bool posted = m_thread_context.waiter->post([this, self = std::move(self), fn = std::forward<Fn>(fn), ready_fulfiller = kj::mv(ready_fulfiller), result_fulfiller = kj::mv(result.fulfiller), cancel_monitor_ptr = kj::mv(cancel_monitor_ptr)]() mutable {
+            // Fulfill ready.promise now, as soon as the Waiter starts executing
+            // this lambda, so the next ProxyServer<Thread>::post() call can
+            // immediately call waiter->post(). It is important to do this
+            // before calling fn() because fn() can make an IPC call back to the
+            // client, which can make another IPC call to this server thread.
+            // (This typically happens when IPC methods take std::function
+            // parameters.) When this happens the second call to the server
+            // thread should not be blocked waiting for the first call.
+            m_loop->sync([ready_fulfiller = kj::mv(ready_fulfiller)]() mutable {
+                ready_fulfiller->fulfill();
+                ready_fulfiller = nullptr;
+            });
+            std::optional<T> result_value;
+            kj::Maybe<kj::Exception> exception{kj::runCatchingExceptions([&]{ result_value.emplace(fn(*cancel_monitor_ptr)); })};
+            m_loop->sync([this, &result_value, &exception, self = kj::mv(self), result_fulfiller = kj::mv(result_fulfiller), cancel_monitor_ptr = kj::mv(cancel_monitor_ptr)]() mutable {
+                // Destroy CancelMonitor here before fulfilling or rejecting the
+                // promise so it doesn't get triggered when the promise is
+                // destroyed.
+                cancel_monitor_ptr = nullptr;
+                // Send results to the fulfiller. Technically it would be ok to
+                // skip this if promise was canceled, but it's simpler to just
+                // do it unconditionally.
+                KJ_IF_MAYBE(e, exception) {
+                    assert(!result_value);
+                    result_fulfiller->reject(kj::mv(*e));
+                } else {
+                    assert(result_value);
+                    result_fulfiller->fulfill(kj::mv(*result_value));
+                    result_value.reset();
+                }
+                result_fulfiller = nullptr;
+                // Use evalLater to destroy the ProxyServer<Thread> self
+                // reference, if it is the last reference, because the
+                // ProxyServer<Thread> destructor needs to join the thread,
+                // which can't happen until this sync() block has exited.
+                m_loop->m_task_set->add(kj::evalLater([self = kj::mv(self)] {}));
+            });
+        });
+        // Assert that calling Waiter::post did not fail. It could only return
+        // false if a new function was posted before the previous one finished
+        // executing, but new functions are only posted when m_thread_ready is
+        // signaled, so this should never happen.
+        assert(posted);
+        return kj::mv(result.promise);
+    }).attach(kj::heap<CancelProbe>(cancel_monitor));
+    m_thread_ready = kj::mv(ready.promise);
+    return ret;
+}
+
 //! Given stream file descriptor, make a new ProxyClient object to send requests
 //! over the stream. Also create a new Connection object embedded in the
 //! client that is freed when the client is closed.
@@ -642,7 +808,7 @@ std::unique_ptr<ProxyClient<InitInterface>> ConnectStream(EventLoop& loop, int f
         init_client = connection->m_rpc_system->bootstrap(ServerVatId().vat_id).castAs<InitInterface>();
         Connection* connection_ptr = connection.get();
         connection->onDisconnect([&loop, connection_ptr] {
-            loop.log() << "IPC client: unexpected network disconnect.";
+            MP_LOG(loop, Log::Warning) << "IPC client: unexpected network disconnect.";
             delete connection_ptr;
         });
     });
@@ -664,8 +830,9 @@ void _Serve(EventLoop& loop, kj::Own<kj::AsyncIoStream>&& stream, InitImpl& init
         return kj::heap<ProxyServer<InitInterface>>(std::shared_ptr<InitImpl>(&init, [](InitImpl*){}), connection);
     });
     auto it = loop.m_incoming_connections.begin();
+    MP_LOG(loop, Log::Info) << "IPC server: socket connected.";
     it->onDisconnect([&loop, it] {
-        loop.log() << "IPC server: socket disconnected.";
+        MP_LOG(loop, Log::Info) << "IPC server: socket disconnected.";
         loop.m_incoming_connections.erase(it);
     });
 }

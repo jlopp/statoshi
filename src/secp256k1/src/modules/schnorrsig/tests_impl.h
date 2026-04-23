@@ -8,6 +8,7 @@
 #define SECP256K1_MODULE_SCHNORRSIG_TESTS_H
 
 #include "../../../include/secp256k1_schnorrsig.h"
+#include "../../unit_test.h"
 
 /* Checks that a bit flip in the n_flip-th argument (that has n_bytes many
  * bytes) changes the hash function
@@ -21,11 +22,12 @@ static void nonce_function_bip340_bitflip(unsigned char **args, size_t n_flip, s
 }
 
 static void run_nonce_function_bip340_tests(void) {
-    unsigned char tag[] = {'B', 'I', 'P', '0', '3', '4', '0', '/', 'n', 'o', 'n', 'c', 'e'};
-    unsigned char aux_tag[] = {'B', 'I', 'P', '0', '3', '4', '0', '/', 'a', 'u', 'x'};
+    /* "BIP0340/nonce" */
+    static const unsigned char tag[] = {'B', 'I', 'P', '0', '3', '4', '0', '/', 'n', 'o', 'n', 'c', 'e'};
+    /* "BIP0340/aux" */
+    static const unsigned char aux_tag[] = {'B', 'I', 'P', '0', '3', '4', '0', '/', 'a', 'u', 'x'};
     unsigned char algo[] = {'B', 'I', 'P', '0', '3', '4', '0', '/', 'n', 'o', 'n', 'c', 'e'};
     size_t algolen = sizeof(algo);
-    secp256k1_sha256 sha;
     secp256k1_sha256 sha_optimized;
     unsigned char nonce[32], nonce_z[32];
     unsigned char msg[32];
@@ -36,19 +38,20 @@ static void run_nonce_function_bip340_tests(void) {
     unsigned char *args[5];
     int i;
 
+    const secp256k1_hash_ctx *hash_ctx = secp256k1_get_hash_context(CTX);
+
     /* Check that hash initialized by
      * secp256k1_nonce_function_bip340_sha256_tagged has the expected
      * state. */
-    secp256k1_sha256_initialize_tagged(&sha, tag, sizeof(tag));
     secp256k1_nonce_function_bip340_sha256_tagged(&sha_optimized);
-    test_sha256_eq(&sha, &sha_optimized);
+    test_sha256_tag_midstate(hash_ctx, &sha_optimized, tag, sizeof(tag));
+
 
    /* Check that hash initialized by
     * secp256k1_nonce_function_bip340_sha256_tagged_aux has the expected
     * state. */
-    secp256k1_sha256_initialize_tagged(&sha, aux_tag, sizeof(aux_tag));
     secp256k1_nonce_function_bip340_sha256_tagged_aux(&sha_optimized);
-    test_sha256_eq(&sha, &sha_optimized);
+    test_sha256_tag_midstate(hash_ctx, &sha_optimized, aux_tag, sizeof(aux_tag));
 
     testrand256(msg);
     testrand256(key);
@@ -161,8 +164,9 @@ static void test_schnorrsig_sha256_tagged(void) {
     unsigned char tag[] = {'B', 'I', 'P', '0', '3', '4', '0', '/', 'c', 'h', 'a', 'l', 'l', 'e', 'n', 'g', 'e'};
     secp256k1_sha256 sha;
     secp256k1_sha256 sha_optimized;
+    const secp256k1_hash_ctx *hash_ctx = secp256k1_get_hash_context(CTX);
 
-    secp256k1_sha256_initialize_tagged(&sha, (unsigned char *) tag, sizeof(tag));
+    secp256k1_sha256_initialize_tagged(hash_ctx, &sha, (unsigned char *) tag, sizeof(tag));
     secp256k1_schnorrsig_sha256_tagged(&sha_optimized);
     test_sha256_eq(&sha, &sha_optimized);
 }
@@ -802,7 +806,7 @@ static int nonce_function_overflowing(unsigned char *nonce32, const unsigned cha
     return 1;
 }
 
-static void test_schnorrsig_sign(void) {
+static void test_schnorrsig_sign_internal(void) {
     unsigned char sk[32];
     secp256k1_xonly_pubkey pk;
     secp256k1_keypair keypair;
@@ -848,11 +852,34 @@ static void test_schnorrsig_sign(void) {
     CHECK(secp256k1_memcmp_var(sig, sig2, sizeof(sig)) == 0);
 }
 
+DEFINE_SHA256_TRANSFORM_PROBE(sha256_schnorrsig)
+static void test_schnorrsig_ctx_sha256(void) {
+    /* Check ctx-provided SHA256 compression override takes effect */
+    secp256k1_context *ctx = secp256k1_context_clone(CTX);
+    unsigned char out_default[64], out_custom[64];
+    unsigned char sk[32] = {1}, msg32[32] = {1};
+    secp256k1_keypair keypair;
+    CHECK(secp256k1_keypair_create(ctx, &keypair, sk));
+
+    /* Default behavior. No ctx-provided SHA256 compression */
+    CHECK(secp256k1_schnorrsig_sign32(ctx, out_default, msg32, &keypair, NULL));
+    CHECK(!sha256_schnorrsig_called);
+
+    /* Override SHA256 compression directly, bypassing the ctx setter sanity checks */
+    ctx->hash_ctx.fn_sha256_compression = sha256_schnorrsig;
+    CHECK(secp256k1_schnorrsig_sign32(ctx, out_custom, msg32, &keypair, NULL));
+    CHECK(sha256_schnorrsig_called);
+    /* Outputs must differ if custom compression was used */
+    CHECK(secp256k1_memcmp_var(out_default, out_custom, 64) != 0);
+
+    secp256k1_context_destroy(ctx);
+}
+
 #define N_SIGS 3
 /* Creates N_SIGS valid signatures and verifies them with verify and
  * verify_batch (TODO). Then flips some bits and checks that verification now
  * fails. */
-static void test_schnorrsig_sign_verify(void) {
+static void test_schnorrsig_sign_verify_internal(void) {
     unsigned char sk[32];
     unsigned char msg[N_SIGS][32];
     unsigned char sig[N_SIGS][64];
@@ -965,18 +992,19 @@ static void test_schnorrsig_taproot(void) {
     CHECK(secp256k1_xonly_pubkey_tweak_add_check(CTX, output_pk_bytes, pk_parity, &internal_pk, tweak) == 1);
 }
 
-static void run_schnorrsig_tests(void) {
-    int i;
-    run_nonce_function_bip340_tests();
+/* --- Test registry --- */
+REPEAT_TEST(test_schnorrsig_sign)
+REPEAT_TEST(test_schnorrsig_sign_verify)
 
-    test_schnorrsig_api();
-    test_schnorrsig_sha256_tagged();
-    test_schnorrsig_bip_vectors();
-    for (i = 0; i < COUNT; i++) {
-        test_schnorrsig_sign();
-        test_schnorrsig_sign_verify();
-    }
-    test_schnorrsig_taproot();
-}
+static const struct tf_test_entry tests_schnorrsig[] = {
+    CASE(nonce_function_bip340_tests),
+    CASE1(test_schnorrsig_api),
+    CASE1(test_schnorrsig_sha256_tagged),
+    CASE1(test_schnorrsig_bip_vectors),
+    CASE1(test_schnorrsig_sign),
+    CASE1(test_schnorrsig_sign_verify),
+    CASE1(test_schnorrsig_taproot),
+    CASE1(test_schnorrsig_ctx_sha256),
+};
 
 #endif

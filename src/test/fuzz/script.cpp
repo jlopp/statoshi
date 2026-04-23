@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2022 The Bitcoin Core developers
+// Copyright (c) 2019-present The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -93,13 +93,6 @@ FUZZ_TARGET(script, .init = initialize_script)
     std::vector<std::vector<unsigned char>> solutions;
     (void)Solver(script, solutions);
 
-    (void)script.HasValidOps();
-    (void)script.IsPayToAnchor();
-    (void)script.IsPayToScriptHash();
-    (void)script.IsPayToWitnessScriptHash();
-    (void)script.IsPushOnly();
-    (void)script.GetSigOpCount(/* fAccurate= */ false);
-
     {
         const std::vector<uint8_t> bytes = ConsumeRandomLengthByteVector(fuzzed_data_provider);
         CompressedScript compressed_script;
@@ -125,7 +118,7 @@ FUZZ_TARGET(script, .init = initialize_script)
             for (const auto& s : random_string_vector) {
                 wit.stack.emplace_back(s.begin(), s.end());
             }
-            (void)CountWitnessSigOps(script, *other_script, &wit, flags);
+            (void)CountWitnessSigOps(script, *other_script, wit, flags);
             wit.SetNull();
         }
     }

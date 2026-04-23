@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2017-2021 The Bitcoin Core developers
+# Copyright (c) 2017-present The Bitcoin Core developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -55,10 +55,10 @@ class GetblockstatsTest(BitcoinTestFramework):
 
         self.nodes[0].sendtoaddress(address=address, amount=10, subtractfeefromamount=True)
         self.nodes[0].sendtoaddress(address=address, amount=10, subtractfeefromamount=False)
-        self.nodes[0].settxfee(amount=0.003)
-        self.nodes[0].sendtoaddress(address=address, amount=1, subtractfeefromamount=True)
+        self.fee_rate=300
+        self.nodes[0].sendtoaddress(address=address, amount=1, subtractfeefromamount=True, fee_rate=self.fee_rate)
         # Send to OP_RETURN output to test its exclusion from statistics
-        self.nodes[0].send(outputs={"data": "21"})
+        self.nodes[0].send(outputs={"data": "21"}, fee_rate=self.fee_rate)
         self.sync_all()
         self.generate(self.nodes[0], 1)
 
@@ -78,11 +78,11 @@ class GetblockstatsTest(BitcoinTestFramework):
             'mocktime': int(mocktime),
             'stats': self.expected_stats,
         }
-        with open(filename, 'w', encoding="utf8") as f:
+        with open(filename, 'w') as f:
             json.dump(to_dump, f, sort_keys=True, indent=2)
 
     def load_test_data(self, filename):
-        with open(filename, 'r', encoding="utf8") as f:
+        with open(filename, 'r') as f:
             d = json.load(f)
             blocks = d['blocks']
             mocktime = d['mocktime']
@@ -171,16 +171,16 @@ class GetblockstatsTest(BitcoinTestFramework):
         genesis_stats = self.nodes[0].getblockstats(0)
         assert_equal(genesis_stats["blockhash"], "0f9188f13cb7b2c71f2a335e3a4fc328bf5beb436012afca590b1a11466e2206")
         assert_equal(genesis_stats["utxo_increase"], 1)
-        assert_equal(genesis_stats["utxo_size_inc"], 117)
+        assert_equal(genesis_stats["utxo_size_inc"], 116)
         assert_equal(genesis_stats["utxo_increase_actual"], 0)
         assert_equal(genesis_stats["utxo_size_inc_actual"], 0)
 
         self.log.info('Test tip including OP_RETURN')
         tip_stats = self.nodes[0].getblockstats(tip)
         assert_equal(tip_stats["utxo_increase"], 6)
-        assert_equal(tip_stats["utxo_size_inc"], 441)
+        assert_equal(tip_stats["utxo_size_inc"], 435)
         assert_equal(tip_stats["utxo_increase_actual"], 4)
-        assert_equal(tip_stats["utxo_size_inc_actual"], 300)
+        assert_equal(tip_stats["utxo_size_inc_actual"], 296)
 
         self.log.info("Test when only header is known")
         block = self.generateblock(self.nodes[0], output="raw(55)", transactions=[], submit=False)

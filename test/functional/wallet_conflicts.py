@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2023 The Bitcoin Core developers
+# Copyright (c) 2023-present The Bitcoin Core developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -146,7 +146,8 @@ class TxConflicts(BitcoinTestFramework):
 
         unspents = alice.listunspent()
         assert_equal(len(unspents), 3)
-        assert all([tx["amount"] == 25 for tx in unspents])
+        for tx in unspents:
+            assert_equal(tx["amount"], 25)
 
         # tx1 spends unspent[0] and unspent[1]
         raw_tx = alice.createrawtransaction(inputs=[unspents[0], unspents[1]], outputs=[{bob.getnewaddress() : 49.9999}])
@@ -336,7 +337,8 @@ class TxConflicts(BitcoinTestFramework):
 
         unspents = alice.listunspent()
         assert_equal(len(unspents), 2)
-        assert all([tx["amount"] == 25 for tx in unspents])
+        for tx in unspents:
+            assert_equal(tx["amount"], 25)
 
         assert_equal(alice.getrawmempool(), [])
 

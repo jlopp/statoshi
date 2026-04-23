@@ -1,4 +1,4 @@
-// Copyright (c) 2021-2022 The Bitcoin Core developers
+// Copyright (c) 2021-present The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -95,10 +95,13 @@ public:
                 fd = m_process->connect(gArgs.GetDataDirNet(), "bitcoin-node", address);
             } catch (const std::system_error& e) {
                 // If connection type is auto and socket path isn't accepting connections, or doesn't exist, catch the error and return null;
-                if (e.code() == std::errc::connection_refused || e.code() == std::errc::no_such_file_or_directory) {
+                if (e.code() == std::errc::connection_refused || e.code() == std::errc::no_such_file_or_directory || e.code() == std::errc::not_a_directory) {
                     return nullptr;
                 }
                 throw;
+            } catch (const std::invalid_argument&) {
+               // Catch 'Unix address path "..." exceeded maximum socket path length' error
+               return nullptr;
             }
         } else {
             fd = m_process->connect(gArgs.GetDataDirNet(), "bitcoin-node", address);

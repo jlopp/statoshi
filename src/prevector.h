@@ -72,11 +72,7 @@ public:
         iterator operator-(size_type n) const { return iterator(ptr - n); }
         iterator& operator-=(size_type n) { ptr -= n; return *this; }
         bool operator==(iterator x) const { return ptr == x.ptr; }
-        bool operator!=(iterator x) const { return ptr != x.ptr; }
-        bool operator>=(iterator x) const { return ptr >= x.ptr; }
-        bool operator<=(iterator x) const { return ptr <= x.ptr; }
-        bool operator>(iterator x) const { return ptr > x.ptr; }
-        bool operator<(iterator x) const { return ptr < x.ptr; }
+        auto operator<=>(iterator x) const { return ptr <=> x.ptr; }
     };
 
     class const_iterator {
@@ -104,11 +100,7 @@ public:
         const_iterator operator-(size_type n) const { return const_iterator(ptr - n); }
         const_iterator& operator-=(size_type n) { ptr -= n; return *this; }
         bool operator==(const_iterator x) const { return ptr == x.ptr; }
-        bool operator!=(const_iterator x) const { return ptr != x.ptr; }
-        bool operator>=(const_iterator x) const { return ptr >= x.ptr; }
-        bool operator<=(const_iterator x) const { return ptr <= x.ptr; }
-        bool operator>(const_iterator x) const { return ptr > x.ptr; }
-        bool operator<(const_iterator x) const { return ptr < x.ptr; }
+        auto operator<=>(const_iterator x) const { return ptr <=> x.ptr; }
     };
 
 private:
@@ -434,25 +426,8 @@ public:
         }
     }
 
-    bool operator==(const prevector<N, T, Size, Diff>& other) const {
-        if (other.size() != size()) {
-            return false;
-        }
-        const_iterator b1 = begin();
-        const_iterator b2 = other.begin();
-        const_iterator e1 = end();
-        while (b1 != e1) {
-            if ((*b1) != (*b2)) {
-                return false;
-            }
-            ++b1;
-            ++b2;
-        }
-        return true;
-    }
-
-    bool operator!=(const prevector<N, T, Size, Diff>& other) const {
-        return !(*this == other);
+    constexpr bool operator==(const prevector& other) const {
+        return std::ranges::equal(*this, other);
     }
 
     bool operator<(const prevector<N, T, Size, Diff>& other) const {

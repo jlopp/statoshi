@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2014-2021 The Bitcoin Core developers
+# Copyright (c) 2014-present The Bitcoin Core developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 """Test the getchaintips RPC.
@@ -69,11 +69,11 @@ class GetChainTipsTest (BitcoinTestFramework):
         start_height = self.nodes[0].getblockcount()
         # Create invalid block (too high coinbase)
         block_time = n0.getblock(n0.getbestblockhash())['time'] + 1
-        invalid_block = create_block(tip, create_coinbase(start_height+1, nValue=100), block_time)
+        invalid_block = create_block(tip, create_coinbase(start_height + 1, nValue=100), ntime=block_time)
         invalid_block.solve()
 
         block_time += 1
-        block2 = create_block(invalid_block.hash_int, create_coinbase(2), block_time, version=4)
+        block2 = create_block(invalid_block.hash_int, height=2, ntime=block_time, version=4)
         block2.solve()
 
         self.log.info("Submit headers-only chain")

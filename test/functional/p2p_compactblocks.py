@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2016-2022 The Bitcoin Core developers
+# Copyright (c) 2016-present The Bitcoin Core developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 """Test compact blocks (BIP 152)."""
@@ -551,8 +551,7 @@ class CompactBlocksTest(BitcoinTestFramework):
 
         # We should receive a getdata request
         test_node.wait_for_getdata([block.hash_int], timeout=10)
-        assert test_node.last_message["getdata"].inv[0].type == MSG_BLOCK or \
-               test_node.last_message["getdata"].inv[0].type == MSG_BLOCK | MSG_WITNESS_FLAG
+        assert test_node.last_message["getdata"].inv[0].type in (MSG_BLOCK, MSG_BLOCK | MSG_WITNESS_FLAG)
 
         # Deliver the block
         test_node.send_and_ping(msg_block(block))
@@ -586,13 +585,12 @@ class CompactBlocksTest(BitcoinTestFramework):
 
         # We should receive a getdata request
         test_node.wait_for_getdata([block.hash_int], timeout=10)
-        assert test_node.last_message["getdata"].inv[0].type == MSG_BLOCK or \
-               test_node.last_message["getdata"].inv[0].type == MSG_BLOCK | MSG_WITNESS_FLAG
+        assert test_node.last_message["getdata"].inv[0].type in (MSG_BLOCK, MSG_BLOCK | MSG_WITNESS_FLAG)
 
         # Send the same blocktxn and assert the sender gets disconnected.
         with node.assert_debug_log(['previous compact block reconstruction attempt failed']):
             test_node.send_without_ping(msg)
-        test_node.wait_for_disconnect()
+            test_node.wait_for_disconnect()
 
     def test_getblocktxn_handler(self, test_node):
         node = self.nodes[0]
@@ -642,7 +640,7 @@ class CompactBlocksTest(BitcoinTestFramework):
         msg.block_txn_request = BlockTransactionsRequest(int(block_hash, 16), [len(block.vtx)])
         with node.assert_debug_log(['getblocktxn with out-of-bounds tx indices']):
             bad_peer.send_without_ping(msg)
-        bad_peer.wait_for_disconnect()
+            bad_peer.wait_for_disconnect()
 
     def test_low_work_compactblocks(self, test_node):
         # A compactblock with insufficient work won't get its header included

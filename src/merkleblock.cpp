@@ -1,17 +1,18 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
-// Copyright (c) 2009-2020 The Bitcoin Core developers
+// Copyright (c) 2009-present The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <merkleblock.h>
 
-#include <hash.h>
 #include <consensus/consensus.h>
+#include <hash.h>
+#include <util/overflow.h>
 
 
 std::vector<unsigned char> BitsToBytes(const std::vector<bool>& bits)
 {
-    std::vector<unsigned char> ret((bits.size() + 7) / 8);
+    std::vector<unsigned char> ret(CeilDiv(bits.size(), 8u));
     for (unsigned int p = 0; p < bits.size(); p++) {
         ret[p / 8] |= bits[p] << (p % 8);
     }
@@ -29,7 +30,7 @@ std::vector<bool> BytesToBits(const std::vector<unsigned char>& bytes)
 
 CMerkleBlock::CMerkleBlock(const CBlock& block, CBloomFilter* filter, const std::set<Txid>* txids)
 {
-    header = block.GetBlockHeader();
+    header = static_cast<const CBlockHeader&>(block);
 
     std::vector<bool> vMatch;
     std::vector<Txid> vHashes;
@@ -40,7 +41,7 @@ CMerkleBlock::CMerkleBlock(const CBlock& block, CBloomFilter* filter, const std:
     for (unsigned int i = 0; i < block.vtx.size(); i++)
     {
         const Txid& hash{block.vtx[i]->GetHash()};
-        if (txids && txids->count(hash)) {
+        if (txids && txids->contains(hash)) {
             vMatch.push_back(true);
         } else if (filter && filter->IsRelevantAndUpdate(*block.vtx[i])) {
             vMatch.push_back(true);
@@ -174,7 +175,7 @@ uint256 CPartialMerkleTree::ExtractMatches(std::vector<Txid> &vMatch, std::vecto
     if (fBad)
         return uint256();
     // verify that all bits were consumed (except for the padding caused by serializing it as a byte sequence)
-    if ((nBitsUsed+7)/8 != (vBits.size()+7)/8)
+    if (CeilDiv(nBitsUsed, 8u) != CeilDiv(vBits.size(), 8u))
         return uint256();
     // verify that all hashes were consumed
     if (nHashUsed != vHash.size())

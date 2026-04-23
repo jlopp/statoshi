@@ -40,6 +40,8 @@ import sys
 
 from subprocess import check_output, CalledProcessError
 
+from lint_ignore_dirs import SHARED_EXCLUDED_SUBTREES
+
 
 KNOWN_VIOLATIONS = [
     "src/dbwrapper.cpp:.*vsnprintf",
@@ -50,13 +52,8 @@ KNOWN_VIOLATIONS = [
 ]
 
 REGEXP_EXTERNAL_DEPENDENCIES_EXCLUSIONS = [
-    "src/crypto/ctaes/",
-    "src/ipc/libmultiprocess/",
-    "src/leveldb/",
-    "src/secp256k1/",
-    "src/minisketch/",
     "src/tinyformat.h",
-]
+] + SHARED_EXCLUDED_SUBTREES
 
 LOCALE_DEPENDENT_FUNCTIONS = [
     "alphasort",    # LC_COLLATE (via strcoll)
@@ -219,7 +216,7 @@ def find_locale_dependent_function_uses():
     git_grep_output = list()
 
     try:
-        git_grep_output = check_output(git_grep_command, text=True, encoding="utf8").splitlines()
+        git_grep_output = check_output(git_grep_command, text=True).splitlines()
     except CalledProcessError as e:
         if e.returncode > 1:
             raise e

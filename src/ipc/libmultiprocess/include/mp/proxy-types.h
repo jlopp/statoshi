@@ -23,9 +23,10 @@ public:
     ValueField(Value&& value) : m_value(value) {}
     Value& m_value;
 
+    const Value& get() const { return m_value; }
     Value& get() { return m_value; }
     Value& init() { return m_value; }
-    bool has() { return true; }
+    bool has() const { return true; }
 };
 
 template <typename Accessor, typename Struct>
@@ -87,7 +88,7 @@ struct StructField
 // actually construct the read destination object. For example, if a std::string
 // is being read, the ReadField call will call the custom emplace_fn with char*
 // and size_t arguments, and the emplace function can decide whether to call the
-// constructor via the operator or make_shared or emplace or just return a
+// constructor via the operator, make_shared, emplace or just return a
 // temporary string that is moved from.
 template <typename LocalType, typename EmplaceFn>
 struct ReadDestEmplace
@@ -166,10 +167,52 @@ struct ReadDestUpdate
     Value& m_value;
 };
 
-template <typename... LocalTypes, typename... Args>
-decltype(auto) ReadField(TypeList<LocalTypes...>, Args&&... args)
+//! Return whether to read a C++ value from a Cap'n Proto field. Returning
+//! false can be useful to interpret certain Cap'n Proto field values as null
+//! C++ values when initializing nullable C++ std::optional / std::unique_ptr /
+//! std::shared_ptr types.
+//!
+//! For example, when reading from a `List(Data)` field into a
+//! `std::vector<std::shared_ptr<const CTransaction>>` value, it's useful to be
+//! able to interpret empty `Data` values as null pointers. This is useful
+//! because the Cap'n Proto C++ API does not currently provide a way to
+//! distinguish between null and empty Data values in a List[*], so we need to
+//! choose some Data value to represent null if we want to allow passing null
+//! pointers. Since no CTransaction is ever serialized as empty Data, it's safe
+//! to use empty Data values to represent null pointers.
+//!
+//! [*] The Cap'n Proto wire format actually does distinguish between null and
+//! empty Data values inside Lists, and the C++ API does allow distinguishing
+//! between null and empty Data values in other contexts, just not the List
+//! context, so this limitation could be removed in the future.
+//!
+//! Design note: CustomHasField() and CustomHasValue() are inverses of each
+//! other.  CustomHasField() allows leaving Cap'n Proto fields unset when C++
+//! types have certain values, and CustomHasValue() allows leaving C++ values
+//! unset when Cap'n Proto fields have certain values. But internally the
+//! functions get called in different ways. This is because in C++, unlike in
+//! Cap'n Proto not every C++ type is default constructible, and it may be
+//! impossible to leave certain C++ values unset. For example if a C++ method
+//! requires function parameters, there's no way to call the function without
+//! constructing values for each of the parameters. Similarly there's no way to
+//! add values to C++ vectors or maps without initializing those values.  This
+//! is not the case in Cap'n Proto where all values are optional and it's
+//! possible to skip initializing parameters and list elements.
+//!
+//! Because of this difference, CustomHasValue() works universally and can be
+//! used to disable BuildField() calls in every context, while CustomHasField()
+//! can only be used to disable ReadField() calls in certain contexts like
+//! std::optional and pointer contexts.
+template <typename... LocalTypes, typename Input>
+bool CustomHasField(TypeList<LocalTypes...>, InvokeContext& invoke_context, const Input& input)
 {
-    return CustomReadField(TypeList<RemoveCvRef<LocalTypes>...>(), Priority<2>(), std::forward<Args>(args)...);
+    return input.has();
+}
+
+template <typename... LocalTypes, typename Input, typename... Args>
+decltype(auto) ReadField(TypeList<LocalTypes...>, InvokeContext& invoke_context, Input&& input, Args&&... args)
+{
+    return CustomReadField(TypeList<RemoveCvRef<LocalTypes>...>(), Priority<2>(), invoke_context, std::forward<Input>(input), std::forward<Args>(args)...);
 }
 
 template <typename LocalType, typename Input>
@@ -190,6 +233,13 @@ void ThrowField(TypeList<std::exception>, InvokeContext& invoke_context, Input&&
     throw std::runtime_error(std::string(CharCast(data.begin()), data.size()));
 }
 
+//! Return whether to write a C++ value into a Cap'n Proto field. Returning
+//! false can be useful to map certain C++ values to unset Cap'n Proto fields.
+//!
+//! For example the bitcoin `Coin` class asserts false when a spent coin is
+//! serialized. But some C++ methods return these coins, so there needs to be a
+//! way to represent them in Cap'n Proto and a null Data field is a convenient
+//! representation.
 template <typename... Values>
 bool CustomHasValue(InvokeContext& invoke_context, const Values&... value)
 {
@@ -205,11 +255,11 @@ void BuildField(TypeList<LocalTypes...>, Context& context, Output&& output, Valu
     }
 }
 
-// Adapter to let BuildField overloads methods work set & init list elements as
-// if they were fields of a struct. If BuildField is changed to use some kind of
-// accessor class instead of calling method pointers, then then maybe this could
-// go away or be simplified, because would no longer be a need to return
-// ListOutput method pointers emulating capnp struct method pointers..
+// Adapter that allows BuildField overloads to work with, set, and initialize list
+// elements as if they were fields of a struct. If BuildField is changed to use some
+// kind of accessor class instead of calling method pointers, then maybe this could
+// go away or be simplified, because there would no longer be a need to return
+// ListOutput method pointers emulating capnp struct method pointers.
 template <typename ListType>
 struct ListOutput;
 
@@ -372,7 +422,7 @@ struct ClientException
         void handleField(InvokeContext& invoke_context, Results& results, ParamList)
         {
             StructField<Accessor, Results> input(results);
-            if (input.has()) {
+            if (CustomHasField(TypeList<Exception>(), invoke_context, input)) {
                 ThrowField(TypeList<Exception>(), invoke_context, input);
             }
         }
@@ -445,9 +495,36 @@ struct ServerCall
     template <typename ServerContext, typename... Args>
     decltype(auto) invoke(ServerContext& server_context, TypeList<>, Args&&... args) const
     {
-        return ProxyServerMethodTraits<typename decltype(server_context.call_context.getParams())::Reads>::invoke(
-            server_context,
-            std::forward<Args>(args)...);
+        // If cancel_lock is set, release it while executing the method, and
+        // reacquire it afterwards. The lock is needed to prevent params and
+        // response structs from being deleted by the event loop thread if the
+        // request is canceled, so it is only needed before and after method
+        // execution. It is important to release the lock during execution
+        // because the method can take arbitrarily long to return and the event
+        // loop will need the lock itself in on_cancel if the call is canceled.
+        if (server_context.cancel_lock) server_context.cancel_lock->m_lock.unlock();
+        return TryFinally(
+            [&]() -> decltype(auto) {
+                return ProxyServerMethodTraits<
+                    typename decltype(server_context.call_context.getParams())::Reads
+                >::invoke(server_context, std::forward<Args>(args)...);
+            },
+            [&] {
+                if (server_context.cancel_lock) server_context.cancel_lock->m_lock.lock();
+                // If the IPC request was canceled, throw InterruptException
+                // because there is no point continuing and trying to fill the
+                // call_context.getResults() struct. It's also important to stop
+                // executing because the connection may have been destroyed as
+                // described in https://github.com/bitcoin/bitcoin/issues/34250
+                // and there could be invalid references to the destroyed
+                // Connection object if this continued.
+                // If the IPC method itself threw an exception, the
+                // InterruptException thrown below will take precedence over it.
+                // Since the call has been canceled that exception can't be
+                // returned to the caller, so it needs to be discarded like
+                // other result values.
+                if (server_context.request_canceled) throw InterruptException{"canceled"};
+            });
     }
 };
 
@@ -568,7 +645,7 @@ template <typename Client>
 void clientDestroy(Client& client)
 {
     if (client.m_context.connection) {
-        client.m_context.loop->log() << "IPC client destroy " << typeid(client).name();
+        MP_LOG(*client.m_context.loop, Log::Debug) << "IPC client destroy " << typeid(client).name();
     } else {
         KJ_LOG(INFO, "IPC interrupted client destroy", typeid(client).name());
     }
@@ -577,7 +654,7 @@ void clientDestroy(Client& client)
 template <typename Server>
 void serverDestroy(Server& server)
 {
-    server.m_context.loop->log() << "IPC server destroy " << typeid(server).name();
+    MP_LOG(*server.m_context.loop, Log::Debug) << "IPC server destroy " << typeid(server).name();
 }
 
 //! Entry point called by generated client code that looks like:
@@ -605,7 +682,7 @@ void clientInvoke(ProxyClient& proxy_client, const GetRequest& get_request, Fiel
         // declaration so the server method runs in a dedicated thread.
         assert(!g_thread_context.loop_thread);
         g_thread_context.waiter = std::make_unique<Waiter>();
-        proxy_client.m_context.loop->logPlain()
+        MP_LOGPLAIN(*proxy_client.m_context.loop, Log::Info)
             << "{" << g_thread_context.thread_name
             << "} IPC client first request from current thread, constructing waiter";
     }
@@ -629,15 +706,19 @@ void clientInvoke(ProxyClient& proxy_client, const GetRequest& get_request, Fiel
         using FieldList = typename ProxyClientMethodTraits<typename Request::Params>::Fields;
         invoke_context.emplace(*proxy_client.m_context.connection, thread_context);
         IterateFields().handleChain(*invoke_context, request, FieldList(), typename FieldObjs::BuildParams{&fields}...);
-        proxy_client.m_context.loop->logPlain()
+        MP_LOGPLAIN(*proxy_client.m_context.loop, Log::Debug)
             << "{" << thread_context.thread_name << "} IPC client send "
-            << TypeName<typename Request::Params>() << " " << LogEscape(request.toString(), proxy_client.m_context.loop->m_log_opts.max_chars);
+            << TypeName<typename Request::Params>();
+        MP_LOGPLAIN(*proxy_client.m_context.loop, Log::Trace)
+            << "send data: " << LogEscape(request.toString(), proxy_client.m_context.loop->m_log_opts.max_chars);
 
         proxy_client.m_context.loop->m_task_set->add(request.send().then(
             [&](::capnp::Response<typename Request::Results>&& response) {
-                proxy_client.m_context.loop->logPlain()
+                MP_LOGPLAIN(*proxy_client.m_context.loop, Log::Debug)
                     << "{" << thread_context.thread_name << "} IPC client recv "
-                    << TypeName<typename Request::Results>() << " " << LogEscape(response.toString(), proxy_client.m_context.loop->m_log_opts.max_chars);
+                    << TypeName<typename Request::Results>();
+                MP_LOGPLAIN(*proxy_client.m_context.loop, Log::Trace)
+                    << "recv data: " << LogEscape(response.toString(), proxy_client.m_context.loop->m_log_opts.max_chars);
                 try {
                     IterateFields().handleChain(
                         *invoke_context, response, FieldList(), typename FieldObjs::ReadResults{&fields}...);
@@ -653,7 +734,7 @@ void clientInvoke(ProxyClient& proxy_client, const GetRequest& get_request, Fiel
                     disconnected = "IPC client method call interrupted by disconnect.";
                 } else {
                     kj_exception = kj::str("kj::Exception: ", e).cStr();
-                    proxy_client.m_context.loop->logPlain()
+                    MP_LOGPLAIN(*proxy_client.m_context.loop, Log::Info)
                         << "{" << thread_context.thread_name << "} IPC client exception " << kj_exception;
                 }
                 const Lock lock(thread_context.waiter->m_mutex);
@@ -665,8 +746,8 @@ void clientInvoke(ProxyClient& proxy_client, const GetRequest& get_request, Fiel
     Lock lock(thread_context.waiter->m_mutex);
     thread_context.waiter->wait(lock, [&done]() { return done; });
     if (exception) std::rethrow_exception(exception);
-    if (!kj_exception.empty()) proxy_client.m_context.loop->raise() << kj_exception;
-    if (disconnected) proxy_client.m_context.loop->raise() << disconnected;
+    if (!kj_exception.empty()) MP_LOGPLAIN(*proxy_client.m_context.loop, Log::Raise) << kj_exception;
+    if (disconnected) MP_LOGPLAIN(*proxy_client.m_context.loop, Log::Raise) << disconnected;
 }
 
 //! Invoke callable `fn()` that may return void. If it does return void, replace
@@ -700,8 +781,10 @@ kj::Promise<void> serverInvoke(Server& server, CallContext& call_context, Fn fn)
     using Results = typename decltype(call_context.getResults())::Builds;
 
     int req = ++server_reqs;
-    server.m_context.loop->log() << "IPC server recv request  #" << req << " "
-                                     << TypeName<typename Params::Reads>() << " " << LogEscape(params.toString(), server.m_context.loop->m_log_opts.max_chars);
+    MP_LOG(*server.m_context.loop, Log::Debug) << "IPC server recv request  #" << req << " "
+                                     << TypeName<typename Params::Reads>();
+    MP_LOG(*server.m_context.loop, Log::Trace) << "request data: "
+        << LogEscape(params.toString(), server.m_context.loop->m_log_opts.max_chars);
 
     try {
         using ServerContext = ServerInvokeContext<Server, CallContext>;
@@ -717,14 +800,15 @@ kj::Promise<void> serverInvoke(Server& server, CallContext& call_context, Fn fn)
         return ReplaceVoid([&]() { return fn.invoke(server_context, ArgList()); },
             [&]() { return kj::Promise<CallContext>(kj::mv(call_context)); })
             .then([&server, req](CallContext call_context) {
-                server.m_context.loop->log() << "IPC server send response #" << req << " " << TypeName<Results>()
-                                                 << " " << LogEscape(call_context.getResults().toString(), server.m_context.loop->m_log_opts.max_chars);
+                MP_LOG(*server.m_context.loop, Log::Debug) << "IPC server send response #" << req << " " << TypeName<Results>();
+                MP_LOG(*server.m_context.loop, Log::Trace) << "response data: "
+                    << LogEscape(call_context.getResults().toString(), server.m_context.loop->m_log_opts.max_chars);
             });
     } catch (const std::exception& e) {
-        server.m_context.loop->log() << "IPC server unhandled exception: " << e.what();
+        MP_LOG(*server.m_context.loop, Log::Error) << "IPC server unhandled exception: " << e.what();
         throw;
     } catch (...) {
-        server.m_context.loop->log() << "IPC server unhandled exception";
+        MP_LOG(*server.m_context.loop, Log::Error) << "IPC server unhandled exception";
         throw;
     }
 }

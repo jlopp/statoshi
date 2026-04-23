@@ -43,7 +43,7 @@ add_custom_target(generate_build_info
   COMMENT "Generating bitcoin-build-info.h"
   VERBATIM
 )
-add_library(bitcoin_clientversion STATIC EXCLUDE_FROM_ALL
+add_library(bitcoin_clientversion STATIC
   clientversion.cpp
 )
 target_link_libraries(bitcoin_clientversion
@@ -56,6 +56,8 @@ add_subdirectory(crypto)
 add_subdirectory(util)
 if(ENABLE_IPC)
   add_subdirectory(ipc)
+else()
+  add_library(bitcoin_ipc STATIC EXCLUDE_FROM_ALL ipc/stub.cpp)
 endif()
 
 add_library(bitcoin_consensus STATIC EXCLUDE_FROM_ALL
@@ -97,6 +99,7 @@ add_library(bitcoin_common STATIC EXCLUDE_FROM_ALL
   common/config.cpp
   common/init.cpp
   common/interfaces.cpp
+  common/license_info.cpp
   common/messages.cpp
   common/netif.cpp
   common/pcp.cpp
@@ -106,8 +109,7 @@ add_library(bitcoin_common STATIC EXCLUDE_FROM_ALL
   common/system.cpp
   common/url.cpp
   compressor.cpp
-  core_read.cpp
-  core_write.cpp
+  core_io.cpp
   deploymentinfo.cpp
   external_signer.cpp
   init/common.cpp
@@ -144,7 +146,6 @@ target_link_libraries(bitcoin_common
     bitcoin_util
     univalue
     secp256k1
-    Boost::headers
     $<TARGET_NAME_IF_EXISTS:USDT::headers>
     $<$<PLATFORM_ID:Windows>:ws2_32>
 )
@@ -167,7 +168,6 @@ if(ENABLE_WALLET)
       bitcoin_wallet
       bitcoin_common
       bitcoin_util
-      Boost::headers
     )
     install_binary_component(bitcoin-wallet HAS_MANPAGE)
   endif()
@@ -194,6 +194,7 @@ add_library(bitcoin_node STATIC EXCLUDE_FROM_ALL
   index/blockfilterindex.cpp
   index/coinstatsindex.cpp
   index/txindex.cpp
+  index/txospenderindex.cpp
   init.cpp
   kernel/chain.cpp
   kernel/checks.cpp
@@ -238,12 +239,13 @@ add_library(bitcoin_node STATIC EXCLUDE_FROM_ALL
   node/warnings.cpp
   noui.cpp
   policy/ephemeral_policy.cpp
-  policy/fees.cpp
-  policy/fees_args.cpp
+  policy/fees/block_policy_estimator.cpp
+  policy/fees/block_policy_estimator_args.cpp
   policy/packages.cpp
   policy/rbf.cpp
   policy/settings.cpp
   policy/truc_policy.cpp
+  private_broadcast.cpp
   rest.cpp
   rpc/blockchain.cpp
   rpc/external_signer.cpp
@@ -287,6 +289,13 @@ target_link_libraries(bitcoin_node
     $<TARGET_NAME_IF_EXISTS:libevent::pthreads>
     $<TARGET_NAME_IF_EXISTS:USDT::headers>
 )
+if(WITH_EMBEDDED_ASMAP)
+  target_compile_definitions(bitcoin_node PRIVATE ENABLE_EMBEDDED_ASMAP=1)
+  include(TargetDataSources)
+  target_raw_data_sources(bitcoin_node NAMESPACE node::data
+    node/data/ip_asn.dat
+  )
+endif()
 
 # Bitcoin wrapper executable that can call other executables.
 if(BUILD_BITCOIN_BIN)
@@ -326,22 +335,6 @@ if(ENABLE_IPC AND BUILD_DAEMON)
   install_binary_component(bitcoin-node INTERNAL)
 endif()
 
-if(ENABLE_IPC AND BUILD_TESTS)
-    # bitcoin_ipc_test library target is defined here in src/CMakeLists.txt
-    # instead of src/test/CMakeLists.txt so capnp files in src/test/ are able to
-    # reference capnp files in src/ipc/capnp/ by relative path. The Cap'n Proto
-    # compiler only allows importing by relative path when the importing and
-    # imported files are underneath the same compilation source prefix, so the
-    # source prefix must be src/, not src/test/
-    add_library(bitcoin_ipc_test STATIC EXCLUDE_FROM_ALL
-      test/ipc_test.cpp
-    )
-    target_capnp_sources(bitcoin_ipc_test ${PROJECT_SOURCE_DIR}
-      test/ipc_test.capnp
-    )
-    add_dependencies(bitcoin_ipc_test bitcoin_ipc_headers)
-endif()
-
 
 add_library(bitcoin_cli STATIC EXCLUDE_FROM_ALL
   compat/stdin.cpp
@@ -356,13 +349,14 @@ target_link_libraries(bitcoin_cli
 
 # Bitcoin Core RPC client
 if(BUILD_CLI)
-  add_executable(bitcoin-cli bitcoin-cli.cpp)
+  add_executable(bitcoin-cli bitcoin-cli.cpp init/basic.cpp)
   add_windows_resources(bitcoin-cli bitcoin-cli-res.rc)
   add_windows_application_manifest(bitcoin-cli)
   target_link_libraries(bitcoin-cli
     core_interface
     bitcoin_cli
     bitcoin_common
+    bitcoin_ipc
     bitcoin_util
     libevent::core
     libevent::extra
@@ -405,27 +399,21 @@ endif()
 
 if(BUILD_KERNEL_LIB)
   add_subdirectory(kernel)
-endif()
-
-if(BUILD_UTIL_CHAINSTATE)
-  add_executable(bitcoin-chainstate
-    bitcoin-chainstate.cpp
-  )
-  # TODO: The `SKIP_BUILD_RPATH` property setting can be deleted
-  #       in the future after reordering Guix script commands to
-  #       perform binary checks after the installation step.
-  # Relevant discussions:
-  # - https://github.com/hebasto/bitcoin/pull/236#issuecomment-2183120953
-  # - https://github.com/bitcoin/bitcoin/pull/30312#issuecomment-2191235833
-  set_target_properties(bitcoin-chainstate PROPERTIES
-    SKIP_BUILD_RPATH OFF
-  )
-  target_link_libraries(bitcoin-chainstate
-    PRIVATE
-      core_interface
-      bitcoinkernel
-  )
-  install_binary_component(bitcoin-chainstate INTERNAL)
+  if (BUILD_KERNEL_TEST)
+    add_subdirectory(test/kernel)
+  endif()
+  if(BUILD_UTIL_CHAINSTATE)
+    add_executable(bitcoin-chainstate
+      bitcoin-chainstate.cpp
+    )
+    add_windows_application_manifest(bitcoin-chainstate)
+    target_link_libraries(bitcoin-chainstate
+      PRIVATE
+        core_interface
+        bitcoinkernel
+    )
+    install_binary_component(bitcoin-chainstate INTERNAL)
+  endif()
 endif()
 
 

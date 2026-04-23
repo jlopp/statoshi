@@ -1,6 +1,6 @@
 # FreeBSD Build Guide
 
-**Updated for FreeBSD [14.3](https://www.freebsd.org/releases/14.3R/announce/)**
+**Updated for FreeBSD [15.0](https://www.freebsd.org/releases/15.0R/announce/)**
 
 This guide describes how to build bitcoind, command-line utilities, and GUI on FreeBSD.
 
@@ -101,5 +101,5 @@ cmake -B build -DENABLE_WALLET=OFF
 
 ```bash
 cmake --build build     # Append "-j N" for N parallel jobs.
-ctest --test-dir build  # Append "-j N" for N parallel tests. Some tests are disabled if Python 3 is not available.
+ctest --test-dir build  # Append "-j N" for N parallel tests.
 ```

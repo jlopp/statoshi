@@ -13,6 +13,8 @@ $Proxy.includeTypes("mp/test/foo-types.h");
 
 interface FooInterface $Proxy.wrap("mp::test::FooImplementation") {
     add @0 (a :Int32, b :Int32) -> (result :Int32);
+    addOut @19 (a :Int32, b :Int32) -> (ret :Int32);
+    addInOut @20 (x :Int32, sum :Int32) -> (sum :Int32);
     mapSize @1 (map :List(Pair(Text, Text))) -> (result :Int32);
     pass @2 (arg :FooStruct) -> (result :FooStruct);
     raise @3 (arg :FooStruct) -> (error :FooStruct $Proxy.exception("mp::test::FooStruct"));
@@ -31,6 +33,8 @@ interface FooInterface $Proxy.wrap("mp::test::FooImplementation") {
     passFn @16 (context :Proxy.Context, fn :FooFn) -> (result :Int32);
     callFn @17 () -> ();
     callFnAsync @18 (context :Proxy.Context) -> ();
+    callIntFnAsync @21 (context :Proxy.Context, arg :Int32) -> (result :Int32);
+    passDataPointers @22 (arg :List(Data)) -> (result :List(Data));
 }
 
 interface FooCallback $Proxy.wrap("mp::test::FooCallback") {

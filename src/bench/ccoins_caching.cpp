@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2022 The Bitcoin Core developers
+// Copyright (c) 2016-present The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -26,8 +26,7 @@ static void CCoinsCaching(benchmark::Bench& bench)
     ECC_Context ecc_context{};
 
     FillableSigningProvider keystore;
-    CCoinsView coinsDummy;
-    CCoinsViewCache coins(&coinsDummy);
+    CCoinsViewCache coins{&CoinsViewEmpty::Get()};
     std::vector<CMutableTransaction> dummyTransactions =
         SetupDummyInputs(keystore, coins, {11 * COIN, 50 * COIN, 21 * COIN, 22 * COIN});
 
@@ -49,9 +48,8 @@ static void CCoinsCaching(benchmark::Bench& bench)
     // Benchmark.
     const CTransaction tx_1(t1);
     bench.run([&] {
-        bool success{AreInputsStandard(tx_1, coins)};
-        assert(success);
+        assert(ValidateInputsStandardness(tx_1, coins).IsValid());
     });
 }
 
-BENCHMARK(CCoinsCaching, benchmark::PriorityLevel::HIGH);
+BENCHMARK(CCoinsCaching);

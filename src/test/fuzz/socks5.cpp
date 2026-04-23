@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2022 The Bitcoin Core developers
+// Copyright (c) 2020-present The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -9,6 +9,7 @@
 #include <test/fuzz/util.h>
 #include <test/fuzz/util/net.h>
 #include <test/util/setup_common.h>
+#include <test/util/time.h>
 #include <util/time.h>
 
 #include <cstdint>
@@ -30,7 +31,7 @@ void initialize_socks5()
 FUZZ_TARGET(socks5, .init = initialize_socks5)
 {
     FuzzedDataProvider fuzzed_data_provider{buffer.data(), buffer.size()};
-    SetMockTime(ConsumeTime(fuzzed_data_provider));
+    NodeClockContext clock_ctx{ConsumeTime(fuzzed_data_provider)};
     ProxyCredentials proxy_credentials;
     proxy_credentials.username = fuzzed_data_provider.ConsumeRandomLengthString(512);
     proxy_credentials.password = fuzzed_data_provider.ConsumeRandomLengthString(512);

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2014-2022 The Bitcoin Core developers
+# Copyright (c) 2014-present The Bitcoin Core developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 """Test the wallet keypool and interaction with wallet encryption/locking."""
@@ -110,7 +110,7 @@ class KeyPoolTest(BitcoinTestFramework):
         addr.add(nodes[0].getnewaddress(address_type="bech32"))
         addr.add(nodes[0].getnewaddress(address_type="bech32"))
         addr.add(nodes[0].getnewaddress(address_type="bech32"))
-        assert len(addr) == 6
+        assert_equal(len(addr), 6)
         # remember keypool sizes
         wi = nodes[0].getwalletinfo()
         kp_size_before = [wi['keypoolsize_hd_internal'], wi['keypoolsize']]

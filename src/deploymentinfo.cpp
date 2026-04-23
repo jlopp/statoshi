@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2021 The Bitcoin Core developers
+// Copyright (c) 2016-present The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -11,10 +11,6 @@
 const std::array<VBDeploymentInfo,Consensus::MAX_VERSION_BITS_DEPLOYMENTS> VersionBitsDeploymentInfo{
     VBDeploymentInfo{
         .name = "testdummy",
-        .gbt_optional_rule = true,
-    },
-    VBDeploymentInfo{
-        .name = "taproot",
         .gbt_optional_rule = true,
     },
 };

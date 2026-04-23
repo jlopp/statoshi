@@ -1,4 +1,4 @@
-// Copyright (c) 2021-2022 The Bitcoin Core developers
+// Copyright (c) 2021-present The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -17,6 +17,7 @@
 #include <test/fuzz/fuzz.h>
 #include <test/fuzz/util.h>
 #include <test/util/setup_common.h>
+#include <test/util/time.h>
 #include <tinyformat.h>
 #include <uint256.h>
 #include <univalue.h>
@@ -90,6 +91,7 @@ const std::vector<std::string> RPC_COMMANDS_NOT_SAFE_FOR_FUZZING{
 
 // RPC commands which are safe for fuzzing.
 const std::vector<std::string> RPC_COMMANDS_SAFE_FOR_FUZZING{
+    "abortprivatebroadcast",
     "analyzepsbt",
     "clearbanned",
     "combinepsbt",
@@ -136,6 +138,8 @@ const std::vector<std::string> RPC_COMMANDS_SAFE_FOR_FUZZING{
     "getmempoolancestors",
     "getmempooldescendants",
     "getmempoolentry",
+    "getmempoolfeeratediagram",
+    "getmempoolcluster",
     "getmempoolinfo",
     "getmininginfo",
     "getnettotals",
@@ -145,6 +149,7 @@ const std::vector<std::string> RPC_COMMANDS_SAFE_FOR_FUZZING{
     "getorphantxs",
     "getpeerinfo",
     "getprioritisedtransactions",
+    "getprivatebroadcastinfo",
     "getrawaddrman",
     "getrawmempool",
     "getrawtransaction",
@@ -366,7 +371,7 @@ FUZZ_TARGET(rpc, .init = initialize_rpc)
     SeedRandomStateForTest(SeedRand::ZEROS);
     FuzzedDataProvider fuzzed_data_provider{buffer.data(), buffer.size()};
     bool good_data{true};
-    SetMockTime(ConsumeTime(fuzzed_data_provider));
+    NodeClockContext clock_ctx{ConsumeTime(fuzzed_data_provider)};
     const std::string rpc_command = fuzzed_data_provider.ConsumeRandomLengthString(64);
     if (!g_limit_to_rpc_command.empty() && rpc_command != g_limit_to_rpc_command) {
         return;
@@ -381,6 +386,12 @@ FUZZ_TARGET(rpc, .init = initialize_rpc)
         arguments.push_back(ConsumeRPCArgument(fuzzed_data_provider, good_data));
     }
     try {
+        std::optional<test_only_CheckFailuresAreExceptionsNotAborts> maybe_mock{};
+        if (rpc_command == "echo") {
+            // Avoid aborting fuzzing for this specific test-only RPC with an
+            // intentional trigger_internal_bug
+            maybe_mock.emplace();
+        }
         rpc_testing_setup->CallRPC(rpc_command, arguments);
     } catch (const UniValue& json_rpc_error) {
         const std::string error_msg{json_rpc_error.find_value("message").get_str()};

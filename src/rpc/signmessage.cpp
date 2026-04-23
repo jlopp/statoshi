@@ -1,5 +1,5 @@
 // Copyright (c) 2010 Satoshi Nakamoto
-// Copyright (c) 2009-2022 The Bitcoin Core developers
+// Copyright (c) 2009-present The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -14,9 +14,9 @@
 
 #include <string>
 
-static RPCHelpMan verifymessage()
+static RPCMethod verifymessage()
 {
-    return RPCHelpMan{"verifymessage",
+    return RPCMethod{"verifymessage",
         "Verify a signed message.",
         {
             {"address", RPCArg::Type::STR, RPCArg::Optional::NO, "The bitcoin address to use for the signature."},
@@ -36,13 +36,11 @@ static RPCHelpMan verifymessage()
             "\nAs a JSON-RPC call\n"
             + HelpExampleRpc("verifymessage", "\"1D1ZrZNe3JUo7ZycKEYQQiQAWd9y54F4XX\", \"signature\", \"my message\"")
         },
-        [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
+        [](const RPCMethod& self, const JSONRPCRequest& request) -> UniValue
         {
-            std::string strAddress = self.Arg<std::string>("address");
-            std::string strSign = self.Arg<std::string>("signature");
-            std::string strMessage = self.Arg<std::string>("message");
-
-            switch (MessageVerify(strAddress, strSign, strMessage)) {
+            switch (MessageVerify(std::string{self.Arg<std::string_view>("address")},
+                                  std::string{self.Arg<std::string_view>("signature")},
+                                  std::string{self.Arg<std::string_view>("message")})) {
             case MessageVerificationResult::ERR_INVALID_ADDRESS:
                 throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid address");
             case MessageVerificationResult::ERR_ADDRESS_NO_KEY:
@@ -61,9 +59,9 @@ static RPCHelpMan verifymessage()
     };
 }
 
-static RPCHelpMan signmessagewithprivkey()
+static RPCMethod signmessagewithprivkey()
 {
-    return RPCHelpMan{
+    return RPCMethod{
         "signmessagewithprivkey",
         "Sign a message with the private key of an address\n",
         {
@@ -81,7 +79,7 @@ static RPCHelpMan signmessagewithprivkey()
             "\nAs a JSON-RPC call\n"
             + HelpExampleRpc("signmessagewithprivkey", "\"privkey\", \"my message\"")
         },
-        [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
+        [](const RPCMethod& self, const JSONRPCRequest& request) -> UniValue
         {
             std::string strPrivkey = request.params[0].get_str();
             std::string strMessage = request.params[1].get_str();

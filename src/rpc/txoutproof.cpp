@@ -1,5 +1,5 @@
 // Copyright (c) 2010 Satoshi Nakamoto
-// Copyright (c) 2009-2022 The Bitcoin Core developers
+// Copyright (c) 2009-present The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -20,9 +20,9 @@
 
 using node::GetTransaction;
 
-static RPCHelpMan gettxoutproof()
+static RPCMethod gettxoutproof()
 {
-    return RPCHelpMan{
+    return RPCMethod{
         "gettxoutproof",
         "Returns a hex-encoded proof that \"txid\" was included in a block.\n"
         "\nNOTE: By default this function only works sometimes. This is when there is an\n"
@@ -41,7 +41,7 @@ static RPCHelpMan gettxoutproof()
             RPCResult::Type::STR, "data", "A string that is a serialized, hex-encoded data for the proof."
         },
         RPCExamples{""},
-        [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
+        [](const RPCMethod& self, const JSONRPCRequest& request) -> UniValue
         {
             std::set<Txid> setTxids;
             UniValue txids = request.params[0].get_array();
@@ -86,7 +86,7 @@ static RPCHelpMan gettxoutproof()
             }
 
             if (pblockindex == nullptr) {
-                const CTransactionRef tx = GetTransaction(/*block_index=*/nullptr, /*mempool=*/nullptr, *setTxids.begin(), hashBlock, chainman.m_blockman);
+                const CTransactionRef tx = GetTransaction(/*block_index=*/nullptr, /*mempool=*/nullptr, *setTxids.begin(), chainman.m_blockman, hashBlock);
                 if (!tx || hashBlock.IsNull()) {
                     throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Transaction not yet in block");
                 }
@@ -109,7 +109,7 @@ static RPCHelpMan gettxoutproof()
 
             unsigned int ntxFound = 0;
             for (const auto& tx : block.vtx) {
-                if (setTxids.count(tx->GetHash())) {
+                if (setTxids.contains(tx->GetHash())) {
                     ntxFound++;
                 }
             }
@@ -126,9 +126,9 @@ static RPCHelpMan gettxoutproof()
     };
 }
 
-static RPCHelpMan verifytxoutproof()
+static RPCMethod verifytxoutproof()
 {
-    return RPCHelpMan{
+    return RPCMethod{
         "verifytxoutproof",
         "Verifies that a proof points to a transaction in a block, returning the transaction it commits to\n"
         "and throwing an RPC error if the block is not in our best chain\n",
@@ -142,11 +142,10 @@ static RPCHelpMan verifytxoutproof()
             }
         },
         RPCExamples{""},
-        [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
+        [](const RPCMethod& self, const JSONRPCRequest& request) -> UniValue
         {
-            DataStream ssMB{ParseHexV(request.params[0], "proof")};
             CMerkleBlock merkleBlock;
-            ssMB >> merkleBlock;
+            SpanReader{ParseHexV(request.params[0], "proof")} >> merkleBlock;
 
             UniValue res(UniValue::VARR);
 

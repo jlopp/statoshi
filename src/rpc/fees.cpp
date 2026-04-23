@@ -1,5 +1,5 @@
 // Copyright (c) 2010 Satoshi Nakamoto
-// Copyright (c) 2009-2022 The Bitcoin Core developers
+// Copyright (c) 2009-present The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -7,7 +7,7 @@
 #include <core_io.h>
 #include <node/context.h>
 #include <policy/feerate.h>
-#include <policy/fees.h>
+#include <policy/fees/block_policy_estimator.h>
 #include <rpc/protocol.h>
 #include <rpc/request.h>
 #include <rpc/server.h>
@@ -15,21 +15,23 @@
 #include <rpc/util.h>
 #include <txmempool.h>
 #include <univalue.h>
+#include <util/fees.h>
 #include <validationinterface.h>
 
 #include <algorithm>
 #include <array>
 #include <cmath>
 #include <string>
+#include <string_view>
 
 using common::FeeModeFromString;
 using common::FeeModesDetail;
 using common::InvalidEstimateModeErrorMessage;
 using node::NodeContext;
 
-static RPCHelpMan estimatesmartfee()
+static RPCMethod estimatesmartfee()
 {
-    return RPCHelpMan{
+    return RPCMethod{
         "estimatesmartfee",
         "Estimates the approximate fee per kilobyte needed for a transaction to begin\n"
         "confirmation within conf_target blocks if possible and return the number of blocks\n"
@@ -58,7 +60,7 @@ static RPCHelpMan estimatesmartfee()
             HelpExampleCli("estimatesmartfee", "6") +
             HelpExampleRpc("estimatesmartfee", "6")
         },
-        [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
+        [](const RPCMethod& self, const JSONRPCRequest& request) -> UniValue
         {
             CBlockPolicyEstimator& fee_estimator = EnsureAnyFeeEstimator(request.context);
             const NodeContext& node = EnsureAnyNodeContext(request.context);
@@ -67,18 +69,15 @@ static RPCHelpMan estimatesmartfee()
             CHECK_NONFATAL(mempool.m_opts.signals)->SyncWithValidationInterfaceQueue();
             unsigned int max_target = fee_estimator.HighestTargetTracked(FeeEstimateHorizon::LONG_HALFLIFE);
             unsigned int conf_target = ParseConfirmTarget(request.params[0], max_target);
-            bool conservative = false;
-            if (!request.params[1].isNull()) {
-                FeeEstimateMode fee_mode;
-                if (!FeeModeFromString(request.params[1].get_str(), fee_mode)) {
-                    throw JSONRPCError(RPC_INVALID_PARAMETER, InvalidEstimateModeErrorMessage());
-                }
-                if (fee_mode == FeeEstimateMode::CONSERVATIVE) conservative = true;
+            FeeEstimateMode fee_mode;
+            if (!FeeModeFromString(self.Arg<std::string_view>("estimate_mode"), fee_mode)) {
+                throw JSONRPCError(RPC_INVALID_PARAMETER, InvalidEstimateModeErrorMessage());
             }
 
             UniValue result(UniValue::VOBJ);
             UniValue errors(UniValue::VARR);
             FeeCalculation feeCalc;
+            bool conservative{fee_mode == FeeEstimateMode::CONSERVATIVE};
             CFeeRate feeRate{fee_estimator.estimateSmartFee(conf_target, &feeCalc, conservative)};
             if (feeRate != CFeeRate(0)) {
                 CFeeRate min_mempool_feerate{mempool.GetMinFee()};
@@ -95,9 +94,9 @@ static RPCHelpMan estimatesmartfee()
     };
 }
 
-static RPCHelpMan estimaterawfee()
+static RPCMethod estimaterawfee()
 {
-    return RPCHelpMan{
+    return RPCMethod{
         "estimaterawfee",
         "WARNING: This interface is unstable and may disappear or change!\n"
         "\nWARNING: This is an advanced API call that is tightly coupled to the specific\n"
@@ -150,7 +149,7 @@ static RPCHelpMan estimaterawfee()
         RPCExamples{
             HelpExampleCli("estimaterawfee", "6 0.9")
         },
-        [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
+        [](const RPCMethod& self, const JSONRPCRequest& request) -> UniValue
         {
             CBlockPolicyEstimator& fee_estimator = EnsureAnyFeeEstimator(request.context);
             const NodeContext& node = EnsureAnyNodeContext(request.context);
@@ -197,14 +196,14 @@ static RPCHelpMan estimaterawfee()
                 if (feeRate != CFeeRate(0)) {
                     horizon_result.pushKV("feerate", ValueFromAmount(feeRate.GetFeePerK()));
                     horizon_result.pushKV("decay", buckets.decay);
-                    horizon_result.pushKV("scale", (int)buckets.scale);
+                    horizon_result.pushKV("scale", buckets.scale);
                     horizon_result.pushKV("pass", std::move(passbucket));
                     // buckets.fail.start == -1 indicates that all buckets passed, there is no fail bucket to output
                     if (buckets.fail.start != -1) horizon_result.pushKV("fail", std::move(failbucket));
                 } else {
                     // Output only information that is still meaningful in the event of error
                     horizon_result.pushKV("decay", buckets.decay);
-                    horizon_result.pushKV("scale", (int)buckets.scale);
+                    horizon_result.pushKV("scale", buckets.scale);
                     horizon_result.pushKV("fail", std::move(failbucket));
                     errors.push_back("Insufficient data or no feerate found which meets threshold");
                     horizon_result.pushKV("errors", std::move(errors));

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2019-2021 The Bitcoin Core developers
+# Copyright (c) 2019-present The Bitcoin Core developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -16,7 +16,6 @@ import time
 
 from test_framework.blocktools import (
     create_block,
-    create_coinbase,
 )
 from test_framework.messages import (
     msg_pong,
@@ -65,7 +64,7 @@ class P2PEvict(BitcoinTestFramework):
             best_block = node.getbestblockhash()
             tip = int(best_block, 16)
             best_block_time = node.getblock(best_block)['time']
-            block = create_block(tip, create_coinbase(node.getblockcount() + 1), best_block_time + 1)
+            block = create_block(tip, height=node.getblockcount() + 1, ntime=best_block_time + 1)
             block.solve()
             block_peer.send_blocks_and_test([block], node, success=True)
             protected_peers.add(current_peer)

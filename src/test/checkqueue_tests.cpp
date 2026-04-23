@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2022 The Bitcoin Core developers
+// Copyright (c) 2012-present The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -21,16 +21,16 @@
 #include <vector>
 
 /**
- * Identical to TestingSetup but excludes lock contention logging if
+ * Identical to BasicTestingSetup but excludes lock contention logging if
  * `DEBUG_LOCKCONTENTION` is defined, as some of these tests are designed to be
  * heavily contested to trigger race conditions or other issues.
  */
-struct NoLockLoggingTestingSetup : public TestingSetup {
+struct NoLockLoggingTestingSetup : public BasicTestingSetup {
     NoLockLoggingTestingSetup()
 #ifdef DEBUG_LOCKCONTENTION
-        : TestingSetup{ChainType::MAIN, {.extra_args = { "-debugexclude=lock" } }} {}
+        : BasicTestingSetup{ChainType::MAIN, {.extra_args = { "-debugexclude=lock" } }} {}
 #else
-        : TestingSetup{ChainType::MAIN} {}
+        : BasicTestingSetup{ChainType::MAIN} {}
 #endif
 };
 

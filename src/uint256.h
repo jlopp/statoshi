@@ -7,6 +7,7 @@
 #define BITCOIN_UINT256_H
 
 #include <crypto/common.h>
+#include <crypto/hex_base.h>
 #include <span.h>
 #include <util/strencodings.h>
 #include <util/string.h>
@@ -64,7 +65,6 @@ public:
     constexpr int Compare(const base_blob& other) const { return std::memcmp(m_data.data(), other.m_data.data(), WIDTH); }
 
     friend constexpr bool operator==(const base_blob& a, const base_blob& b) { return a.Compare(b) == 0; }
-    friend constexpr bool operator!=(const base_blob& a, const base_blob& b) { return a.Compare(b) != 0; }
     friend constexpr bool operator<(const base_blob& a, const base_blob& b) { return a.Compare(b) < 0; }
 
     /** @name Hex representation

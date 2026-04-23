@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2019-2021 The Bitcoin Core developers
+# Copyright (c) 2019-present The Bitcoin Core developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 """
@@ -123,7 +123,7 @@ class TxDownloadTest(BitcoinTestFramework):
         #   peer, plus
         # * the first time it is re-requested from the outbound peer, plus
         # * 2 seconds to avoid races
-        assert self.nodes[1].getpeerinfo()[0]['inbound'] == False
+        assert_equal(self.nodes[1].getpeerinfo()[0]['inbound'], False)
         timeout = 2 + NONPREF_PEER_TX_DELAY + GETDATA_TX_INTERVAL
         self.log.info("Tx should be received at node 1 after {} seconds".format(timeout))
         self.nodes[0].bumpmocktime(timeout)

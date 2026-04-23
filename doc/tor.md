@@ -181,6 +181,10 @@ Add these lines to your `/etc/tor/torrc` (or equivalent config file):
 
     HiddenServiceDir /var/lib/tor/bitcoin-service/
     HiddenServicePort 8333 127.0.0.1:8334
+    # If `tor --list-modules` shows "pow: yes", then enable PoW protection.
+    # It is available in tor-0.4.8.1-alpha and newer when configured with
+    # `./configure --enable-gpl`.
+    HiddenServicePoWDefensesEnabled 1
 
 The directory can be different of course, but virtual port numbers should be equal to
 your bitcoind's P2P listen port (8333 by default), and target addresses and ports
@@ -238,3 +242,10 @@ for normal IPv4/IPv6 communication, use:
   Otherwise it is trivial to link them, which may reduce privacy. Onion
   services created automatically (as in section 2) always have only one port
   open.
+- Operating a node that listens on multiple networks (e.g. IPv4 and Tor) can help
+  strengthen the Bitcoin network, as nodes in this configuration (i.e. bridge nodes) increase
+  the cost and complexity of launching eclipse and partition attacks. However, under certain
+  conditions, an adversary that can connect to your node on multiple networks may be
+  able to correlate those identities by observing shared runtime characteristics. It
+  is not recommended to expose your node over multiple networks if you require
+  unlinkability across those identities.

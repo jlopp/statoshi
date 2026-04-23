@@ -365,7 +365,7 @@ static bool EvalChecksigTapscript(const valtype& sig, const valtype& pubkey, Scr
         }
     }
     if (pubkey.size() == 0) {
-        return set_error(serror, SCRIPT_ERR_PUBKEYTYPE);
+        return set_error(serror, SCRIPT_ERR_TAPSCRIPT_EMPTY_PUBKEY);
     } else if (pubkey.size() == 32) {
         if (success && !checker.CheckSchnorrSignature(sig, pubkey, sigversion, execdata, serror)) {
             return false; // serror is set
@@ -608,7 +608,7 @@ bool EvalScript(std::vector<std::vector<unsigned char> >& stack, const CScript& 
                     if (fExec)
                     {
                         if (stack.size() < 1)
-                            return set_error(serror, SCRIPT_ERR_UNBALANCED_CONDITIONAL);
+                            return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
                         valtype& vch = stacktop(-1);
                         // Tapscript requires minimal IF/NOTIF inputs as a consensus rule.
                         if (sigversion == SigVersion::TAPSCRIPT) {
@@ -1222,6 +1222,10 @@ bool EvalScript(std::vector<std::vector<unsigned char> >& stack, const CScript& 
             if (stack.size() + altstack.size() > MAX_STACK_SIZE)
                 return set_error(serror, SCRIPT_ERR_STACK_SIZE);
         }
+    }
+    catch (const scriptnum_error&)
+    {
+        return set_error(serror, SCRIPT_ERR_SCRIPTNUM);
     }
     catch (...)
     {
@@ -2132,10 +2136,8 @@ size_t static WitnessSigOps(int witversion, const std::vector<unsigned char>& wi
     return 0;
 }
 
-size_t CountWitnessSigOps(const CScript& scriptSig, const CScript& scriptPubKey, const CScriptWitness* witness, script_verify_flags flags)
+size_t CountWitnessSigOps(const CScript& scriptSig, const CScript& scriptPubKey, const CScriptWitness& witness, script_verify_flags flags)
 {
-    static const CScriptWitness witnessEmpty;
-
     if ((flags & SCRIPT_VERIFY_WITNESS) == 0) {
         return 0;
     }
@@ -2144,7 +2146,7 @@ size_t CountWitnessSigOps(const CScript& scriptSig, const CScript& scriptPubKey,
     int witnessversion;
     std::vector<unsigned char> witnessprogram;
     if (scriptPubKey.IsWitnessProgram(witnessversion, witnessprogram)) {
-        return WitnessSigOps(witnessversion, witnessprogram, witness ? *witness : witnessEmpty);
+        return WitnessSigOps(witnessversion, witnessprogram, witness);
     }
 
     if (scriptPubKey.IsPayToScriptHash() && scriptSig.IsPushOnly()) {
@@ -2156,38 +2158,42 @@ size_t CountWitnessSigOps(const CScript& scriptSig, const CScript& scriptPubKey,
         }
         CScript subscript(data.begin(), data.end());
         if (subscript.IsWitnessProgram(witnessversion, witnessprogram)) {
-            return WitnessSigOps(witnessversion, witnessprogram, witness ? *witness : witnessEmpty);
+            return WitnessSigOps(witnessversion, witnessprogram, witness);
         }
     }
 
     return 0;
 }
 
+const std::map<std::string, script_verify_flag_name>& ScriptFlagNamesToEnum()
+{
 #define FLAG_NAME(flag) {std::string(#flag), SCRIPT_VERIFY_##flag}
-const std::map<std::string, script_verify_flag_name> g_verify_flag_names{
-    FLAG_NAME(P2SH),
-    FLAG_NAME(STRICTENC),
-    FLAG_NAME(DERSIG),
-    FLAG_NAME(LOW_S),
-    FLAG_NAME(SIGPUSHONLY),
-    FLAG_NAME(MINIMALDATA),
-    FLAG_NAME(NULLDUMMY),
-    FLAG_NAME(DISCOURAGE_UPGRADABLE_NOPS),
-    FLAG_NAME(CLEANSTACK),
-    FLAG_NAME(MINIMALIF),
-    FLAG_NAME(NULLFAIL),
-    FLAG_NAME(CHECKLOCKTIMEVERIFY),
-    FLAG_NAME(CHECKSEQUENCEVERIFY),
-    FLAG_NAME(WITNESS),
-    FLAG_NAME(DISCOURAGE_UPGRADABLE_WITNESS_PROGRAM),
-    FLAG_NAME(WITNESS_PUBKEYTYPE),
-    FLAG_NAME(CONST_SCRIPTCODE),
-    FLAG_NAME(TAPROOT),
-    FLAG_NAME(DISCOURAGE_UPGRADABLE_PUBKEYTYPE),
-    FLAG_NAME(DISCOURAGE_OP_SUCCESS),
-    FLAG_NAME(DISCOURAGE_UPGRADABLE_TAPROOT_VERSION),
-};
+    static const std::map<std::string, script_verify_flag_name> g_names_to_enum{
+        FLAG_NAME(P2SH),
+        FLAG_NAME(STRICTENC),
+        FLAG_NAME(DERSIG),
+        FLAG_NAME(LOW_S),
+        FLAG_NAME(SIGPUSHONLY),
+        FLAG_NAME(MINIMALDATA),
+        FLAG_NAME(NULLDUMMY),
+        FLAG_NAME(DISCOURAGE_UPGRADABLE_NOPS),
+        FLAG_NAME(CLEANSTACK),
+        FLAG_NAME(MINIMALIF),
+        FLAG_NAME(NULLFAIL),
+        FLAG_NAME(CHECKLOCKTIMEVERIFY),
+        FLAG_NAME(CHECKSEQUENCEVERIFY),
+        FLAG_NAME(WITNESS),
+        FLAG_NAME(DISCOURAGE_UPGRADABLE_WITNESS_PROGRAM),
+        FLAG_NAME(WITNESS_PUBKEYTYPE),
+        FLAG_NAME(CONST_SCRIPTCODE),
+        FLAG_NAME(TAPROOT),
+        FLAG_NAME(DISCOURAGE_UPGRADABLE_PUBKEYTYPE),
+        FLAG_NAME(DISCOURAGE_OP_SUCCESS),
+        FLAG_NAME(DISCOURAGE_UPGRADABLE_TAPROOT_VERSION),
+    };
 #undef FLAG_NAME
+    return g_names_to_enum;
+}
 
 std::vector<std::string> GetScriptFlagNames(script_verify_flags flags)
 {
@@ -2196,7 +2202,7 @@ std::vector<std::string> GetScriptFlagNames(script_verify_flags flags)
         return res;
     }
     script_verify_flags leftover = flags;
-    for (const auto& [name, flag] : g_verify_flag_names) {
+    for (const auto& [name, flag] : ScriptFlagNamesToEnum()) {
         if ((flags & flag) != 0) {
             res.push_back(name);
             leftover &= ~flag;

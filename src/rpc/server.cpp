@@ -26,6 +26,7 @@
 #include <chrono>
 #include <memory>
 #include <mutex>
+#include <string_view>
 #include <unordered_map>
 
 using util::SplitString;
@@ -65,7 +66,7 @@ struct RPCCommandExecution
     }
 };
 
-std::string CRPCTable::help(const std::string& strCommand, const JSONRPCRequest& helpreq) const
+std::string CRPCTable::help(std::string_view strCommand, const JSONRPCRequest& helpreq) const
 {
     std::string strRet;
     std::string category;
@@ -115,9 +116,9 @@ std::string CRPCTable::help(const std::string& strCommand, const JSONRPCRequest&
     return strRet;
 }
 
-static RPCHelpMan help()
+static RPCMethod help()
 {
-    return RPCHelpMan{
+    return RPCMethod{
         "help",
         "List all commands, or get help for a specified command.\n",
                 {
@@ -128,26 +129,23 @@ static RPCHelpMan help()
                     RPCResult{RPCResult::Type::ANY, "", ""},
                 },
                 RPCExamples{""},
-        [&](const RPCHelpMan& self, const JSONRPCRequest& jsonRequest) -> UniValue
+        [](const RPCMethod& self, const JSONRPCRequest& jsonRequest) -> UniValue
 {
-    std::string strCommand;
-    if (jsonRequest.params.size() > 0) {
-        strCommand = jsonRequest.params[0].get_str();
-    }
-    if (strCommand == "dump_all_command_conversions") {
+    auto command{self.MaybeArg<std::string_view>("command")};
+    if (command == "dump_all_command_conversions") {
         // Used for testing only, undocumented
         return tableRPC.dumpArgMap(jsonRequest);
     }
 
-    return tableRPC.help(strCommand, jsonRequest);
+    return tableRPC.help(command.value_or(""), jsonRequest);
 },
     };
 }
 
-static RPCHelpMan stop()
+static RPCMethod stop()
 {
     static const std::string RESULT{CLIENT_NAME " stopping"};
-    return RPCHelpMan{
+    return RPCMethod{
         "stop",
     // Also accept the hidden 'wait' integer argument (milliseconds)
     // For instance, 'stop 1000' makes the call wait 1 second before returning
@@ -158,7 +156,7 @@ static RPCHelpMan stop()
                 },
                 RPCResult{RPCResult::Type::STR, "", "A string with the content '" + RESULT + "'"},
                 RPCExamples{""},
-        [&](const RPCHelpMan& self, const JSONRPCRequest& jsonRequest) -> UniValue
+        [](const RPCMethod& self, const JSONRPCRequest& jsonRequest) -> UniValue
 {
     // Event loop will exit after current HTTP requests have been handled, so
     // this reply will get back to the client.
@@ -171,9 +169,9 @@ static RPCHelpMan stop()
     };
 }
 
-static RPCHelpMan uptime()
+static RPCMethod uptime()
 {
-    return RPCHelpMan{
+    return RPCMethod{
         "uptime",
         "Returns the total uptime of the server.\n",
                             {},
@@ -184,16 +182,16 @@ static RPCHelpMan uptime()
                     HelpExampleCli("uptime", "")
                 + HelpExampleRpc("uptime", "")
                 },
-        [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
+        [](const RPCMethod& self, const JSONRPCRequest& request) -> UniValue
 {
-    return GetTime() - GetStartupTime();
+    return TicksSeconds(GetUptime());
 }
     };
 }
 
-static RPCHelpMan getrpcinfo()
+static RPCMethod getrpcinfo()
 {
-    return RPCHelpMan{
+    return RPCMethod{
         "getrpcinfo",
         "Returns details of the RPC server.\n",
                 {},
@@ -214,14 +212,14 @@ static RPCHelpMan getrpcinfo()
                 RPCExamples{
                     HelpExampleCli("getrpcinfo", "")
                 + HelpExampleRpc("getrpcinfo", "")},
-        [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
+        [](const RPCMethod& self, const JSONRPCRequest& request) -> UniValue
 {
     LOCK(g_rpc_server_info.mutex);
     UniValue active_commands(UniValue::VARR);
     for (const RPCCommandExecutionInfo& info : g_rpc_server_info.active_commands) {
         UniValue entry(UniValue::VOBJ);
         entry.pushKV("method", info.method);
-        entry.pushKV("duration", int64_t{Ticks<std::chrono::microseconds>(SteadyClock::now() - info.start)});
+        entry.pushKV("duration", Ticks<std::chrono::microseconds>(SteadyClock::now() - info.start));
         active_commands.push_back(std::move(entry));
     }
 

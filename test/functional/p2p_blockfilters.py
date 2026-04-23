@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2019-2022 The Bitcoin Core developers
+# Copyright (c) 2019-present The Bitcoin Core developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 """Tests NODE_COMPACT_FILTERS (BIP 157/158).
@@ -71,11 +71,11 @@ class CompactFiltersTest(BitcoinTestFramework):
 
         # Check that nodes have signalled NODE_COMPACT_FILTERS correctly.
         assert_not_equal(peer_0.nServices & NODE_COMPACT_FILTERS, 0)
-        assert peer_1.nServices & NODE_COMPACT_FILTERS == 0
+        assert_equal(peer_1.nServices & NODE_COMPACT_FILTERS, 0)
 
         # Check that the localservices is as expected.
         assert_not_equal(int(self.nodes[0].getnetworkinfo()['localservices'], 16) & NODE_COMPACT_FILTERS, 0)
-        assert int(self.nodes[1].getnetworkinfo()['localservices'], 16) & NODE_COMPACT_FILTERS == 0
+        assert_equal(int(self.nodes[1].getnetworkinfo()['localservices'], 16) & NODE_COMPACT_FILTERS, 0)
 
         self.log.info("get cfcheckpt on chain to be re-orged out.")
         request = msg_getcfcheckpt(

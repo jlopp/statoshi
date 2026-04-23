@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-# Copyright (c) 2018-2022 The Bitcoin Core developers
+# Copyright (c) 2018-present The Bitcoin Core developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -20,10 +20,11 @@ def grep_boost_fixture_test_suite():
         "-E",
         r"^BOOST_FIXTURE_TEST_SUITE\(",
         "--",
+        "src/ipc/test/**.cpp",
         "src/test/**.cpp",
         "src/wallet/test/**.cpp",
     ]
-    return subprocess.check_output(command, text=True, encoding="utf8")
+    return subprocess.check_output(command, text=True)
 
 
 def check_matching_test_names(test_suite_list):

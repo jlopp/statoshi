@@ -1,5 +1,5 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
-// Copyright (c) 2009-2022 The Bitcoin Core developers
+// Copyright (c) 2009-present The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -8,9 +8,11 @@
 
 #include <consensus/amount.h>
 #include <consensus/consensus.h>
+#include <consensus/validation.h>
 #include <primitives/transaction.h>
 #include <script/interpreter.h>
 #include <script/solver.h>
+#include <util/feefrac.h>
 
 #include <cstdint>
 #include <string>
@@ -23,6 +25,8 @@ class CScript;
 static constexpr unsigned int DEFAULT_BLOCK_MAX_WEIGHT{MAX_BLOCK_WEIGHT};
 /** Default for -blockreservedweight **/
 static constexpr unsigned int DEFAULT_BLOCK_RESERVED_WEIGHT{8000};
+/** Default sigops cost to reserve for coinbase transaction outputs when creating block templates. */
+static constexpr unsigned int DEFAULT_COINBASE_OUTPUT_MAX_ADDITIONAL_SIGOPS{400};
 /** This accounts for the block header, var_int encoding of the transaction count and a minimally viable
  * coinbase transaction. It adds an additional safety margin, because even with a thorough understanding
  * of block serialization, it's easy to make a costly mistake when trying to squeeze every last byte.
@@ -64,14 +68,14 @@ static constexpr unsigned int MAX_STANDARD_SCRIPTSIG_SIZE{1650};
 static constexpr unsigned int DUST_RELAY_TX_FEE{3000};
 /** Default for -minrelaytxfee, minimum relay fee for transactions */
 static constexpr unsigned int DEFAULT_MIN_RELAY_TX_FEE{100};
+/** Maximum number of transactions per cluster (default) */
+static constexpr unsigned int DEFAULT_CLUSTER_LIMIT{64};
+/** Maximum size of cluster in virtual kilobytes */
+static constexpr unsigned int DEFAULT_CLUSTER_SIZE_LIMIT_KVB{101};
 /** Default for -limitancestorcount, max number of in-mempool ancestors */
 static constexpr unsigned int DEFAULT_ANCESTOR_LIMIT{25};
-/** Default for -limitancestorsize, maximum kilobytes of tx + all in-mempool ancestors */
-static constexpr unsigned int DEFAULT_ANCESTOR_SIZE_LIMIT_KVB{101};
 /** Default for -limitdescendantcount, max number of in-mempool descendants */
 static constexpr unsigned int DEFAULT_DESCENDANT_LIMIT{25};
-/** Default for -limitdescendantsize, maximum kilobytes of in-mempool descendants */
-static constexpr unsigned int DEFAULT_DESCENDANT_SIZE_LIMIT_KVB{101};
 /** Default for -datacarrier */
 static const bool DEFAULT_ACCEPT_DATACARRIER = true;
 /**
@@ -92,8 +96,7 @@ static constexpr unsigned int MAX_DUST_OUTPUTS_PER_TX{1};
 
 /**
  * Mandatory script verification flags that all new transactions must comply with for
- * them to be valid. Failing one of these tests may trigger a DoS ban;
- * see CheckInputScripts() for details.
+ * them to be valid.
  *
  * Note that this does not affect consensus validity; see GetBlockScriptFlags()
  * for that.
@@ -154,11 +157,12 @@ static constexpr decltype(CTransaction::version) TX_MAX_STANDARD_VERSION{3};
 */
 bool IsStandardTx(const CTransaction& tx, const std::optional<unsigned>& max_datacarrier_bytes, bool permit_bare_multisig, const CFeeRate& dust_relay_fee, std::string& reason);
 /**
-* Check for standard transaction types
-* @param[in] mapInputs       Map of previous transactions that have outputs we're spending
-* @return True if all inputs (scriptSigs) use only standard transaction forms
-*/
-bool AreInputsStandard(const CTransaction& tx, const CCoinsViewCache& mapInputs);
+ * Check for standard transaction types
+ * @param[in] mapInputs       Map of previous transactions that have outputs we're spending
+ * @returns valid TxValidationState if all inputs (scriptSigs) use only standard transaction forms else returns
+ * invalid TxValidationState which states why the first invalid input is not standard
+ */
+TxValidationState ValidateInputsStandardness(const CTransaction& tx, const CCoinsViewCache& mapInputs);
 /**
 * Check if the transaction is over standard P2WSH resources limit:
 * 3600bytes witnessScript size, 80bytes per witness stack element, 100 witness stack elements
@@ -187,5 +191,9 @@ static inline int64_t GetVirtualTransactionInputSize(const CTxIn& tx)
 {
     return GetVirtualTransactionInputSize(tx, 0, 0);
 }
+
+int64_t GetSigOpsAdjustedWeight(int64_t weight, int64_t sigop_cost, unsigned int bytes_per_sigop);
+
+static inline FeePerVSize ToFeePerVSize(FeePerWeight feerate) { return {feerate.fee, (feerate.size + WITNESS_SCALE_FACTOR - 1) / WITNESS_SCALE_FACTOR}; }
 
 #endif // BITCOIN_POLICY_POLICY_H
