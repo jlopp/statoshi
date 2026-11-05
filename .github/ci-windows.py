@@ -34,8 +34,6 @@ GENERATE_OPTIONS = {
     "fuzz": [
         "-DVCPKG_MANIFEST_NO_DEFAULT_FEATURES=ON",
         "-DVCPKG_MANIFEST_FEATURES=wallet",
-        "-DBUILD_GUI=OFF",
-        "-DWITH_ZMQ=OFF",
         "-DBUILD_FOR_FUZZING=ON",
         "-DCMAKE_COMPILE_WARNING_AS_ERROR=ON",
     ],
@@ -179,6 +177,7 @@ def run_tests(ci_type):
         for var, exe in test_envs.items():
             os.environ[var] = str(release_bin / exe)
 
+        os.environ["QT_ASSUME_STDERR_HAS_CONSOLE"] = "1"
         ctest_cmd = [
             "ctest",
             "--test-dir",
@@ -198,7 +197,7 @@ def run_tests(ci_type):
             "--jobs",
             num_procs,
             "--quiet",
-            f"--tmpdirprefix={workspace}",
+            f"--tmpdirprefix={workspace / '_ _'}",
             "--combinedlogslen=99999999",
             *shlex.split(os.environ.get("TEST_RUNNER_EXTRA", "").strip()),
         ]

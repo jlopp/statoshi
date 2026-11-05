@@ -9,12 +9,10 @@
 #include <consensus/amount.h>
 #include <consensus/consensus.h>
 #include <consensus/merkle.h>
-#include <interfaces/chain.h>
 #include <kernel/chain.h>
 #include <kernel/types.h>
 #include <node/blockstorage.h>
 #include <outputtype.h>
-#include <policy/feerate.h>
 #include <primitives/block.h>
 #include <primitives/transaction.h>
 #include <script/script.h>
@@ -22,28 +20,29 @@
 #include <test/util/setup_common.h>
 #include <test/util/time.h>
 #include <uint256.h>
+#include <util/check.h>
 #include <util/result.h>
-#include <util/time.h>
 #include <validation.h>
 #include <versionbits.h>
 #include <wallet/coincontrol.h>
 #include <wallet/coinselection.h>
 #include <wallet/spend.h>
+#include <wallet/sqlite.h>
 #include <wallet/test/util.h>
 #include <wallet/wallet.h>
 #include <wallet/walletutil.h>
 
-#include <cassert>
 #include <cstdint>
 #include <map>
 #include <memory>
 #include <optional>
+#include <string>
 #include <utility>
 #include <vector>
 
 using kernel::ChainstateRole;
 using wallet::CWallet;
-using wallet::CreateMockableWalletDatabase;
+using wallet::MakeInMemoryWalletDatabase;
 using wallet::WALLET_FLAG_DESCRIPTORS;
 
 struct TipBlock
@@ -118,8 +117,8 @@ static void WalletCreateTx(benchmark::Bench& bench, const OutputType output_type
     const auto test_setup = MakeNoLogFileContext<const TestingSetup>();
 
     // Set clock to genesis block, so the descriptors/keys creation time don't interfere with the blocks scanning process.
-    NodeClockContext clock_ctx{test_setup->m_node.chainman->GetParams().GenesisBlock().Time()};
-    CWallet wallet{test_setup->m_node.chain.get(), "", CreateMockableWalletDatabase()};
+    FakeNodeClock clock{test_setup->m_node.chainman->GetParams().GenesisBlock().Time()};
+    CWallet wallet{test_setup->m_node.chain.get(), "", MakeInMemoryWalletDatabase()};
     {
         LOCK(wallet.cs_wallet);
         wallet.SetWalletFlag(WALLET_FLAG_DESCRIPTORS);
@@ -173,8 +172,8 @@ static void AvailableCoins(benchmark::Bench& bench, const std::vector<OutputType
 {
     const auto test_setup = MakeNoLogFileContext<const TestingSetup>();
     // Set clock to genesis block, so the descriptors/keys creation time don't interfere with the blocks scanning process.
-    NodeClockContext clock_ctx{test_setup->m_node.chainman->GetParams().GenesisBlock().Time()};
-    CWallet wallet{test_setup->m_node.chain.get(), "", CreateMockableWalletDatabase()};
+    FakeNodeClock clock{test_setup->m_node.chainman->GetParams().GenesisBlock().Time()};
+    CWallet wallet{test_setup->m_node.chain.get(), "", MakeInMemoryWalletDatabase()};
     {
         LOCK(wallet.cs_wallet);
         wallet.SetWalletFlag(WALLET_FLAG_DESCRIPTORS);

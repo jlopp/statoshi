@@ -2,10 +2,8 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#include <test/data/script_tests.json.h>
-#include <test/data/bip341_wallet_vectors.json.h>
-
 #include <common/system.h>
+#include <compressor.h>
 #include <core_io.h>
 #include <key.h>
 #include <rpc/util.h>
@@ -16,24 +14,26 @@
 #include <script/sign.h>
 #include <script/signingprovider.h>
 #include <script/solver.h>
+#include <secp256k1.h>
 #include <streams.h>
+#include <test/data/bip341_wallet_vectors.json.h>
+#include <test/data/script_tests.json.h>
+#include <test/util/common.h>
 #include <test/util/json.h>
 #include <test/util/random.h>
-#include <test/util/common.h>
 #include <test/util/setup_common.h>
 #include <test/util/transaction_utils.h>
+#include <univalue.h>
+#include <util/check.h>
 #include <util/fs.h>
 #include <util/strencodings.h>
 #include <util/string.h>
 
+#include <boost/test/unit_test.hpp>
+
 #include <cstdint>
 #include <string>
 #include <vector>
-
-#include <boost/test/unit_test.hpp>
-
-#include <secp256k1.h>
-#include <univalue.h>
 
 // Uncomment if you want to output updated JSON tests.
 // #define UPDATE_JSON_TESTS
@@ -92,6 +92,7 @@ static ScriptErrorDesc script_errors[]={
     {SCRIPT_ERR_WITNESS_UNEXPECTED, "WITNESS_UNEXPECTED"},
     {SCRIPT_ERR_WITNESS_PUBKEYTYPE, "WITNESS_PUBKEYTYPE"},
     {SCRIPT_ERR_TAPSCRIPT_EMPTY_PUBKEY, "TAPSCRIPT_EMPTY_PUBKEY"},
+    {SCRIPT_ERR_TAPSCRIPT_MINIMALIF, "TAPSCRIPT_MINIMALIF"},
     {SCRIPT_ERR_OP_CODESEPARATOR, "OP_CODESEPARATOR"},
     {SCRIPT_ERR_SIG_FINDANDDELETE, "SIG_FINDANDDELETE"},
     {SCRIPT_ERR_SCRIPTNUM, "SCRIPTNUM"}
@@ -1265,7 +1266,7 @@ SignatureData CombineSignatures(const CTxOut& txout, const CMutableTransaction& 
     SignatureData data;
     data.MergeSignatureData(scriptSig1);
     data.MergeSignatureData(scriptSig2);
-    ProduceSignature(DUMMY_SIGNING_PROVIDER, MutableTransactionSignatureCreator(tx, 0, txout.nValue, SIGHASH_DEFAULT), txout.scriptPubKey, data);
+    ProduceSignature(DUMMY_SIGNING_PROVIDER, MutableTransactionSignatureCreator(tx, 0, txout.nValue, {.sighash_type = SIGHASH_DEFAULT}), txout.scriptPubKey, data);
     return data;
 }
 
@@ -1297,9 +1298,9 @@ BOOST_AUTO_TEST_CASE(script_combineSigs)
     BOOST_CHECK(SignSignature(keystore, CTransaction(txFrom), txTo, 0, SIGHASH_ALL, dummy)); // changes scriptSig
     scriptSig = DataFromTransaction(txTo, 0, txFrom.vout[0]);
     combined = CombineSignatures(txFrom.vout[0], txTo, scriptSig, empty);
-    BOOST_CHECK(combined.scriptSig == scriptSig.scriptSig);
+    BOOST_CHECK_EQUAL(combined.scriptSig, scriptSig.scriptSig);
     combined = CombineSignatures(txFrom.vout[0], txTo, empty, scriptSig);
-    BOOST_CHECK(combined.scriptSig == scriptSig.scriptSig);
+    BOOST_CHECK_EQUAL(combined.scriptSig, scriptSig.scriptSig);
     SignatureData scriptSigCopy = scriptSig;
     // Signing again will give a different, valid signature:
     SignatureData dummy_b;
@@ -1316,9 +1317,9 @@ BOOST_AUTO_TEST_CASE(script_combineSigs)
     BOOST_CHECK(SignSignature(keystore, CTransaction(txFrom), txTo, 0, SIGHASH_ALL, dummy_c));
     scriptSig = DataFromTransaction(txTo, 0, txFrom.vout[0]);
     combined = CombineSignatures(txFrom.vout[0], txTo, scriptSig, empty);
-    BOOST_CHECK(combined.scriptSig == scriptSig.scriptSig);
+    BOOST_CHECK_EQUAL(combined.scriptSig, scriptSig.scriptSig);
     combined = CombineSignatures(txFrom.vout[0], txTo, empty, scriptSig);
-    BOOST_CHECK(combined.scriptSig == scriptSig.scriptSig);
+    BOOST_CHECK_EQUAL(combined.scriptSig, scriptSig.scriptSig);
     scriptSigCopy = scriptSig;
     SignatureData dummy_d;
     BOOST_CHECK(SignSignature(keystore, CTransaction(txFrom), txTo, 0, SIGHASH_ALL, dummy_d));
@@ -1333,9 +1334,9 @@ BOOST_AUTO_TEST_CASE(script_combineSigs)
     BOOST_CHECK(SignSignature(keystore, CTransaction(txFrom), txTo, 0, SIGHASH_ALL, dummy_e));
     scriptSig = DataFromTransaction(txTo, 0, txFrom.vout[0]);
     combined = CombineSignatures(txFrom.vout[0], txTo, scriptSig, empty);
-    BOOST_CHECK(combined.scriptSig == scriptSig.scriptSig);
+    BOOST_CHECK_EQUAL(combined.scriptSig, scriptSig.scriptSig);
     combined = CombineSignatures(txFrom.vout[0], txTo, empty, scriptSig);
-    BOOST_CHECK(combined.scriptSig == scriptSig.scriptSig);
+    BOOST_CHECK_EQUAL(combined.scriptSig, scriptSig.scriptSig);
 
     // A couple of partially-signed versions:
     std::vector<unsigned char> sig1;
@@ -1370,21 +1371,21 @@ BOOST_AUTO_TEST_CASE(script_combineSigs)
     partial3_sigs.signatures.emplace(keys[2].GetPubKey().GetID(), SigPair(keys[2].GetPubKey(), sig3));
 
     combined = CombineSignatures(txFrom.vout[0], txTo, partial1_sigs, partial1_sigs);
-    BOOST_CHECK(combined.scriptSig == partial1a);
+    BOOST_CHECK_EQUAL(combined.scriptSig, partial1a);
     combined = CombineSignatures(txFrom.vout[0], txTo, partial1_sigs, partial2_sigs);
-    BOOST_CHECK(combined.scriptSig == complete12);
+    BOOST_CHECK_EQUAL(combined.scriptSig, complete12);
     combined = CombineSignatures(txFrom.vout[0], txTo, partial2_sigs, partial1_sigs);
-    BOOST_CHECK(combined.scriptSig == complete12);
+    BOOST_CHECK_EQUAL(combined.scriptSig, complete12);
     combined = CombineSignatures(txFrom.vout[0], txTo, partial1_sigs, partial2_sigs);
-    BOOST_CHECK(combined.scriptSig == complete12);
+    BOOST_CHECK_EQUAL(combined.scriptSig, complete12);
     combined = CombineSignatures(txFrom.vout[0], txTo, partial3_sigs, partial1_sigs);
-    BOOST_CHECK(combined.scriptSig == complete13);
+    BOOST_CHECK_EQUAL(combined.scriptSig, complete13);
     combined = CombineSignatures(txFrom.vout[0], txTo, partial2_sigs, partial3_sigs);
-    BOOST_CHECK(combined.scriptSig == complete23);
+    BOOST_CHECK_EQUAL(combined.scriptSig, complete23);
     combined = CombineSignatures(txFrom.vout[0], txTo, partial3_sigs, partial2_sigs);
-    BOOST_CHECK(combined.scriptSig == complete23);
+    BOOST_CHECK_EQUAL(combined.scriptSig, complete23);
     combined = CombineSignatures(txFrom.vout[0], txTo, partial3_sigs, partial3_sigs);
-    BOOST_CHECK(combined.scriptSig == partial3c);
+    BOOST_CHECK_EQUAL(combined.scriptSig, partial3c);
 }
 
 /**
@@ -1504,7 +1505,7 @@ BOOST_AUTO_TEST_CASE(script_byte_array_u8_vector_equivalence)
 {
     const CScript scriptPubKey1 = CScript() << "04678afdb0fe5548271967f1a67130b7105cd6a828e03909a67962e0ea1f61deb649f6bc3f4cef38c4f35504e51ec112de5c384df7ba0b8d578a4c702b6bf11d5f"_hex_v_u8 << OP_CHECKSIG;
     const CScript scriptPubKey2 = CScript() << "04678afdb0fe5548271967f1a67130b7105cd6a828e03909a67962e0ea1f61deb649f6bc3f4cef38c4f35504e51ec112de5c384df7ba0b8d578a4c702b6bf11d5f"_hex << OP_CHECKSIG;
-    BOOST_CHECK(scriptPubKey1 == scriptPubKey2);
+    BOOST_CHECK_EQUAL(scriptPubKey1, scriptPubKey2);
 }
 
 BOOST_AUTO_TEST_CASE(script_FindAndDelete)
@@ -1518,43 +1519,43 @@ BOOST_AUTO_TEST_CASE(script_FindAndDelete)
     d = CScript(); // delete nothing should be a no-op
     expect = s;
     BOOST_CHECK_EQUAL(FindAndDelete(s, d), 0);
-    BOOST_CHECK(s == expect);
+    BOOST_CHECK_EQUAL(s, expect);
 
     s = CScript() << OP_1 << OP_2 << OP_3;
     d = CScript() << OP_2;
     expect = CScript() << OP_1 << OP_3;
     BOOST_CHECK_EQUAL(FindAndDelete(s, d), 1);
-    BOOST_CHECK(s == expect);
+    BOOST_CHECK_EQUAL(s, expect);
 
     s = CScript() << OP_3 << OP_1 << OP_3 << OP_3 << OP_4 << OP_3;
     d = CScript() << OP_3;
     expect = CScript() << OP_1 << OP_4;
     BOOST_CHECK_EQUAL(FindAndDelete(s, d), 4);
-    BOOST_CHECK(s == expect);
+    BOOST_CHECK_EQUAL(s, expect);
 
     s = ToScript("0302ff03"_hex); // PUSH 0x02ff03 onto stack
     d = ToScript("0302ff03"_hex);
     expect = CScript();
     BOOST_CHECK_EQUAL(FindAndDelete(s, d), 1);
-    BOOST_CHECK(s == expect);
+    BOOST_CHECK_EQUAL(s, expect);
 
     s = ToScript("0302ff030302ff03"_hex); // PUSH 0x02ff03 PUSH 0x02ff03
     d = ToScript("0302ff03"_hex);
     expect = CScript();
     BOOST_CHECK_EQUAL(FindAndDelete(s, d), 2);
-    BOOST_CHECK(s == expect);
+    BOOST_CHECK_EQUAL(s, expect);
 
     s = ToScript("0302ff030302ff03"_hex);
     d = ToScript("02"_hex);
     expect = s; // FindAndDelete matches entire opcodes
     BOOST_CHECK_EQUAL(FindAndDelete(s, d), 0);
-    BOOST_CHECK(s == expect);
+    BOOST_CHECK_EQUAL(s, expect);
 
     s = ToScript("0302ff030302ff03"_hex);
     d = ToScript("ff"_hex);
     expect = s;
     BOOST_CHECK_EQUAL(FindAndDelete(s, d), 0);
-    BOOST_CHECK(s == expect);
+    BOOST_CHECK_EQUAL(s, expect);
 
     // This is an odd edge case: strip of the push-three-bytes
     // prefix, leaving 02ff03 which is push-two-bytes:
@@ -1562,44 +1563,44 @@ BOOST_AUTO_TEST_CASE(script_FindAndDelete)
     d = ToScript("03"_hex);
     expect = CScript() << "ff03"_hex << "ff03"_hex;
     BOOST_CHECK_EQUAL(FindAndDelete(s, d), 2);
-    BOOST_CHECK(s == expect);
+    BOOST_CHECK_EQUAL(s, expect);
 
     // Byte sequence that spans multiple opcodes:
     s = ToScript("02feed5169"_hex); // PUSH(0xfeed) OP_1 OP_VERIFY
     d = ToScript("feed51"_hex);
     expect = s;
     BOOST_CHECK_EQUAL(FindAndDelete(s, d), 0); // doesn't match 'inside' opcodes
-    BOOST_CHECK(s == expect);
+    BOOST_CHECK_EQUAL(s, expect);
 
     s = ToScript("02feed5169"_hex); // PUSH(0xfeed) OP_1 OP_VERIFY
     d = ToScript("02feed51"_hex);
     expect = ToScript("69"_hex);
     BOOST_CHECK_EQUAL(FindAndDelete(s, d), 1);
-    BOOST_CHECK(s == expect);
+    BOOST_CHECK_EQUAL(s, expect);
 
     s = ToScript("516902feed5169"_hex);
     d = ToScript("feed51"_hex);
     expect = s;
     BOOST_CHECK_EQUAL(FindAndDelete(s, d), 0);
-    BOOST_CHECK(s == expect);
+    BOOST_CHECK_EQUAL(s, expect);
 
     s = ToScript("516902feed5169"_hex);
     d = ToScript("02feed51"_hex);
     expect = ToScript("516969"_hex);
     BOOST_CHECK_EQUAL(FindAndDelete(s, d), 1);
-    BOOST_CHECK(s == expect);
+    BOOST_CHECK_EQUAL(s, expect);
 
     s = CScript() << OP_0 << OP_0 << OP_1 << OP_1;
     d = CScript() << OP_0 << OP_1;
     expect = CScript() << OP_0 << OP_1; // FindAndDelete is single-pass
     BOOST_CHECK_EQUAL(FindAndDelete(s, d), 1);
-    BOOST_CHECK(s == expect);
+    BOOST_CHECK_EQUAL(s, expect);
 
     s = CScript() << OP_0 << OP_0 << OP_1 << OP_0 << OP_1 << OP_1;
     d = CScript() << OP_0 << OP_1;
     expect = CScript() << OP_0 << OP_1; // FindAndDelete is single-pass
     BOOST_CHECK_EQUAL(FindAndDelete(s, d), 2);
-    BOOST_CHECK(s == expect);
+    BOOST_CHECK_EQUAL(s, expect);
 
     // Another weird edge case:
     // End with invalid push (not enough data)...
@@ -1607,13 +1608,13 @@ BOOST_AUTO_TEST_CASE(script_FindAndDelete)
     d = ToScript("03feed"_hex); // ... can remove the invalid push
     expect = ToScript("00"_hex);
     BOOST_CHECK_EQUAL(FindAndDelete(s, d), 1);
-    BOOST_CHECK(s == expect);
+    BOOST_CHECK_EQUAL(s, expect);
 
     s = ToScript("0003feed"_hex);
     d = ToScript("00"_hex);
     expect = ToScript("03feed"_hex);
     BOOST_CHECK_EQUAL(FindAndDelete(s, d), 1);
-    BOOST_CHECK(s == expect);
+    BOOST_CHECK_EQUAL(s, expect);
 }
 
 BOOST_AUTO_TEST_CASE(script_HasValidOps)
@@ -1633,7 +1634,7 @@ BOOST_AUTO_TEST_CASE(script_HasValidOps)
 BOOST_AUTO_TEST_CASE(bip341_keypath_test_vectors)
 {
     UniValue tests;
-    tests.read(json_tests::bip341_wallet_vectors);
+    Assert(tests.read(json_tests::bip341_wallet_vectors));
 
     const auto& vectors = tests["keyPathSpending"];
 
@@ -1681,7 +1682,7 @@ BOOST_AUTO_TEST_CASE(bip341_keypath_test_vectors)
             // Sign and verify signature.
             FlatSigningProvider provider;
             provider.keys[key.GetPubKey().GetID()] = key;
-            MutableTransactionSignatureCreator creator(tx, txinpos, utxos[txinpos].nValue, &txdata, hashtype);
+            MutableTransactionSignatureCreator creator(tx, txinpos, utxos[txinpos].nValue, &txdata, {.sighash_type = hashtype});
             std::vector<unsigned char> signature;
             BOOST_CHECK(creator.CreateSchnorrSig(provider, signature, pubkey, nullptr, &merkle_root, SigVersion::TAPROOT));
             BOOST_CHECK_EQUAL(HexStr(signature), input["expected"]["witness"][0].get_str());

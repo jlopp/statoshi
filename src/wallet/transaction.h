@@ -28,6 +28,8 @@ class Chain;
 } // namespace interfaces
 
 namespace wallet {
+class WalletBatch;
+
 //! State of transaction confirmed in a block.
 struct TxStateConfirmed {
     uint256 confirmed_block_hash;
@@ -164,9 +166,6 @@ struct CachableAmount
 };
 
 
-typedef std::map<std::string, std::string> mapValue_t;
-
-
 /** Legacy class used for deserializing vtxPrev for backwards compatibility.
  * vtxPrev was removed in commit 93a18a3650292afbb441a47d1fa1b94aeb0164e3,
  * but old wallet.dat files may still contain vtxPrev vectors of CMerkleTxs.
@@ -194,33 +193,20 @@ public:
 class CWalletTx
 {
 public:
-    /**
-     * Key/value map with information about the transaction.
-     *
-     * The following keys can be read and written through the map and are
-     * serialized in the wallet database:
-     *
-     *     "comment", "to"   - comment strings provided to sendtoaddress,
-     *                         and sendmany wallet RPCs
-     *     "replaces_txid"   - txid (as HexStr) of transaction replaced by
-     *                         bumpfee on transaction created by bumpfee
-     *     "replaced_by_txid" - txid (as HexStr) of transaction created by
-     *                         bumpfee on transaction replaced by bumpfee
-     *     "from", "message" - obsolete fields that could be set in UI prior to
-     *                         2011 (removed in commit 4d9b223)
-     *
-     * The following keys are serialized in the wallet database, but shouldn't
-     * be read or written through the map (they will be temporarily added and
-     * removed from the map during serialization):
-     *
-     *     "fromaccount"     - serialized strFromAccount value
-     *     "n"               - serialized nOrderPos value
-     *     "timesmart"       - serialized nTimeSmart value
-     *     "spent"           - serialized vfSpent value that existed prior to
-     *                         2014 (removed in commit 93a18a3)
-     */
-    mapValue_t mapValue;
-    std::vector<std::pair<std::string, std::string> > vOrderForm;
+    // "from" and "message" are obsolete fields that could be set in
+    // the UI prior to 2011 (removed in commit 4d9b223)
+    // These fields are kept to avoid losing metadata.
+    std::optional<std::string> m_from;
+    std::optional<std::string> m_message;
+    // Comment strings provided by the user
+    std::optional<std::string> m_comment;
+    std::optional<std::string> m_comment_to;
+    std::optional<Txid> m_replaces_txid;
+    std::optional<Txid> m_replaced_by_txid;
+    // BIP 21 URI Messages
+    std::vector<std::string> m_messages;
+    // BIP 70 Payment Request (deprecated, field kept to preserve metadata from old wallets)
+    std::vector<std::string> m_payment_requests;
     unsigned int nTimeReceived; //!< time received by this node
     /**
      * Stable timestamp that never changes, and reflects the order a transaction
@@ -250,23 +236,27 @@ public:
     mutable bool fChangeCached;
     mutable CAmount nChangeCached;
 
-    CWalletTx(CTransactionRef tx, const TxState& state) : tx(std::move(tx)), m_state(state)
+    CWalletTx(CTransactionRef tx, const TxState& state) : m_state(state)
     {
-        Init();
+        Assert(tx);
+        m_canonical_wtxid = tx->GetWitnessHash();
+        m_txs.emplace(tx->GetWitnessHash(), std::move(tx));
+        SetDefaults();
     }
 
-    void Init()
+    template <typename Stream>
+    CWalletTx(deserialize_type, Stream& s, const std::map<Wtxid, CTransactionRef>& variants) : m_state(TxStateInactive{})
     {
-        mapValue.clear();
-        vOrderForm.clear();
-        nTimeReceived = 0;
-        nTimeSmart = 0;
-        fChangeCached = false;
-        nChangeCached = 0;
-        nOrderPos = -1;
+        Unserialize(s);
+        const Txid& canonical_txid = GetHash();
+        for (const auto& [wtxid, tx] : variants) {
+            if (tx->GetHash() != canonical_txid) throw std::runtime_error("variant txid does not match wallet txid");
+        }
+        // Merge witness variants
+        m_txs.insert(variants.begin(), variants.end());
+        Assert(m_txs.contains(GetWitnessHash()));
     }
 
-    CTransactionRef tx;
     TxState m_state;
 
     // Set of mempool transactions that conflict
@@ -284,14 +274,24 @@ public:
     template<typename Stream>
     void Serialize(Stream& s) const
     {
-        mapValue_t mapValueCopy = mapValue;
+        std::map<std::string, std::string> string_values;
+        if (m_from) string_values["from"] = *m_from;
+        if (m_message) string_values["message"] = *m_message;
+        if (m_comment) string_values["comment"] = *m_comment;
+        if (m_comment_to) string_values["to"] = *m_comment_to;
+        if (m_replaces_txid) string_values["replaces_txid"] = m_replaces_txid->ToString();
+        if (m_replaced_by_txid) string_values["replaced_by_txid"] = m_replaced_by_txid->ToString();
+        string_values["fromaccount"] = "";
+        if (nOrderPos != -1) string_values["n"] = util::ToString(nOrderPos);
+        if (nTimeSmart) string_values["timesmart"] = strprintf("%u", nTimeSmart);
 
-        mapValueCopy["fromaccount"] = "";
-        if (nOrderPos != -1) {
-            mapValueCopy["n"] = util::ToString(nOrderPos);
+        std::vector<std::pair<std::string, std::string>> msgs_reqs;
+        msgs_reqs.reserve(m_messages.size() + m_payment_requests.size());
+        for (const std::string& msg : m_messages) {
+            msgs_reqs.emplace_back("Message", msg);
         }
-        if (nTimeSmart) {
-            mapValueCopy["timesmart"] = strprintf("%u", nTimeSmart);
+        for (const std::string& req : m_payment_requests) {
+            msgs_reqs.emplace_back("PaymentRequest", req);
         }
 
         std::vector<uint8_t> dummy_vector1; // Used to be vMerkleBranch
@@ -300,7 +300,7 @@ public:
         uint32_t dummy_int = 0; // Used to be fTimeReceivedIsTxTime
         uint256 serializedHash = TxStateSerializedBlockHash(m_state);
         int serializedIndex = TxStateSerializedIndex(m_state);
-        s << TX_WITH_WITNESS(tx) << serializedHash << dummy_vector1 << serializedIndex << dummy_vector2 << mapValueCopy << vOrderForm << dummy_int << nTimeReceived << dummy_bool << dummy_bool;
+        s << TX_WITH_WITNESS(GetTx()) << serializedHash << dummy_vector1 << serializedIndex << dummy_vector2 << string_values << msgs_reqs << dummy_int << nTimeReceived << dummy_bool << dummy_bool;
     }
 
     template<typename Stream>
@@ -314,25 +314,47 @@ public:
         uint32_t dummy_int; // Used to be fTimeReceivedIsTxTime
         uint256 serialized_block_hash;
         int serializedIndex;
-        s >> TX_WITH_WITNESS(tx) >> serialized_block_hash >> dummy_vector1 >> serializedIndex >> dummy_vector2 >> mapValue >> vOrderForm >> dummy_int >> nTimeReceived >> dummy_bool >> dummy_bool;
+        std::map<std::string, std::string> string_values;
+        std::vector<std::pair<std::string, std::string>> msgs_reqs;
+        CTransactionRef canonical_tx;
+        s >> TX_WITH_WITNESS(canonical_tx) >> serialized_block_hash >> dummy_vector1 >> serializedIndex >> dummy_vector2 >> string_values >> msgs_reqs >> dummy_int >> nTimeReceived >> dummy_bool >> dummy_bool;
+        m_canonical_wtxid = canonical_tx->GetWitnessHash();
+        m_txs.emplace(m_canonical_wtxid, std::move(canonical_tx));
 
         m_state = TxStateInterpretSerialized({serialized_block_hash, serializedIndex});
 
-        const auto it_op = mapValue.find("n");
-        nOrderPos = (it_op != mapValue.end()) ? LocaleIndependentAtoi<int64_t>(it_op->second) : -1;
-        const auto it_ts = mapValue.find("timesmart");
-        nTimeSmart = (it_ts != mapValue.end()) ? static_cast<unsigned int>(LocaleIndependentAtoi<int64_t>(it_ts->second)) : 0;
+        string_values.erase("fromaccount");
+        string_values.erase("spent");
+        for (const auto& [key, value] : string_values) {
+            if (key == "n") nOrderPos = LocaleIndependentAtoi<int64_t>(value);
+            else if (key == "timesmart") nTimeSmart = LocaleIndependentAtoi<int64_t>(value);
+            else if (key == "from") m_from = value;
+            else if (key == "message") m_message = value;
+            else if (key == "comment") m_comment = value;
+            else if (key == "to") m_comment_to = value;
+            else if (key == "replaces_txid") m_replaces_txid = Txid::FromHex(value);
+            else if (key == "replaced_by_txid") m_replaced_by_txid = Txid::FromHex(value);
+            else {
+                throw std::runtime_error("Unexpected value in CWalletTx strings value map");
+            }
+        }
 
-        mapValue.erase("fromaccount");
-        mapValue.erase("spent");
-        mapValue.erase("n");
-        mapValue.erase("timesmart");
+        for (const auto& [type, data] : msgs_reqs) {
+            if (type == "Message") m_messages.emplace_back(data);
+            else if (type == "PaymentRequest") m_payment_requests.emplace_back(data);
+            else {
+                throw std::runtime_error("Unknown type in CWalletTx messages and requests vector");
+            }
+        }
     }
 
-    void SetTx(CTransactionRef arg)
-    {
-        tx = std::move(arg);
-    }
+    CTransactionRef GetTx() const { return m_txs.at(m_canonical_wtxid); }
+
+    // Update the state of this wallet transaction along with a transaction that may have a different wtxid.
+    // If the given transaction has a different wtxid, the transaction is stored if it has not been seen before.
+    // The canonical wtxid is also updated. The tx that is confirmed becomes canonical. For unconfirmed txs,
+    // those with witnesses are preferred, followed by least weight.
+    bool Update(CTransactionRef tx, const TxState& new_state, WalletBatch& batch, bool metadata_changed);
 
     //! make sure balances are recalculated
     void MarkDirty()
@@ -344,8 +366,9 @@ public:
         m_cached_from_me = std::nullopt;
     }
 
-    /** True if only scriptSigs are different */
-    bool IsEquivalentTo(const CWalletTx& tx) const;
+    /** True if tx is a malleation of this, i.e. it has the exact same version, locktime,
+     * input order, input outpoints, input sequences, and outputs. Input scriptSigs and input scriptWitnesses may differ. */
+    bool IsMalleation(const CWalletTx& tx) const;
 
     bool InMempool() const;
 
@@ -364,19 +387,44 @@ public:
     bool isInactive() const { return state<TxStateInactive>(); }
     bool isUnconfirmed() const { return !isAbandoned() && !isBlockConflicted() && !isMempoolConflicted() && !isConfirmed(); }
     bool isConfirmed() const { return state<TxStateConfirmed>(); }
-    const Txid& GetHash() const LIFETIMEBOUND { return tx->GetHash(); }
-    const Wtxid& GetWitnessHash() const LIFETIMEBOUND { return tx->GetWitnessHash(); }
-    bool IsCoinBase() const { return tx->IsCoinBase(); }
+    const Txid& GetHash() const LIFETIMEBOUND { return GetTx()->GetHash(); }
+    const Wtxid& GetWitnessHash() const LIFETIMEBOUND { return GetTx()->GetWitnessHash(); }
+    bool IsCoinBase() const { return GetTx()->IsCoinBase(); }
 
-private:
+    const std::map<Wtxid, CTransactionRef>& GetTxs() const { return m_txs; }
+
     // Disable copying of CWalletTx objects to prevent bugs where instances get
     // copied in and out of the mapWallet map, and fields are updated in the
     // wrong copy.
-    CWalletTx(const CWalletTx&) = default;
-    CWalletTx& operator=(const CWalletTx&) = default;
-public:
-    // Instead have an explicit copy function
-    void CopyFrom(const CWalletTx&);
+    CWalletTx(const CWalletTx&) = delete;
+    CWalletTx& operator=(const CWalletTx&) = delete;
+
+    // Enable the default move constructor
+    CWalletTx(CWalletTx&&) = default;
+
+private:
+    void SetDefaults()
+    {
+        nTimeReceived = 0;
+        nTimeSmart = 0;
+        fChangeCached = false;
+        nChangeCached = 0;
+        nOrderPos = -1;
+    }
+
+    void Init()
+    {
+        m_txs.clear();
+        m_canonical_wtxid = Wtxid{};
+        SetDefaults();
+    }
+
+    Wtxid m_canonical_wtxid;
+    std::map<Wtxid, CTransactionRef> m_txs;
+
+    //! Set m_canonical_wtxid to the best variant under the unconfirmed rule
+    //! (witnessed preferred, then least weight). Ignores state.
+    void RecomputeCanonical();
 };
 
 struct WalletTxOrderComparator {
@@ -397,7 +445,7 @@ public:
     : m_wtx(wtx),
     m_output(output)
     {
-        Assume(std::ranges::find(wtx.tx->vout, output) != wtx.tx->vout.end());
+        Assume(std::ranges::find(wtx.GetTx()->vout, output) != wtx.GetTx()->vout.end());
     }
 
     const CWalletTx& GetWalletTx() const { return m_wtx; }

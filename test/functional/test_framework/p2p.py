@@ -43,6 +43,7 @@ from test_framework.messages import (
     msg_cfheaders,
     msg_cfilter,
     msg_cmpctblock,
+    msg_feature,
     msg_feefilter,
     msg_filteradd,
     msg_filterclear,
@@ -99,7 +100,8 @@ logger = logging.getLogger("TestFramework.p2p")
 MIN_P2P_VERSION_SUPPORTED = 60001
 # The P2P version that this test framework implements and sends in its `version` message
 # Version 70016 supports wtxid relay
-P2P_VERSION = 70016
+# Version 70017 supports feature
+P2P_VERSION = 70017
 # The services that this test framework offers in its `version` message
 P2P_SERVICES = NODE_NETWORK | NODE_WITNESS
 # The P2P user agent string that this test framework sends in its `version` message
@@ -124,6 +126,7 @@ MESSAGEMAP = {
     b"cfheaders": msg_cfheaders,
     b"cfilter": msg_cfilter,
     b"cmpctblock": msg_cmpctblock,
+    b"feature": msg_feature,
     b"feefilter": msg_feefilter,
     b"filteradd": msg_filteradd,
     b"filterclear": msg_filterclear,
@@ -242,6 +245,8 @@ class P2PConnection(asyncio.Protocol):
         if self.p2p_connected_to_node and not self.supports_v2_p2p:
             self.send_version()
         self.on_open()
+        with p2p_lock:
+            p2p_lock.notify_all()
 
     def connection_lost(self, exc):
         """asyncio callback when a connection is closed."""
@@ -253,6 +258,8 @@ class P2PConnection(asyncio.Protocol):
         self._transport = None
         self.recvbuf = b""
         self.on_close()
+        with p2p_lock:
+            p2p_lock.notify_all()
 
     # v2 handshake method
     def _on_data_v2_handshake(self):
@@ -525,6 +532,7 @@ class P2PInterface(P2PConnection):
             except Exception:
                 print("ERROR delivering %s (%s)" % (repr(message), sys.exc_info()[0]))
                 raise
+            p2p_lock.notify_all()
 
     # Callback methods. Can be overridden by subclasses in individual test
     # cases to provide custom message handling behaviour.
@@ -543,6 +551,7 @@ class P2PInterface(P2PConnection):
     def on_cfheaders(self, message): pass
     def on_cfilter(self, message): pass
     def on_cmpctblock(self, message): pass
+    def on_feature(self, message): pass
     def on_feefilter(self, message): pass
     def on_filteradd(self, message): pass
     def on_filterclear(self, message): pass
@@ -606,11 +615,15 @@ class P2PInterface(P2PConnection):
         wait_until_helper_internal(test_function, timeout=timeout, lock=p2p_lock, timeout_factor=self.timeout_factor, check_interval=check_interval)
 
     def wait_for_connect(self, *, timeout=60):
-        test_function = lambda: self.is_connected
+        def test_function():
+            return self.is_connected
+
         self.wait_until(test_function, timeout=timeout, check_connected=False)
 
     def wait_for_disconnect(self, *, timeout=60):
-        test_function = lambda: not self.is_connected
+        def test_function():
+            return not self.is_connected
+
         self.wait_until(test_function, timeout=timeout, check_connected=False)
 
     def wait_for_reconnect(self, *, timeout=60):
@@ -727,7 +740,9 @@ class P2PInterface(P2PConnection):
 # P2PConnection acquires this lock whenever delivering a message to a P2PInterface.
 # This lock should be acquired in the thread running the test logic to synchronize
 # access to any data shared with the P2PInterface or P2PConnection.
-p2p_lock = threading.Lock()
+# It is a Condition so that waiters can be woken up as soon as a message is
+# delivered or the connection state changes, instead of polling.
+p2p_lock = threading.Condition(threading.Lock())
 
 
 class NetworkThread(threading.Thread):
@@ -740,6 +755,7 @@ class NetworkThread(threading.Thread):
 
         NetworkThread.listeners = {}
         NetworkThread.protos = {}
+        NetworkThread.protos_accept_done = []
 
     def run(self):
         """Start the network thread."""
@@ -748,10 +764,25 @@ class NetworkThread(threading.Thread):
 
     def close(self, *, timeout):
         """Close the connections and network event loop."""
+        for p in NetworkThread.protos_accept_done:
+            p.peer_disconnect()
+        NetworkThread.protos_accept_done.clear()
+
+        listeners = list(NetworkThread.listeners.values())
+        NetworkThread.listeners.clear()
+
+        async def close_listeners():
+            for listener in listeners:
+                listener.close()
+            for listener in listeners:
+                await listener.wait_closed()
+        future = asyncio.run_coroutine_threadsafe(close_listeners(), self.network_event_loop)
+        future.result(timeout=timeout)
+
         self.network_event_loop.call_soon_threadsafe(self.network_event_loop.stop)
         wait_until_helper_internal(lambda: not self.network_event_loop.is_running(), timeout=timeout)
-        self.network_event_loop.close()
         self.join(timeout)
+        self.network_event_loop.close()
         # Safe to remove event loop.
         NetworkThread.network_event_loop = None
 
@@ -787,6 +818,7 @@ class NetworkThread(threading.Thread):
             response = cls.protos.get((addr, port))
             # remove protocol function from dict only when reconnection doesn't need to happen/already happened
             if not proto.reconnect:
+                cls.protos_accept_done.append(response)
                 cls.protos[(addr, port)] = None
             return response
 
@@ -973,3 +1005,27 @@ class P2PTxInvStore(P2PInterface):
         self.wait_until(lambda: set(self.tx_invs_received.keys()) == set([int(tx, 16) for tx in txns]), timeout=timeout)
         # Flush messages and wait for the getdatas to be processed
         self.sync_with_ping()
+
+def start_p2p_listener(network_thread, listener):
+    listen_addr = ""
+    listen_port = 0
+
+    def on_listen_done(addr, port):
+        nonlocal listen_addr
+        nonlocal listen_port
+        listen_addr = addr
+        listen_port = port
+
+    # Use port=0 to let the OS assign an available port. This
+    # avoids "address already in use" errors when tests run
+    # concurrently or ports are still in TIME_WAIT state.
+    network_thread.listen(
+        addr="127.0.0.1",
+        port=0,
+        p2p=listener,
+        callback=on_listen_done)
+
+    # Wait until the callback has been called.
+    wait_until_helper_internal(lambda: listen_port != 0)
+
+    return listen_addr, listen_port

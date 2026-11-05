@@ -100,7 +100,7 @@ static void initialize()
     SeedRandomStateForTest(SeedRand::ZEROS);
 
     // Set time to the genesis block timestamp for deterministic initialization.
-    SetMockTime(1231006505);
+    SetMockTime(1231006505s);
 
     // Terminate immediately if a fuzzing harness ever tries to create a socket.
     // Individual tests can override this by pointing CreateSock to a mocked alternative.
@@ -231,7 +231,7 @@ int main(int argc, char** argv)
     // Enable AFL persistent mode. Requires compilation using afl-clang-fast++.
     // See fuzzing.md for details.
     const uint8_t* buffer = __AFL_FUZZ_TESTCASE_BUF;
-    while (__AFL_LOOP(100000)) {
+    while (__AFL_LOOP(100'000)) {
         size_t buffer_len = __AFL_FUZZ_TESTCASE_LEN;
         test_one_input({buffer, buffer_len});
     }

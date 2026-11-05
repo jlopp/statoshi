@@ -3,25 +3,17 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <wallet/transaction.h>
+#include <wallet/walletdb.h>
 
+#include <consensus/validation.h>
 #include <interfaces/chain.h>
 
 using interfaces::FoundBlock;
 
 namespace wallet {
-bool CWalletTx::IsEquivalentTo(const CWalletTx& _tx) const
+bool CWalletTx::IsMalleation(const CWalletTx& _tx) const
 {
-        CMutableTransaction tx1 {*this->tx};
-        CMutableTransaction tx2 {*_tx.tx};
-        for (auto& txin : tx1.vin) {
-            txin.scriptSig = CScript();
-            txin.scriptWitness.SetNull();
-        }
-        for (auto& txin : tx2.vin) {
-            txin.scriptSig = CScript();
-            txin.scriptWitness.SetNull();
-        }
-        return CTransaction(tx1) == CTransaction(tx2);
+    return GetTx()->Equals(*_tx.GetTx(), {.include_script_sig = false, .include_witness_data = false});
 }
 
 bool CWalletTx::InMempool() const
@@ -54,10 +46,64 @@ void CWalletTx::updateState(interfaces::Chain& chain)
     } else if (auto* conf = state<TxStateBlockConflicted>()) {
         lookup_block(conf->conflicting_block_hash, conf->conflicting_block_height, m_state);
     }
+
+    // If the above downgraded a previously-confirmed witness variant back to unconfirmed,
+    // the canonical choice is no longer pinned by confirmation. Re-apply the least-weight rule.
+    if (!isConfirmed()) RecomputeCanonical();
 }
 
-void CWalletTx::CopyFrom(const CWalletTx& _tx)
+bool CWalletTx::Update(CTransactionRef new_tx, const TxState& new_state, WalletBatch& batch, bool metadata_changed)
 {
-    *this = _tx;
+    Assert(new_tx);
+    if (!Assume(GetHash() == new_tx->GetHash())) {
+        return false;
+    }
+    const auto& [tx_pair, new_variant] = m_txs.emplace(new_tx->GetWitnessHash(), std::move(new_tx));
+    if (new_variant) {
+        if (!batch.WriteWtxVariant(GetHash(), tx_pair->second)) {
+            throw std::ios_base::failure("Unable to write wtxvariant record");
+        }
+    }
+    const auto& [wtxid, tx] = *tx_pair;
+
+    if (new_state.index() != m_state.index()) {
+        m_state = new_state;
+        if (state<TxStateConfirmed>()) {
+            m_canonical_wtxid = wtxid;
+        }
+        metadata_changed = true;
+    } else {
+        assert(TxStateSerializedIndex(m_state) == TxStateSerializedIndex(new_state));
+        assert(TxStateSerializedBlockHash(m_state) == TxStateSerializedBlockHash(new_state));
+    }
+
+    // While unconfirmed, derive the canonical variant from all known variants
+    if (!isConfirmed()) {
+        const Wtxid prev_canonical = m_canonical_wtxid;
+        RecomputeCanonical();
+        if (m_canonical_wtxid != prev_canonical) {
+            metadata_changed = true;
+        }
+    }
+
+    if (metadata_changed) {
+        if (!batch.WriteTxMetadata(*this)) {
+            throw std::ios_base::failure("Unable to write tx record");
+        }
+    }
+
+    return new_variant || metadata_changed;
+}
+
+void CWalletTx::RecomputeCanonical()
+{
+    // Recompute the canonical variant among the witness variants. They share
+    // the txid but differ in the wtxid. Prefer variant with witness data and
+    // the least weight.
+    Assert(!m_txs.empty());
+
+    m_canonical_wtxid = std::ranges::min_element(m_txs, std::less{}, [](const auto& entry) {
+                            return std::make_pair(!entry.second->HasWitness(), GetTransactionWeight(*entry.second));
+                        })->first;
 }
 } // namespace wallet

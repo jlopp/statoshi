@@ -610,9 +610,9 @@ BOOST_AUTO_TEST_CASE(fixed_tests)
     std::string ms_str_multi_a{"multi_a(1,"};
     for (size_t i = 0; i < 21; ++i) {
         ms_str_multi_a += HexStr(g_testdata->pubkeys[i]);
-        if (i < 20) ms_str_multi_a += ",";
+        if (i < 20) ms_str_multi_a += ',';
     }
-    ms_str_multi_a += ")";
+    ms_str_multi_a += ')';
     Test(ms_str_multi_a, "?", "2079be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798ac20c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5ba20f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9ba20e493dbf1c10d80f3581e4904930b1404cc6c13900ee0758474fa94abe8c4cd13ba202f8bde4d1a07209355b4a7250a5c5128e88b84bddc619ab7cba8d569b240efe4ba20fff97bd5755eeea420453a14355235d382f6472f8568a18b2f057a1460297556ba205cbdf0646e5db4eaa398f365f2ea7a0e3d419b7e0330e39ce92bddedcac4f9bcba202f01e5e15cca351daff3843fb70f3c2f0a1bdd05e5af888a67784ef3e10a2a01ba20acd484e2f0c7f65309ad178a9f559abde09796974c57e714c35f110dfc27ccbeba20a0434d9e47f3c86235477c7b1ae6ae5d3442d49b1943c2b752a68e2a47e247c7ba20774ae7f858a9411e5ef4246b70c65aac5649980be5c17891bbec17895da008cbba20d01115d548e7561b15c38f004d734633687cf4419620095bc5b0f47070afe85aba20f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8ba20499fdf9e895e719cfd64e67f07d38e3226aa7b63678949e6e49b241a60e823e4ba20d7924d4f7d43ea965a465ae3095ff41131e5946f3c85f79e44adbcf8e27e080eba20e60fce93b59e9ec53011aabc21c23e97b2a31369b87a5ae9c44ee89e2a6dec0aba20defdea4cdb677750a420fee807eacf21eb9898ae79b9768766e4faa04a2d4a34ba205601570cb47f238d2b0286db4a990fa0f3ba28d1a319f5e7cf55c2a2444da7ccba202b4ea0a797a443d293ef5cff444f4979f06acfebd7e86d277475656138385b6cba204ce119c96e2fa357200b559b2f7dd5a5f02d5290aff74b03f3e471b273211c97ba20352bbf4a4cdd12564f93fa332ce333301d9ad40271f8107181340aef25be59d5ba519c", TESTMODE_VALID | TESTMODE_NONMAL | TESTMODE_NEEDSIG | TESTMODE_P2WSH_INVALID, 22, 21, {}, {}, 22);
     // Since 'd:' is 'u' we can use it directly inside a thresh. But we can't under P2WSH.
     Test("thresh(2,dv:older(42),s:pk(025cbdf0646e5db4eaa398f365f2ea7a0e3d419b7e0330e39ce92bddedcac4f9bc),s:pk(03d30199d74fb5a22d47b6e054e2f378cedacffcb89904a61d75d0dbd407143e65))", "?", "7663012ab269687c205cbdf0646e5db4eaa398f365f2ea7a0e3d419b7e0330e39ce92bddedcac4f9bcac937c20d30199d74fb5a22d47b6e054e2f378cedacffcb89904a61d75d0dbd407143e65ac935287", TESTMODE_VALID | TESTMODE_NONMAL | TESTMODE_NEEDSIG | TESTMODE_P2WSH_INVALID, 12, 3, {}, {}, 4);
@@ -636,13 +636,15 @@ BOOST_AUTO_TEST_CASE(fixed_tests)
     ms_stack_limit += "pk(" + HexStr(g_testdata->pubkeys[0]) + ")";
     ms_stack_limit.insert(ms_stack_limit.end(), count, ')');
     const auto ms_stack_ok{miniscript::FromString(ms_stack_limit, tap_converter)};
-    BOOST_CHECK(ms_stack_ok && ms_stack_ok->CheckStackSize());
+    BOOST_REQUIRE(ms_stack_ok);
+    BOOST_CHECK(ms_stack_ok->CheckStackSize());
     Test(ms_stack_limit, "?", "?", TESTMODE_VALID | TESTMODE_NONMAL | TESTMODE_NEEDSIG | TESTMODE_P2WSH_INVALID, 4 * count + 1, 1, {}, {}, 1 + count + 1);
     // But one more element on the stack during execution will make it fail. And we'd detect that.
     count++;
     ms_stack_limit = "and_b(older(1),a:" + ms_stack_limit + ")";
     const auto ms_stack_nok{miniscript::FromString(ms_stack_limit, tap_converter)};
-    BOOST_CHECK(ms_stack_nok && !ms_stack_nok->CheckStackSize());
+    BOOST_REQUIRE(ms_stack_nok);
+    BOOST_CHECK(!ms_stack_nok->CheckStackSize());
     Test(ms_stack_limit, "?", "?", TESTMODE_VALID | TESTMODE_NONMAL | TESTMODE_NEEDSIG | TESTMODE_P2WSH_INVALID, 4 * count + 1, 1, {}, {}, 1 + count + 1);
 
     // Misc unit tests
@@ -677,32 +679,45 @@ BOOST_AUTO_TEST_CASE(fixed_tests)
     // (for now) have 'd:' be 'u'. This tests we can't use a 'd:' wrapper for a thresh, which requires
     // its subs to all be 'u' (taken from https://github.com/rust-bitcoin/rust-miniscript/discussions/341).
     const auto ms_minimalif = miniscript::FromString("thresh(3,c:pk_k(03d30199d74fb5a22d47b6e054e2f378cedacffcb89904a61d75d0dbd407143e65),sc:pk_k(03fff97bd5755eeea420453a14355235d382f6472f8568a18b2f057a1460297556),sc:pk_k(0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798),sdv:older(32))", wsh_converter);
-    BOOST_CHECK(ms_minimalif && !ms_minimalif->IsValid());
+    BOOST_REQUIRE(ms_minimalif);
+    BOOST_CHECK(!ms_minimalif->IsValid());
     // A Miniscript with duplicate keys is not sane
     const auto ms_dup1 = miniscript::FromString("and_v(v:pk(03d30199d74fb5a22d47b6e054e2f378cedacffcb89904a61d75d0dbd407143e65),pk(03d30199d74fb5a22d47b6e054e2f378cedacffcb89904a61d75d0dbd407143e65))", wsh_converter);
-    BOOST_CHECK(ms_dup1);
-    BOOST_CHECK(!ms_dup1->IsSane() && !ms_dup1->CheckDuplicateKey());
+    BOOST_REQUIRE(ms_dup1);
+    BOOST_CHECK(!ms_dup1->IsSane());
+    BOOST_CHECK(!ms_dup1->CheckDuplicateKey());
     // Same with a disjunction, and different key nodes (pk and pkh)
     const auto ms_dup2 = miniscript::FromString("or_b(c:pk_k(03d30199d74fb5a22d47b6e054e2f378cedacffcb89904a61d75d0dbd407143e65),ac:pk_h(03d30199d74fb5a22d47b6e054e2f378cedacffcb89904a61d75d0dbd407143e65))", wsh_converter);
-    BOOST_CHECK(ms_dup2 && !ms_dup2->IsSane() && !ms_dup2->CheckDuplicateKey());
+    BOOST_REQUIRE(ms_dup2);
+    BOOST_CHECK(!ms_dup2->IsSane());
+    BOOST_CHECK(!ms_dup2->CheckDuplicateKey());
     // Same when the duplicates are leaves or a larger tree
     const auto ms_dup3 = miniscript::FromString("or_i(and_b(pk(03d30199d74fb5a22d47b6e054e2f378cedacffcb89904a61d75d0dbd407143e65),s:pk(03fff97bd5755eeea420453a14355235d382f6472f8568a18b2f057a1460297556)),and_b(older(1),s:pk(03d30199d74fb5a22d47b6e054e2f378cedacffcb89904a61d75d0dbd407143e65)))", wsh_converter);
-    BOOST_CHECK(ms_dup3 && !ms_dup3->IsSane() && !ms_dup3->CheckDuplicateKey());
+    BOOST_REQUIRE(ms_dup3);
+    BOOST_CHECK(!ms_dup3->IsSane());
+    BOOST_CHECK(!ms_dup3->CheckDuplicateKey());
     // Same when the duplicates are on different levels in the tree
     const auto ms_dup4 = miniscript::FromString("thresh(2,pkh(03d30199d74fb5a22d47b6e054e2f378cedacffcb89904a61d75d0dbd407143e65),s:pk(03fff97bd5755eeea420453a14355235d382f6472f8568a18b2f057a1460297556),a:and_b(dv:older(1),s:pk(03d30199d74fb5a22d47b6e054e2f378cedacffcb89904a61d75d0dbd407143e65)))", wsh_converter);
-    BOOST_CHECK(ms_dup4 && !ms_dup4->IsSane() && !ms_dup4->CheckDuplicateKey());
+    BOOST_REQUIRE(ms_dup4);
+    BOOST_CHECK(!ms_dup4->IsSane());
+    BOOST_CHECK(!ms_dup4->CheckDuplicateKey());
     // Sanity check the opposite is true, too. An otherwise sane Miniscript with no duplicate keys is sane.
     const auto ms_nondup = miniscript::FromString("pk(03d30199d74fb5a22d47b6e054e2f378cedacffcb89904a61d75d0dbd407143e65)", wsh_converter);
-    BOOST_CHECK(ms_nondup && ms_nondup->CheckDuplicateKey() && ms_nondup->IsSane());
+    BOOST_REQUIRE(ms_nondup);
+    BOOST_CHECK(ms_nondup->CheckDuplicateKey());
+    BOOST_CHECK(ms_nondup->IsSane());
     // Test we find the first insane sub closer to be a leaf node. This fragment is insane for two reasons:
     // 1. It can be spent without a signature
     // 2. It contains timelock mixes
     // We'll report the timelock mix error, as it's "deeper" (closer to be a leaf node) than the "no 's' property"
     // error is.
     const auto ms_ins = miniscript::FromString("or_i(and_b(after(1),a:after(1000000000)),pk(03cdabb7f2dce7bfbd8a0b9570c6fd1e712e5d64045e9d6b517b3d5072251dc204))", wsh_converter);
-    BOOST_CHECK(ms_ins && ms_ins->IsValid() && !ms_ins->IsSane());
+    BOOST_REQUIRE(ms_ins);
+    BOOST_CHECK(ms_ins->IsValid());
+    BOOST_CHECK(!ms_ins->IsSane());
     const auto insane_sub = ms_ins->FindInsaneSub();
-    BOOST_CHECK(insane_sub && *insane_sub->ToString(wsh_converter) == "and_b(after(1),a:after(1000000000))");
+    BOOST_REQUIRE(insane_sub);
+    BOOST_CHECK(*insane_sub->ToString(wsh_converter) == "and_b(after(1),a:after(1000000000))");
 
     // Numbers can't be prefixed by a sign.
     BOOST_CHECK(!miniscript::FromString("after(-1)", wsh_converter));

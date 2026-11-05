@@ -194,6 +194,17 @@ static void bench_field_normalize(void* arg, int iters) {
     }
 }
 
+static void bench_field_normalize_var(void* arg, int iters) {
+    int i;
+    bench_inv *data = (bench_inv*)arg;
+
+    /* Note that this benchmark measures the optimistic path. The worst-case path with the final
+       reduction is very unlikely to be needed, so this is representative of the common case. */
+    for (i = 0; i < iters; i++) {
+        secp256k1_fe_normalize_var(&data->fe[0]);
+    }
+}
+
 static void bench_field_normalize_weak(void* arg, int iters) {
     int i;
     bench_inv *data = (bench_inv*)arg;
@@ -348,7 +359,7 @@ static void bench_sha256(void* arg, int iters) {
     int i;
     bench_inv *data = (bench_inv*)arg;
     secp256k1_sha256 sha;
-    const secp256k1_hash_ctx *hash_ctx = secp256k1_get_hash_context(data->ctx);
+    const secp256k1_hash_ctx *hash_ctx = &data->ctx->hash_ctx;
 
     for (i = 0; i < iters; i++) {
         secp256k1_sha256_initialize(&sha);
@@ -361,7 +372,7 @@ static void bench_hmac_sha256(void* arg, int iters) {
     int i;
     bench_inv *data = (bench_inv*)arg;
     secp256k1_hmac_sha256 hmac;
-    const secp256k1_hash_ctx *hash_ctx = secp256k1_get_hash_context(data->ctx);
+    const secp256k1_hash_ctx *hash_ctx = &data->ctx->hash_ctx;
 
     for (i = 0; i < iters; i++) {
         secp256k1_hmac_sha256_initialize(hash_ctx, &hmac, data->data, 32);
@@ -374,7 +385,7 @@ static void bench_rfc6979_hmac_sha256(void* arg, int iters) {
     int i;
     bench_inv *data = (bench_inv*)arg;
     secp256k1_rfc6979_hmac_sha256 rng;
-    const secp256k1_hash_ctx *hash_ctx = secp256k1_get_hash_context(data->ctx);
+    const secp256k1_hash_ctx *hash_ctx = &data->ctx->hash_ctx;
 
     for (i = 0; i < iters; i++) {
         secp256k1_rfc6979_hmac_sha256_initialize(hash_ctx, &rng, data->data, 64);
@@ -421,6 +432,7 @@ int main(int argc, char **argv) {
 
     if (d || have_flag(argc, argv, "field") || have_flag(argc, argv, "half")) run_benchmark("field_half", bench_field_half, bench_setup, NULL, &data, 10, iters*100);
     if (d || have_flag(argc, argv, "field") || have_flag(argc, argv, "normalize")) run_benchmark("field_normalize", bench_field_normalize, bench_setup, NULL, &data, 10, iters*100);
+    if (d || have_flag(argc, argv, "field") || have_flag(argc, argv, "normalize")) run_benchmark("field_normalize_var", bench_field_normalize_var, bench_setup, NULL, &data, 10, iters*100);
     if (d || have_flag(argc, argv, "field") || have_flag(argc, argv, "normalize")) run_benchmark("field_normalize_weak", bench_field_normalize_weak, bench_setup, NULL, &data, 10, iters*100);
     if (d || have_flag(argc, argv, "field") || have_flag(argc, argv, "sqr")) run_benchmark("field_sqr", bench_field_sqr, bench_setup, NULL, &data, 10, iters*10);
     if (d || have_flag(argc, argv, "field") || have_flag(argc, argv, "mul")) run_benchmark("field_mul", bench_field_mul, bench_setup, NULL, &data, 10, iters*10);

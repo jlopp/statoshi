@@ -7,13 +7,11 @@
 
 #include <addresstype.h>
 #include <consensus/amount.h>
-#include <node/transaction.h>
-#include <outputtype.h>
+#include <policy/feerate.h>
 #include <pubkey.h>
 #include <rpc/protocol.h>
 #include <rpc/request.h>
 #include <script/script.h>
-#include <script/sign.h>
 #include <uint256.h>
 #include <univalue.h>
 #include <util/check.h>
@@ -21,9 +19,9 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
-#include <initializer_list>
 #include <map>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -31,11 +29,11 @@
 #include <variant>
 #include <vector>
 
-class JSONRPCRequest;
-enum ServiceFlags : uint64_t;
 enum class OutputType;
 struct FlatSigningProvider;
 struct bilingual_str;
+class CBlockIndex;
+
 namespace common {
 enum class PSBTError;
 } // namespace common
@@ -43,7 +41,7 @@ namespace node {
 enum class TransactionError;
 } // namespace node
 
-static constexpr bool DEFAULT_RPC_DOC_CHECK{
+inline constexpr bool DEFAULT_RPC_DOC_CHECK{
 #ifdef RPC_DOC_CHECK
     true
 #else
@@ -63,8 +61,6 @@ extern const std::string UNIX_EPOCH_TIME;
  */
 extern const std::string EXAMPLE_ADDRESS[2];
 
-class FillableSigningProvider;
-class CScript;
 struct Sections;
 
 struct HelpResult : std::runtime_error {
@@ -156,6 +152,9 @@ std::pair<int64_t, int64_t> ParseDescriptorRange(const UniValue& value);
 /** Evaluate a descriptor given as a string, or as a {"desc":...,"range":...} object, with default range of 1000. */
 std::vector<CScript> EvalDescriptorStringOrObject(const UniValue& scanobject, FlatSigningProvider& provider, bool expand_priv = false);
 
+//! Parse BIP32 path
+std::vector<uint32_t> ParsePathBIP32(const std::string& path);
+
 /**
  * Serializing JSON objects depends on the outer type. Only arrays and
  * dictionaries can be nested in json. The top-level outer type is "NONE".
@@ -170,6 +169,7 @@ struct RPCArgOptions {
     bool skip_type_check{false};
     std::string oneline_description{};   //!< Should be empty unless it is supposed to override the auto-generated summary line
     std::vector<std::string> type_str{}; //!< Should be empty unless it is supposed to override the auto-generated type strings. Vector length is either 0 or 2, m_opts.type_str.at(0) will override the type of the value in a key-value pair, m_opts.type_str.at(1) will override the type in the argument description.
+    bool placeholder{false};             //!< If set, the argument is retained only for compatibility and should generally be omitted.
     bool hidden{false};                  //!< For testing only
     bool also_positional{false};         //!< If set allows a named-parameter field in an OBJ_NAMED_PARAM options object
                                          //!< to have the same name as a top-level parameter. By default the RPC
@@ -236,7 +236,7 @@ struct RPCArg {
         std::string description,
         RPCArgOptions opts = {})
         : m_names{std::move(name)},
-          m_type{std::move(type)},
+          m_type{type},
           m_fallback{std::move(fallback)},
           m_description{std::move(description)},
           m_opts{std::move(opts)}
@@ -252,7 +252,7 @@ struct RPCArg {
         std::vector<RPCArg> inner,
         RPCArgOptions opts = {})
         : m_names{std::move(name)},
-          m_type{std::move(type)},
+          m_type{type},
           m_inner{std::move(inner)},
           m_fallback{std::move(fallback)},
           m_description{std::move(description)},
@@ -292,18 +292,17 @@ struct RPCArg {
     std::string ToDescriptionString(bool is_named_arg) const;
 };
 
+/// Controls how an RPCResult is rendered in human-readable help text.
+/// The std::string alternative carries the summary text rendered as "...".
+struct HelpElisionNone {}; //!< field printed normally
+struct HelpElisionSkip {}; //!< field hidden from help
+using HelpElision = std::variant<HelpElisionNone, HelpElisionSkip, std::string>;
+
 struct RPCResultOptions {
     bool skip_type_check{false};
-    /// Whether to treat this as elided in the human-readable description, and
-    /// possibly supply a description for the elision. Normally, there will be
-    /// one string on any of the elided results, for example `Same output as
-    /// verbosity = 1`, and all other elided strings will be empty.
-    ///
-    /// - If nullopt: normal display.
-    /// - If empty string: suppress from help.
-    /// - If non-empty: show "..." with this description.
-    std::optional<std::string> print_elision{std::nullopt};
+    HelpElision print_elision{HelpElisionNone{}};
 };
+
 // NOLINTNEXTLINE(misc-no-recursion)
 struct RPCResult {
     enum class Type {
@@ -313,13 +312,12 @@ struct RPCResult {
         NUM,
         BOOL,
         NONE,
-        ANY,        //!< Special type to disable type checks (for testing only)
+        ANY,        //!< Special type to disable type checks
         STR_AMOUNT, //!< Special string to represent a floating point amount
         STR_HEX,    //!< Special string with only hex chars
         OBJ_DYN,    //!< Special dictionary with keys that are not literals
         ARR_FIXED,  //!< Special array that has a fixed number of entries
         NUM_TIME,   //!< Special numeric to denote unix epoch time
-        ELISION,    //!< Special type to denote elision (...)
     };
 
     const Type m_type;
@@ -338,7 +336,7 @@ struct RPCResult {
         std::string description,
         std::vector<RPCResult> inner = {},
         RPCResultOptions opts = {})
-        : m_type{std::move(type)},
+        : m_type{type},
           m_key_name{std::move(m_key_name)},
           m_inner{std::move(inner)},
           m_optional{optional},
@@ -366,7 +364,7 @@ struct RPCResult {
         std::string description,
         std::vector<RPCResult> inner = {},
         RPCResultOptions opts = {})
-        : m_type{std::move(type)},
+        : m_type{type},
           m_key_name{std::move(m_key_name)},
           m_inner{std::move(inner)},
           m_optional{optional},
@@ -385,6 +383,16 @@ struct RPCResult {
         RPCResultOptions opts = {})
         : RPCResult{type, std::move(m_key_name), /*optional=*/false, std::move(description), std::move(inner), std::move(opts)} {}
 
+    /// Copy with replacement options, for stamping new opts onto an existing result.
+    RPCResult(const RPCResult& other, RPCResultOptions opts)
+        : m_type{other.m_type},
+          m_key_name{other.m_key_name},
+          m_inner{other.m_inner},
+          m_optional{other.m_optional},
+          m_opts{std::move(opts)},
+          m_description{other.m_description},
+          m_cond{other.m_cond} {}
+
     /** Append the sections of the result. */
     void ToSections(Sections& sections, OuterType outer_type = OuterType::NONE, int current_indent = 0) const;
     /** Return the type string of the result when it is in an object (dict). */
@@ -399,6 +407,10 @@ struct RPCResult {
 private:
     void CheckInnerDoc() const;
 };
+
+/// Stamp elision onto an entire vector of RPCResult fields at once.
+/// Merges into existing m_opts so that flags like skip_type_check are preserved.
+std::vector<RPCResult> ElideGroup(std::vector<RPCResult> fields, std::string summary = "");
 
 struct RPCResults {
     const std::vector<RPCResult> m_results;
@@ -506,6 +518,9 @@ public:
     bool IsValidNumArgs(size_t num_args) const;
     //! Return list of arguments and whether they are named-only.
     std::vector<std::pair<std::string, bool>> GetArgNames() const;
+    const std::string& GetDescription() const { return m_description; }
+    const std::vector<RPCArg>& GetArgs() const { return m_args; }
+    const RPCResults& GetResults() const { return m_results; }
 
     const std::string m_name;
 

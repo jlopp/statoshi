@@ -45,10 +45,12 @@ class SlowP2PInterface(P2PInterface):
 class P2PEvict(BitcoinTestFramework):
     def set_test_params(self):
         self.num_nodes = 1
-        # The choice of maxconnections=32 results in a maximum of 21 inbound connections
-        # (32 - 10 outbound - 1 feeler). 20 inbound peers are protected from eviction:
+        # The choice of maxconnections=53 results in a maximum of 21 tx-relaying inbound connections
+        # (53 - 10 outbound - 1 feeler) * 0.5 = 21. The other inbound slots are reserved for block-relay-only
+        # peers that don't play a role in this test.
+        # 20 inbound peers are protected from eviction:
         # 4 by netgroup, 4 that sent us blocks, 4 that sent us transactions and 8 via lowest ping time
-        self.extra_args = [['-maxconnections=32']]
+        self.extra_args = [['-maxconnections=53']]
 
     def run_test(self):
         protected_peers = set()  # peers that we expect to be protected from eviction
@@ -108,10 +110,11 @@ class P2PEvict(BitcoinTestFramework):
         # One of the non-protected peers must be evicted. We can't be sure which one because
         # 4 peers are protected via netgroup, which is identical for all peers,
         # and the eviction mechanism doesn't preserve the order of identical elements.
-        evicted_peers = []
-        for i in range(len(node.p2ps)):
-            if not node.p2ps[i].is_connected:
-                evicted_peers.append(i)
+        def get_evicted_peers():
+            return [i for i, peer in enumerate(node.p2ps) if not peer.is_connected]
+
+        self.wait_until(lambda: len(get_evicted_peers()) >= 1)  # wait for socket close
+        evicted_peers = get_evicted_peers()
 
         self.log.info("Test that one peer was evicted")
         self.log.debug("{} evicted peer: {}".format(len(evicted_peers), set(evicted_peers)))

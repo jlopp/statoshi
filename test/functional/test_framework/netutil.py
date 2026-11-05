@@ -2,11 +2,13 @@
 # Copyright (c) 2014-present The Bitcoin Core developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
-"""Linux network utilities.
+"""Linux, macOS, BSD and illumos network utilities.
 
 Roughly based on https://web.archive.org/web/20190424172231/http://voorloopnul.com/blog/a-python-netstat-in-less-than-100-lines-of-code/ by Ricardo Pascal
 """
 
+import http.client
+import ipaddress
 import sys
 import socket
 import struct
@@ -33,6 +35,15 @@ STATE_LISTEN = '0A'
 ADDRMAN_NEW_BUCKET_COUNT = 1 << 10
 ADDRMAN_TRIED_BUCKET_COUNT = 1 << 8
 ADDRMAN_BUCKET_SIZE = 1 << 6
+
+# When a test expects a server disconnection, any of these errors are
+# acceptable. The specific event is determined by race condition and platform OS.
+NETWORK_ERRORS = (
+    BrokenPipeError,                 # write to a closed socket/pipe
+    ConnectionResetError,            # connection forcibly closed by peer
+    ConnectionAbortedError,          # connection aborted locally or by network stack
+    http.client.ResponseNotReady,    # server response not ready or connection out of sync
+)
 
 def get_socket_inodes(pid):
     '''
@@ -88,69 +99,79 @@ def get_bind_addrs(pid):
     '''
     Get bind addresses as (host,port) tuples for process pid.
     '''
-    inodes = get_socket_inodes(pid)
-    bind_addrs = []
-    for conn in netstat('tcp') + netstat('tcp6'):
-        if conn[3] == STATE_LISTEN and conn[4] in inodes:
-            bind_addrs.append(conn[1])
-    return bind_addrs
+    if sys.platform == 'linux':
+        inodes = get_socket_inodes(pid)
+        bind_addrs = []
+        for conn in netstat('tcp') + netstat('tcp6'):
+            if conn[3] == STATE_LISTEN and conn[4] in inodes:
+                bind_addrs.append(conn[1])
+        return bind_addrs
+    # OpenBSD is not included, as it does not ship the lsof utility.
+    elif sys.platform.startswith(("darwin", "freebsd", "netbsd", "sunos5")):
+        import re
+        import subprocess
+        output = subprocess.check_output(["lsof",
+            *(["-Di"] if sys.platform.startswith(("freebsd", "netbsd", "sunos5")) else []), # Ignore device cache to avoid stderr warnings.
+            *(["-w"] if sys.platform.startswith("netbsd") else []), # Ignore point release mismatch warnings.
+            "-nP",          # Keep hosts and ports numeric.
+            "-a",           # Require all filters to match.
+            "-p", str(pid), # Limit results to the target pid.
+            "-iTCP",        # Only inspect TCP sockets.
+            "-sTCP:LISTEN", # Only keep listening sockets.
+            "-Ftn",         # Emit machine-readable type and name fields.
+        ], text=True)
+        return [
+            (addr_to_hex(("::" if sock_type == "IPv6" else "0.0.0.0") if host == "*" else host.strip("[]")), int(port))
+            for sock_type, host, port in re.findall(r"t(IPv[46])\nn(\*|\[.+?]|[^:]+):(\d+)", output)
+        ]
+    else:
+        raise NotImplementedError(f"get_bind_addrs is not supported on {sys.platform}")
 
-# from: https://code.activestate.com/recipes/439093/
 def all_interfaces():
     '''
-    Return all interfaces that are up
+    Return all IPv4 interfaces that are up.
     '''
-    import fcntl  # Linux only, so only import when required
+    if sys.platform == 'linux':
+        import fcntl  # Linux only, so only import when required
 
-    is_64bits = sys.maxsize > 2**32
-    struct_size = 40 if is_64bits else 32
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    max_possible = 8 # initial value
-    while True:
-        bytes = max_possible * struct_size
-        names = array.array('B', b'\0' * bytes)
-        outbytes = struct.unpack('iL', fcntl.ioctl(
-            s.fileno(),
-            0x8912,  # SIOCGIFCONF
-            struct.pack('iL', bytes, names.buffer_info()[0])
-        ))[0]
-        if outbytes == bytes:
-            max_possible *= 2
-        else:
-            break
-    namestr = names.tobytes()
-    return [(namestr[i:i+16].split(b'\0', 1)[0],
-             socket.inet_ntoa(namestr[i+20:i+24]))
-            for i in range(0, outbytes, struct_size)]
+        is_64bits = sys.maxsize > 2**32
+        struct_size = 40 if is_64bits else 32
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        max_possible = 8 # initial value
+        while True:
+            bytes = max_possible * struct_size
+            names = array.array('B', b'\0' * bytes)
+            outbytes = struct.unpack('iL', fcntl.ioctl(
+                s.fileno(),
+                0x8912,  # SIOCGIFCONF
+                struct.pack('iL', bytes, names.buffer_info()[0])
+            ))[0]
+            if outbytes == bytes:
+                max_possible *= 2
+            else:
+                break
+        namestr = names.tobytes()
+        return [(namestr[i:i+16].split(b'\0', 1)[0],
+                 socket.inet_ntoa(namestr[i+20:i+24]))
+                for i in range(0, outbytes, struct_size)]
+    elif sys.platform.startswith(("darwin", "freebsd", "netbsd", "openbsd", "sunos5")):
+        import re
+        import subprocess
+        output = subprocess.check_output(["ifconfig", "-au"], text=True)
+        return [
+            (m["iface"].encode(), ip)
+            for m in re.finditer(r"(?m)^(?P<iface>\S+):(?P<block>[^\n]*(?:\n[ \t]+[^\n]*)*)", output)
+            for ip in re.findall(r"inet ([^\s/]+)", m["block"])
+        ]
+    else:
+        raise NotImplementedError(f"all_interfaces is not supported on {sys.platform}")
 
 def addr_to_hex(addr):
     '''
     Convert string IPv4 or IPv6 address to binary address as returned by
     get_bind_addrs.
-    Very naive implementation that certainly doesn't work for all IPv6 variants.
     '''
-    if '.' in addr: # IPv4
-        addr = [int(x) for x in addr.split('.')]
-    elif ':' in addr: # IPv6
-        sub = [[], []] # prefix, suffix
-        x = 0
-        addr = addr.split(':')
-        for i,comp in enumerate(addr):
-            if comp == '':
-                if i == 0 or i == (len(addr)-1): # skip empty component at beginning or end
-                    continue
-                x += 1 # :: skips to suffix
-                assert x < 2
-            else: # two bytes per component
-                val = int(comp, 16)
-                sub[x].append(val >> 8)
-                sub[x].append(val & 0xff)
-        nullbytes = 16 - len(sub[0]) - len(sub[1])
-        assert (x == 0 and nullbytes == 0) or (x == 1 and nullbytes > 0)
-        addr = sub[0] + ([0] * nullbytes) + sub[1]
-    else:
-        raise ValueError('Could not parse address %s' % addr)
-    return bytearray(addr).hex()
+    return ipaddress.ip_address(addr).packed.hex()
 
 def test_ipv6_local():
     '''
@@ -182,17 +203,49 @@ def format_addr_port(addr, port):
     else:
         return f"{addr}:{port}"
 
+def format_sock(sock, *, local):
+    '''
+    Format either local or remote side of a socket to a human readable string, e.g.
+    1.2.3.4:8333 or
+    [11:22::33]:8333 or
+    /path/to/socket or
+    @abstract-socket
+    '''
+    try:
+        if local:
+            name = sock.getsockname()
+        else:
+            name = sock.getpeername()
+    except Exception:
+        return "n/a"
+
+    if sock.family == socket.AF_INET:
+        return f"{name[0]}:{name[1]}"
+
+    if sock.family == socket.AF_INET6:
+        return f"[{name[0]}]:{name[1]}"
+
+    if sock.family == socket.AF_UNIX:
+        if isinstance(name, bytes):
+            name = name.decode(errors="backslashreplace")
+        if name.startswith("\0"):
+            return f"@{name[1:]}"
+        return name
+
+    return str(name)
+
 
 def set_ephemeral_port_range(sock):
-    '''On FreeBSD, set socket to use the high ephemeral port range (49152-65535).
+    '''On FreeBSD and OpenBSD, set socket to use the high ephemeral port range (49152-65535).
 
-    FreeBSD's default ephemeral port range (10000-65535) overlaps with the test
-    framework's static port range starting at TEST_RUNNER_PORT_MIN (default=11000).
+    The default ephemeral port ranges on FreeBSD (10000-65535) and
+    OpenBSD (1024-49151) overlap with the test framework's static port
+    range starting at TEST_RUNNER_PORT_MIN (default=11000).
     Using IP_PORTRANGE_HIGH avoids this overlap when binding to port 0 for dynamic
     port allocation.
     '''
-    if sys.platform.startswith('freebsd'):
-        # Constants from FreeBSD's netinet/in.h and netinet6/in6.h
+    if sys.platform.startswith(("freebsd", "openbsd")):
+        # Constants from FreeBSD/OpenBSD's netinet/in.h and netinet6/in6.h
         IP_PORTRANGE = 19
         IPV6_PORTRANGE = 14
         IP_PORTRANGE_HIGH = 1  # Same value for both IPv4 and IPv6

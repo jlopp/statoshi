@@ -12,6 +12,7 @@
 #include <util/vector.h>
 #include <wallet/receive.h>
 #include <wallet/rpc/util.h>
+#include <wallet/scan.h>
 #include <wallet/wallet.h>
 
 using interfaces::FoundBlock;
@@ -38,6 +39,12 @@ static void WalletTxToJSON(const CWallet& wallet, const CWalletTx& wtx, UniValue
     }
     entry.pushKV("txid", wtx.GetHash().GetHex());
     entry.pushKV("wtxid", wtx.GetWitnessHash().GetHex());
+    UniValue alternate_wtxids(UniValue::VARR);
+    for (const auto& [wtxid, _] : wtx.GetTxs()) {
+        if (wtxid == wtx.GetWitnessHash()) continue;
+        alternate_wtxids.push_back(wtxid.GetHex());
+    }
+    entry.pushKV("alternate_wtxids", alternate_wtxids);
     UniValue conflicts(UniValue::VARR);
     for (const Txid& conflict : wallet.GetTxConflicts(wtx))
         conflicts.push_back(conflict.GetHex());
@@ -50,18 +57,22 @@ static void WalletTxToJSON(const CWallet& wallet, const CWalletTx& wtx, UniValue
     entry.pushKV("timereceived", wtx.nTimeReceived);
 
     // Add opt-in RBF status
-    std::string rbfStatus = "no";
-    if (confirms <= 0) {
-        RBFTransactionState rbfState = chain.isRBFOptIn(*wtx.tx);
-        if (rbfState == RBFTransactionState::UNKNOWN)
-            rbfStatus = "unknown";
-        else if (rbfState == RBFTransactionState::REPLACEABLE_BIP125)
-            rbfStatus = "yes";
+    if (chain.rpcEnableDeprecated("bip125")) {
+        std::string rbfStatus = "no";
+        if (confirms <= 0) {
+            RBFTransactionState rbfState = chain.isRBFOptIn(*wtx.GetTx());
+            if (rbfState == RBFTransactionState::UNKNOWN)
+                rbfStatus = "unknown";
+            else if (rbfState == RBFTransactionState::REPLACEABLE_BIP125)
+                rbfStatus = "yes";
+        }
+        entry.pushKV("bip125-replaceable", rbfStatus);
     }
-    entry.pushKV("bip125-replaceable", rbfStatus);
 
-    for (const std::pair<const std::string, std::string>& item : wtx.mapValue)
-        entry.pushKV(item.first, item.second);
+    if (wtx.m_comment) entry.pushKV("comment", *wtx.m_comment);
+    if (wtx.m_comment_to) entry.pushKV("to", *wtx.m_comment_to);
+    if (wtx.m_replaces_txid) entry.pushKV("replaces_txid", wtx.m_replaces_txid->ToString());
+    if (wtx.m_replaced_by_txid) entry.pushKV("replaced_by_txid", wtx.m_replaced_by_txid->ToString());
 }
 
 struct tallyitem
@@ -106,7 +117,7 @@ static UniValue ListReceived(const CWallet& wallet, const UniValue& params, cons
             continue;
         }
 
-        for (const CTxOut& txout : wtx.tx->vout) {
+        for (const CTxOut& txout : wtx.GetTx()->vout) {
             CTxDestination address;
             if (!ExtractDestination(txout.scriptPubKey, address))
                 continue;
@@ -129,12 +140,17 @@ static UniValue ListReceived(const CWallet& wallet, const UniValue& params, cons
     UniValue ret(UniValue::VARR);
     std::map<std::string, tallyitem> label_tally;
 
-    const auto& func = [&](const CTxDestination& address, const std::string& label, bool is_change, const std::optional<AddressPurpose>& purpose) {
+    const auto& func = [&](const CTxDestination& address, const std::string& label, bool is_change,
+                            const std::optional<AddressPurpose>& purpose) EXCLUSIVE_LOCKS_REQUIRED(wallet.cs_wallet) {
         if (is_change) return; // no change addresses
 
+        // Entries in mapTally are only ever added for wallet.IsMine() addresses (see the tally
+        // loop above), so it's only addresses missing from mapTally that need the IsMine() check.
         auto it = mapTally.find(address);
-        if (it == mapTally.end() && !fIncludeEmpty)
-            return;
+        if (it == mapTally.end()) {
+            if (!fIncludeEmpty) return;
+            if (!wallet.IsMine(address)) return; // exclude addresses not owned by the wallet (e.g. "send" purpose)
+        }
 
         CAmount nAmount = 0;
         int nConf = std::numeric_limits<int>::max();
@@ -350,7 +366,7 @@ static void ListTransactions(const CWallet& wallet, const CWalletTx& wtx, int nM
             }
             UniValue entry(UniValue::VOBJ);
             MaybePushAddress(entry, r.destination);
-            PushParentDescriptors(wallet, wtx.tx->vout.at(r.vout).scriptPubKey, entry);
+            PushParentDescriptors(wallet, wtx.GetTx()->vout.at(r.vout).scriptPubKey, entry);
             if (wtx.IsCoinBase())
             {
                 if (wallet.GetTxDepthInMainChain(wtx) < 1)
@@ -377,10 +393,66 @@ static void ListTransactions(const CWallet& wallet, const CWalletTx& wtx, int nM
     }
 }
 
-
-static std::vector<RPCResult> TransactionDescriptionString()
+static void PushTxAmountAndFee(const CWallet& wallet, const CWalletTx& wtx, UniValue& entry)
+    EXCLUSIVE_LOCKS_REQUIRED(wallet.cs_wallet)
 {
-    return{{RPCResult::Type::NUM, "confirmations", "The number of confirmations for the transaction. Negative confirmations means the\n"
+    CAmount credit = CachedTxGetCredit(wallet, wtx, /*avoid_reuse=*/false);
+    CAmount debit = CachedTxGetDebit(wallet, wtx, /*avoid_reuse=*/false);
+    CAmount net = credit - debit;
+    bool is_from_me = CachedTxIsFromMe(wallet, wtx);
+    CAmount fee = (is_from_me ? wtx.GetTx()->GetValueOut() - debit : 0);
+
+    entry.pushKV("amount", ValueFromAmount(net - fee));
+    if (is_from_me)
+        entry.pushKV("fee", ValueFromAmount(fee));
+}
+
+static void PushTxDecoded(const CWallet& wallet, const CWalletTx& wtx, UniValue& entry)
+    EXCLUSIVE_LOCKS_REQUIRED(wallet.cs_wallet)
+{
+    UniValue decoded(UniValue::VOBJ);
+    TxToUniv(*wtx.GetTx(),
+            /*block_hash=*/uint256(),
+            /*entry=*/decoded,
+            /*include_hex=*/false,
+            /*txundo=*/nullptr,
+            /*verbosity=*/TxVerbosity::SHOW_DETAILS,
+            /*is_change_func=*/[&wallet](const CTxOut& txout) EXCLUSIVE_LOCKS_REQUIRED(wallet.cs_wallet) {
+                                    AssertLockHeld(wallet.cs_wallet);
+                                    return OutputIsChange(wallet, txout);
+                                });
+    entry.pushKV("decoded", std::move(decoded));
+}
+
+/**
+ * Append a raw transaction entry for the given wallet transaction to ret.
+ *
+ * @param  wallet         The wallet.
+ * @param  wtx            The wallet transaction.
+ * @param  ret            Output vector to append the entry to.
+ * @param  verbose        If true, include a decoded transaction object.
+ */
+static void ListRawTransaction(const CWallet& wallet, const CWalletTx& wtx, std::vector<UniValue>& ret, bool verbose)
+    EXCLUSIVE_LOCKS_REQUIRED(wallet.cs_wallet)
+{
+    UniValue entry(UniValue::VOBJ);
+
+    PushTxAmountAndFee(wallet, wtx, entry);
+
+    WalletTxToJSON(wallet, wtx, entry);
+    entry.pushKV("abandoned", wtx.isAbandoned());
+    entry.pushKV("hex", EncodeHexTx(*wtx.GetTx()));
+
+    if (verbose) {
+        PushTxDecoded(wallet, wtx, entry);
+    }
+
+    ret.push_back(std::move(entry));
+}
+
+static std::vector<RPCResult> TransactionDescriptionString(bool include_parent_descs = true)
+{
+    std::vector<RPCResult> result{{RPCResult::Type::NUM, "confirmations", "The number of confirmations for the transaction. Negative confirmations means the\n"
                "transaction conflicted that many blocks ago."},
            {RPCResult::Type::BOOL, "generated", /*optional=*/true, "Only present if the transaction's only input is a coinbase one."},
            {RPCResult::Type::BOOL, "trusted", /*optional=*/true, "Whether we consider the transaction to be trusted and safe to spend from.\n"
@@ -391,12 +463,16 @@ static std::vector<RPCResult> TransactionDescriptionString()
            {RPCResult::Type::NUM_TIME, "blocktime", /*optional=*/true, "The block time expressed in " + UNIX_EPOCH_TIME + "."},
            {RPCResult::Type::STR_HEX, "txid", "The transaction id."},
            {RPCResult::Type::STR_HEX, "wtxid", "The hash of serialized transaction, including witness data."},
+           {RPCResult::Type::ARR, "alternate_wtxids", "The wtxids of transactions with different witness data but the same txid.",
+           {
+               {RPCResult::Type::STR_HEX, "wtxid", "The witness transaction id."},
+           }},
            {RPCResult::Type::ARR, "walletconflicts", "Confirmed transactions that have been detected by the wallet to conflict with this transaction.",
            {
                {RPCResult::Type::STR_HEX, "txid", "The transaction id."},
            }},
-           {RPCResult::Type::STR_HEX, "replaced_by_txid", /*optional=*/true, "Only if 'category' is 'send'. The txid if this tx was replaced."},
-           {RPCResult::Type::STR_HEX, "replaces_txid", /*optional=*/true, "Only if 'category' is 'send'. The txid if this tx replaces another."},
+           {RPCResult::Type::STR_HEX, "replaced_by_txid", /*optional=*/true, "The txid of the transaction that replaced this one."},
+           {RPCResult::Type::STR_HEX, "replaces_txid", /*optional=*/true, "The txid of the transaction that this one replaces."},
            {RPCResult::Type::ARR, "mempoolconflicts", "Transactions in the mempool that directly conflict with either this transaction or an ancestor transaction",
            {
                {RPCResult::Type::STR_HEX, "txid", "The transaction id."},
@@ -405,12 +481,15 @@ static std::vector<RPCResult> TransactionDescriptionString()
            {RPCResult::Type::NUM_TIME, "time", "The transaction time expressed in " + UNIX_EPOCH_TIME + "."},
            {RPCResult::Type::NUM_TIME, "timereceived", "The time received expressed in " + UNIX_EPOCH_TIME + "."},
            {RPCResult::Type::STR, "comment", /*optional=*/true, "If a comment is associated with the transaction, only present if not empty."},
-           {RPCResult::Type::STR, "bip125-replaceable", "(\"yes|no|unknown\") Whether this transaction signals BIP125 replaceability or has an unconfirmed ancestor signaling BIP125 replaceability.\n"
+           {RPCResult::Type::STR, "bip125-replaceable", /*optional=*/true, "(\"yes|no|unknown\") (DEPRECATED) Whether this transaction signals BIP125 replaceability or has an unconfirmed ancestor signaling BIP125 replaceability.\n"
                "May be unknown for unconfirmed transactions not in the mempool because their unconfirmed ancestors are unknown."},
-           {RPCResult::Type::ARR, "parent_descs", /*optional=*/true, "Only if 'category' is 'received'. List of parent descriptors for the output script of this coin.", {
-               {RPCResult::Type::STR, "desc", "The descriptor string."},
-           }},
            };
+    if (include_parent_descs) {
+        result.push_back({RPCResult::Type::ARR, "parent_descs", /*optional=*/true, "Only if 'category' is 'receive'. List of parent descriptors for the output script of this coin.", {
+            {RPCResult::Type::STR, "desc", "The descriptor string."},
+        }});
+    }
+    return result;
 }
 
 RPCMethod listtransactions()
@@ -479,17 +558,10 @@ RPCMethod listtransactions()
             throw JSONRPCError(RPC_INVALID_PARAMETER, "Label argument must be a valid label name or \"*\".");
         }
     }
-    int nCount = 10;
-    if (!request.params[1].isNull())
-        nCount = request.params[1].getInt<int>();
-    int nFrom = 0;
-    if (!request.params[2].isNull())
-        nFrom = request.params[2].getInt<int>();
-
-    if (nCount < 0)
-        throw JSONRPCError(RPC_INVALID_PARAMETER, "Negative count");
-    if (nFrom < 0)
-        throw JSONRPCError(RPC_INVALID_PARAMETER, "Negative from");
+    const auto count{self.Arg<uint32_t>("count")};
+    const auto skip{self.Arg<uint32_t>("skip")};
+    // Both are at most UINT32_MAX, so the sum can't overflow in 64 bits
+    const uint64_t limit{uint64_t{count} + skip};
 
     std::vector<UniValue> ret;
     {
@@ -497,28 +569,137 @@ RPCMethod listtransactions()
 
         const CWallet::TxItems & txOrdered = pwallet->wtxOrdered;
 
-        // iterate backwards until we have nCount items to return:
+        // iterate backwards until we have count items to return:
         for (CWallet::TxItems::const_reverse_iterator it = txOrdered.rbegin(); it != txOrdered.rend(); ++it)
         {
             CWalletTx *const pwtx = (*it).second;
             ListTransactions(*pwallet, *pwtx, 0, true, ret, filter_label);
-            if ((int)ret.size() >= (nCount+nFrom)) break;
+            if (ret.size() >= limit) break;
         }
     }
 
     // ret is newest to oldest
 
-    if (nFrom > (int)ret.size())
-        nFrom = ret.size();
-    if ((nFrom + nCount) > (int)ret.size())
-        nCount = ret.size() - nFrom;
+    const size_t from{std::min<size_t>(skip, ret.size())};
+    const size_t num{std::min<size_t>(count, ret.size() - from)};
 
     auto txs_rev_it{std::make_move_iterator(ret.rend())};
     UniValue result{UniValue::VARR};
-    result.push_backV(txs_rev_it - nFrom - nCount, txs_rev_it - nFrom); // Return oldest to newest
+    result.push_backV(txs_rev_it - from - num, txs_rev_it - from); // Return oldest to newest
     return result;
 },
     };
+}
+
+RPCMethod listrawtransactions()
+{
+    return RPCMethod{
+        "listrawtransactions",
+        "Returns up to 'count' most recent wallet transactions ordered from oldest to newest, "
+        "skipping the first 'skip' transactions. Unlike `listtransactions`, each wallet transaction "
+        "appears exactly once with its net wallet balance change excluding fee, without logical "
+        "interpretation (no category assignment, no change suppression). This means consolidation "
+        "and self-transfer transactions that are invisible in `listtransactions` are included here.\n",
+        {
+            {"count", RPCArg::Type::NUM, RPCArg::Default{10}, "The number of transactions to return."},
+            {"skip", RPCArg::Type::NUM, RPCArg::Default{0}, "The number of transactions to skip."},
+            {"verbose", RPCArg::Type::BOOL, RPCArg::Default{false}, "Whether to include a `decoded` field containing the decoded transaction (equivalent to RPC decoderawtransaction)"},
+        },
+        RPCResult{
+            RPCResult::Type::ARR, "", "",
+            {
+                {RPCResult::Type::OBJ, "", "", Cat<std::vector<RPCResult>>(
+                {
+                    {RPCResult::Type::STR_AMOUNT, "amount", "The net change to the wallet balance caused by this transaction "
+                        "(excluding fee). Positive means the wallet gained funds, negative means it lost funds, "
+                        "zero means a pure self-transfer (e.g. consolidation)."},
+                    {RPCResult::Type::STR_AMOUNT, "fee", /*optional=*/true, "The fee paid in " + CURRENCY_UNIT + ". "
+                        "This is negative and only present when the wallet funded the transaction."},
+                },
+                Cat(TransactionDescriptionString(/*include_parent_descs=*/false),
+                {
+                    {RPCResult::Type::BOOL, "abandoned", "'true' if the transaction has been abandoned (inputs are respendable)."},
+                    {RPCResult::Type::STR_HEX, "hex", "Raw data for transaction"},
+                    {RPCResult::Type::OBJ, "decoded", /*optional=*/true, "The decoded transaction (only present when `verbose` is passed)",
+                    {
+                        TxDoc({.wallet = true}),
+                    }},
+                }))},
+            }
+        },
+        RPCExamples{
+            "\nList the most recent 10 transactions\n"
+            + HelpExampleCli("listrawtransactions", "") +
+            "\nList transactions 100 to 120\n"
+            + HelpExampleCli("listrawtransactions", "20 100") +
+            "\nList the most recent 10 transactions with decoded transaction data\n"
+            + HelpExampleCli("listrawtransactions", "10 0 true") +
+            "\nAs a JSON-RPC call\n"
+            + HelpExampleRpc("listrawtransactions", "20, 100")
+        },
+        [](const RPCMethod& self, const JSONRPCRequest& request) -> UniValue
+{
+    const std::shared_ptr<const CWallet> pwallet = GetWalletForJSONRPCRequest(request);
+    if (!pwallet) return UniValue::VNULL;
+
+    pwallet->BlockUntilSyncedToCurrentChain();
+
+    int count = self.Arg<int>("count");
+    int skip = self.Arg<int>("skip");
+    bool verbose = self.Arg<bool>("verbose");
+
+    if (count < 0)
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Negative count");
+    if (skip < 0)
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Negative skip");
+
+    std::vector<UniValue> ret;
+    {
+        LOCK(pwallet->cs_wallet);
+
+        const CWallet::TxItems& tx_ordered = pwallet->wtxOrdered;
+
+        int skipped = 0;
+        for (CWallet::TxItems::const_reverse_iterator it = tx_ordered.rbegin(); it != tx_ordered.rend(); ++it) {
+            if ((int)ret.size() >= count) break;
+            if (skipped++ < skip) continue;
+            CWalletTx* const pwtx = (*it).second;
+            ListRawTransaction(*pwallet, *pwtx, ret, verbose);
+        }
+    }
+
+    UniValue result{UniValue::VARR};
+    result.push_backV(std::make_move_iterator(ret.rbegin()), std::make_move_iterator(ret.rend()));
+    return result;
+},
+    };
+}
+
+static std::vector<RPCResult> ListSinceBlockTxFields()
+{
+    return Cat<std::vector<RPCResult>>(
+        {
+            {RPCResult::Type::STR, "address", /*optional=*/true, "The bitcoin address of the transaction (not returned if the output does not have an address, e.g. OP_RETURN null data)."},
+            {RPCResult::Type::STR, "category", "The transaction category.\n"
+                "\"send\"                  Transactions sent.\n"
+                "\"receive\"               Non-coinbase transactions received.\n"
+                "\"generate\"              Coinbase transactions received with more than 100 confirmations.\n"
+                "\"immature\"              Coinbase transactions received with 100 or fewer confirmations.\n"
+                "\"orphan\"                Orphaned coinbase transactions received."},
+            {RPCResult::Type::STR_AMOUNT, "amount", "The amount in " + CURRENCY_UNIT + ". This is negative for the 'send' category, and is positive\n"
+                "for all other categories"},
+            {RPCResult::Type::NUM, "vout", "the vout value"},
+            {RPCResult::Type::STR_AMOUNT, "fee", /*optional=*/true, "The amount of the fee in " + CURRENCY_UNIT + ". This is negative and only available for the\n"
+                 "'send' category of transactions."},
+        },
+        Cat(
+            TransactionDescriptionString(),
+            std::vector<RPCResult>{
+                {RPCResult::Type::BOOL, "abandoned", "'true' if the transaction has been abandoned (inputs are respendable)."},
+                {RPCResult::Type::STR, "label", /*optional=*/true, "A comment for the address/transaction, if any"},
+            }
+        )
+    );
 }
 
 RPCMethod listsinceblock()
@@ -542,30 +723,13 @@ RPCMethod listsinceblock()
                     {
                         {RPCResult::Type::ARR, "transactions", "",
                         {
-                            {RPCResult::Type::OBJ, "", "", Cat(Cat<std::vector<RPCResult>>(
-                            {
-                                {RPCResult::Type::STR, "address",  /*optional=*/true, "The bitcoin address of the transaction (not returned if the output does not have an address, e.g. OP_RETURN null data)."},
-                                {RPCResult::Type::STR, "category", "The transaction category.\n"
-                                    "\"send\"                  Transactions sent.\n"
-                                    "\"receive\"               Non-coinbase transactions received.\n"
-                                    "\"generate\"              Coinbase transactions received with more than 100 confirmations.\n"
-                                    "\"immature\"              Coinbase transactions received with 100 or fewer confirmations.\n"
-                                    "\"orphan\"                Orphaned coinbase transactions received."},
-                                {RPCResult::Type::STR_AMOUNT, "amount", "The amount in " + CURRENCY_UNIT + ". This is negative for the 'send' category, and is positive\n"
-                                    "for all other categories"},
-                                {RPCResult::Type::NUM, "vout", "the vout value"},
-                                {RPCResult::Type::STR_AMOUNT, "fee", /*optional=*/true, "The amount of the fee in " + CURRENCY_UNIT + ". This is negative and only available for the\n"
-                                     "'send' category of transactions."},
-                            },
-                            TransactionDescriptionString()),
-                            {
-                                {RPCResult::Type::BOOL, "abandoned", "'true' if the transaction has been abandoned (inputs are respendable)."},
-                                {RPCResult::Type::STR, "label", /*optional=*/true, "A comment for the address/transaction, if any"},
-                            })},
+                            {RPCResult::Type::OBJ, "", "", ListSinceBlockTxFields()},
                         }},
                         {RPCResult::Type::ARR, "removed", /*optional=*/true, "<structure is the same as \"transactions\" above, only present if include_removed=true>\n"
-                            "Note: transactions that were re-added in the active chain will appear as-is in this array, and may thus have a positive confirmation count."
-                        , {{RPCResult::Type::ELISION, "", ""},}},
+                            "Note: transactions that were re-added in the active chain will appear as-is in this array, and may thus have a positive confirmation count.",
+                        {
+                            {RPCResult::Type::OBJ, "", "", ListSinceBlockTxFields(), {.print_elision = std::string{}}},
+                        }},
                         {RPCResult::Type::STR_HEX, "lastblock", "The hash of the block (target_confirmations-1) from the best block on the main chain, or the genesis hash if the referenced block does not exist yet. This is typically used to feed back into listsinceblock the next time you call it. So you would generally use a target_confirmations of say 6, so you will be continually re-notified of transactions until they've reached 6 confirmations plus any new ones"},
                     }
                 },
@@ -697,7 +861,7 @@ RPCMethod gettransaction()
                                 {RPCResult::Type::STR_AMOUNT, "fee", /*optional=*/true, "The amount of the fee in " + CURRENCY_UNIT + ". This is negative and only available for the \n"
                                     "'send' category of transactions."},
                                 {RPCResult::Type::BOOL, "abandoned", "'true' if the transaction has been abandoned (inputs are respendable)."},
-                                {RPCResult::Type::ARR, "parent_descs", /*optional=*/true, "Only if 'category' is 'received'. List of parent descriptors for the output script of this coin.", {
+                                {RPCResult::Type::ARR, "parent_descs", /*optional=*/true, "Only if 'category' is 'receive'. List of parent descriptors for the output script of this coin.", {
                                     {RPCResult::Type::STR, "desc", "The descriptor string."},
                                 }},
                             }},
@@ -738,14 +902,7 @@ RPCMethod gettransaction()
     }
     const CWalletTx& wtx = it->second;
 
-    CAmount nCredit = CachedTxGetCredit(*pwallet, wtx, /*avoid_reuse=*/false);
-    CAmount nDebit = CachedTxGetDebit(*pwallet, wtx, /*avoid_reuse=*/false);
-    CAmount nNet = nCredit - nDebit;
-    CAmount nFee = (CachedTxIsFromMe(*pwallet, wtx) ? wtx.tx->GetValueOut() - nDebit : 0);
-
-    entry.pushKV("amount", ValueFromAmount(nNet - nFee));
-    if (CachedTxIsFromMe(*pwallet, wtx))
-        entry.pushKV("fee", ValueFromAmount(nFee));
+    PushTxAmountAndFee(*pwallet, wtx, entry);
 
     WalletTxToJSON(*pwallet, wtx, entry);
 
@@ -753,21 +910,10 @@ RPCMethod gettransaction()
     ListTransactions(*pwallet, wtx, 0, false, details, /*filter_label=*/std::nullopt);
     entry.pushKV("details", std::move(details));
 
-    entry.pushKV("hex", EncodeHexTx(*wtx.tx));
+    entry.pushKV("hex", EncodeHexTx(*wtx.GetTx()));
 
     if (verbose) {
-        UniValue decoded(UniValue::VOBJ);
-        TxToUniv(*wtx.tx,
-                /*block_hash=*/uint256(),
-                /*entry=*/decoded,
-                /*include_hex=*/false,
-                /*txundo=*/nullptr,
-                /*verbosity=*/TxVerbosity::SHOW_DETAILS,
-                /*is_change_func=*/[&pwallet](const CTxOut& txout) EXCLUSIVE_LOCKS_REQUIRED(pwallet->cs_wallet) {
-                                        AssertLockHeld(pwallet->cs_wallet);
-                                        return OutputIsChange(*pwallet, txout);
-                                    });
-        entry.pushKV("decoded", std::move(decoded));
+        PushTxDecoded(*pwallet, wtx, entry);
     }
 
     AppendLastProcessedBlock(entry, *pwallet);
@@ -896,14 +1042,14 @@ RPCMethod rescanblockchain()
         CHECK_NONFATAL(pwallet->chain().findAncestorByHeight(pwallet->GetLastBlockHash(), start_height, FoundBlock().hash(start_block)));
     }
 
-    CWallet::ScanResult result =
-        pwallet->ScanForWalletTransactions(start_block, start_height, stop_height, reserver, /*fUpdate=*/true, /*save_progress=*/false);
+    ScanResult result =
+        pwallet->Scanner().Scan(start_block, start_height, stop_height, reserver, /*save_progress=*/false);
     switch (result.status) {
-    case CWallet::ScanResult::SUCCESS:
+    case ScanResult::SUCCESS:
         break;
-    case CWallet::ScanResult::FAILURE:
+    case ScanResult::FAILURE:
         throw JSONRPCError(RPC_MISC_ERROR, "Rescan failed. Potentially corrupted data files.");
-    case CWallet::ScanResult::USER_ABORT:
+    case ScanResult::USER_ABORT:
         throw JSONRPCError(RPC_MISC_ERROR, "Rescan aborted.");
     } // no default case, so the compiler can warn about missing cases
     UniValue response(UniValue::VOBJ);
@@ -934,8 +1080,8 @@ RPCMethod abortrescan()
     std::shared_ptr<CWallet> const pwallet = GetWalletForJSONRPCRequest(request);
     if (!pwallet) return UniValue::VNULL;
 
-    if (!pwallet->IsScanning() || pwallet->IsAbortingRescan()) return false;
-    pwallet->AbortRescan();
+    if (!pwallet->Scanner().IsScanning() || pwallet->Scanner().IsAborting()) return false;
+    pwallet->Scanner().Abort();
     return true;
 },
     };

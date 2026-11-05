@@ -13,9 +13,10 @@
 #include <secp256k1.h>
 #include <secp256k1_ellswift.h>
 #include <secp256k1_extrakeys.h>
-#include <secp256k1_musig.h>
 #include <secp256k1_recovery.h>
 #include <secp256k1_schnorrsig.h>
+
+#include <algorithm>
 
 static secp256k1_context* secp256k1_context_sign = nullptr;
 
@@ -350,128 +351,6 @@ KeyPair CKey::ComputeKeyPair(const uint256* merkle_root) const
     return KeyPair(*this, merkle_root);
 }
 
-std::vector<uint8_t> CKey::CreateMuSig2Nonce(MuSig2SecNonce& secnonce, const uint256& sighash, const CPubKey& aggregate_pubkey, const std::vector<CPubKey>& pubkeys)
-{
-    // Get the keyagg cache and aggregate pubkey
-    secp256k1_musig_keyagg_cache keyagg_cache;
-    if (!MuSig2AggregatePubkeys(pubkeys, keyagg_cache, aggregate_pubkey)) return {};
-
-    // Parse participant pubkey
-    CPubKey our_pubkey = GetPubKey();
-    secp256k1_pubkey pubkey;
-    if (!secp256k1_ec_pubkey_parse(secp256k1_context_static, &pubkey, our_pubkey.data(), our_pubkey.size())) {
-        return {};
-    }
-
-    // Generate randomness for nonce
-    uint256 rand;
-    GetStrongRandBytes(rand);
-
-    // Generate nonce
-    secp256k1_musig_pubnonce pubnonce;
-    if (!secp256k1_musig_nonce_gen(secp256k1_context_sign, secnonce.Get(), &pubnonce, rand.data(), UCharCast(begin()), &pubkey, sighash.data(), &keyagg_cache, nullptr)) {
-        return {};
-    }
-
-    // Serialize pubnonce
-    std::vector<uint8_t> out;
-    out.resize(MUSIG2_PUBNONCE_SIZE);
-    if (!secp256k1_musig_pubnonce_serialize(secp256k1_context_static, out.data(), &pubnonce)) {
-        return {};
-    }
-
-    return out;
-}
-
-std::optional<uint256> CKey::CreateMuSig2PartialSig(const uint256& sighash, const CPubKey& aggregate_pubkey, const std::vector<CPubKey>& pubkeys, const std::map<CPubKey, std::vector<uint8_t>>& pubnonces, MuSig2SecNonce& secnonce, const std::vector<std::pair<uint256, bool>>& tweaks)
-{
-    secp256k1_keypair keypair;
-    if (!secp256k1_keypair_create(secp256k1_context_sign, &keypair, UCharCast(begin()))) return std::nullopt;
-
-    // Get the keyagg cache and aggregate pubkey
-    secp256k1_musig_keyagg_cache keyagg_cache;
-    if (!MuSig2AggregatePubkeys(pubkeys, keyagg_cache, aggregate_pubkey)) return std::nullopt;
-
-    // Check that there are enough pubnonces
-    if (pubnonces.size() != pubkeys.size()) return std::nullopt;
-
-    // Parse the pubnonces
-    std::vector<std::pair<secp256k1_pubkey, secp256k1_musig_pubnonce>> signers_data;
-    std::vector<const secp256k1_musig_pubnonce*> pubnonce_ptrs;
-    std::optional<size_t> our_pubkey_idx;
-    CPubKey our_pubkey = GetPubKey();
-    for (const CPubKey& part_pk : pubkeys) {
-        const auto& pn_it = pubnonces.find(part_pk);
-        if (pn_it == pubnonces.end()) return std::nullopt;
-        const std::vector<uint8_t> pubnonce = pn_it->second;
-        if (pubnonce.size() != MUSIG2_PUBNONCE_SIZE) return std::nullopt;
-        if (part_pk == our_pubkey) {
-            our_pubkey_idx = signers_data.size();
-        }
-
-        auto& [secp_pk, secp_pn] = signers_data.emplace_back();
-
-        if (!secp256k1_ec_pubkey_parse(secp256k1_context_static, &secp_pk, part_pk.data(), part_pk.size())) {
-            return std::nullopt;
-        }
-
-        if (!secp256k1_musig_pubnonce_parse(secp256k1_context_static, &secp_pn, pubnonce.data())) {
-            return std::nullopt;
-        }
-    }
-    if (our_pubkey_idx == std::nullopt) {
-        return std::nullopt;
-    }
-    pubnonce_ptrs.reserve(signers_data.size());
-    for (auto& [_, pn] : signers_data) {
-        pubnonce_ptrs.push_back(&pn);
-    }
-
-    // Aggregate nonces
-    secp256k1_musig_aggnonce aggnonce;
-    if (!secp256k1_musig_nonce_agg(secp256k1_context_static, &aggnonce, pubnonce_ptrs.data(), pubnonce_ptrs.size())) {
-        return std::nullopt;
-    }
-
-    // Apply tweaks
-    for (const auto& [tweak, xonly] : tweaks) {
-        if (xonly) {
-            if (!secp256k1_musig_pubkey_xonly_tweak_add(secp256k1_context_static, nullptr, &keyagg_cache, tweak.data())) {
-                return std::nullopt;
-            }
-        } else if (!secp256k1_musig_pubkey_ec_tweak_add(secp256k1_context_static, nullptr, &keyagg_cache, tweak.data())) {
-            return std::nullopt;
-        }
-    }
-
-    // Create musig_session
-    secp256k1_musig_session session;
-    if (!secp256k1_musig_nonce_process(secp256k1_context_static, &session, &aggnonce, sighash.data(), &keyagg_cache)) {
-        return std::nullopt;
-    }
-
-    // Create partial signature
-    secp256k1_musig_partial_sig psig;
-    if (!secp256k1_musig_partial_sign(secp256k1_context_static, &psig, secnonce.Get(), &keypair, &keyagg_cache, &session)) {
-        return std::nullopt;
-    }
-    // The secnonce must be deleted after signing to prevent nonce reuse.
-    secnonce.Invalidate();
-
-    // Verify partial signature
-    if (!secp256k1_musig_partial_sig_verify(secp256k1_context_static, &psig, &(signers_data.at(*our_pubkey_idx).second), &(signers_data.at(*our_pubkey_idx).first), &keyagg_cache, &session)) {
-        return std::nullopt;
-    }
-
-    // Serialize
-    uint256 sig;
-    if (!secp256k1_musig_partial_sig_serialize(secp256k1_context_static, sig.data(), &psig)) {
-        return std::nullopt;
-    }
-
-    return sig;
-}
-
 CKey GenerateRandomKey(bool compressed) noexcept
 {
     CKey key;
@@ -482,14 +361,26 @@ CKey GenerateRandomKey(bool compressed) noexcept
 bool CExtKey::Derive(CExtKey &out, unsigned int _nChild) const {
     if (nDepth == std::numeric_limits<unsigned char>::max()) return false;
     out.nDepth = nDepth + 1;
-    CKeyID id = key.GetPubKey().GetID();
-    memcpy(out.vchFingerprint, &id, 4);
+    out.fingerprint = id_key_fingerprint();
     out.nChild = _nChild;
     return key.Derive(out.key, out.chaincode, _nChild, chaincode);
 }
 
+std::optional<std::pair<CExtKey, KeyOriginInfo>> DeriveExtKey(const CExtKey& ext_key, const std::vector<uint32_t>& path)
+{
+    CExtKey descendant = ext_key;
+    KeyOriginInfo origin;
+    origin.fingerprint = ext_key.id_key_fingerprint();
+    origin.path = path;
+    for (uint32_t i : path) {
+        if (!descendant.Derive(descendant, i)) return std::nullopt;
+    }
+    return std::make_pair(descendant, origin);
+}
+
 void CExtKey::SetSeed(std::span<const std::byte> seed)
 {
+    Assert(16 <= seed.size() && seed.size() <= 64);
     static const unsigned char hashkey[] = {'B','i','t','c','o','i','n',' ','s','e','e','d'};
     std::vector<unsigned char, secure_allocator<unsigned char>> vout(64);
     CHMAC_SHA512{hashkey, sizeof(hashkey)}.Write(UCharCast(seed.data()), seed.size()).Finalize(vout.data());
@@ -497,36 +388,17 @@ void CExtKey::SetSeed(std::span<const std::byte> seed)
     memcpy(chaincode.begin(), vout.data() + 32, 32);
     nDepth = 0;
     nChild = 0;
-    memset(vchFingerprint, 0, sizeof(vchFingerprint));
+    fingerprint.fill(0);
 }
 
 CExtPubKey CExtKey::Neuter() const {
     CExtPubKey ret;
     ret.nDepth = nDepth;
-    memcpy(ret.vchFingerprint, vchFingerprint, 4);
+    ret.fingerprint = fingerprint;
     ret.nChild = nChild;
     ret.pubkey = key.GetPubKey();
     ret.chaincode = chaincode;
     return ret;
-}
-
-void CExtKey::Encode(unsigned char code[BIP32_EXTKEY_SIZE]) const {
-    code[0] = nDepth;
-    memcpy(code+1, vchFingerprint, 4);
-    WriteBE32(code+5, nChild);
-    memcpy(code+9, chaincode.begin(), 32);
-    code[41] = 0;
-    assert(key.size() == 32);
-    memcpy(code+42, key.begin(), 32);
-}
-
-void CExtKey::Decode(const unsigned char code[BIP32_EXTKEY_SIZE]) {
-    nDepth = code[0];
-    memcpy(vchFingerprint, code+1, 4);
-    nChild = ReadBE32(code+5);
-    memcpy(chaincode.begin(), code+9, 32);
-    key.Set(code+42, code+BIP32_EXTKEY_SIZE, true);
-    if ((nDepth == 0 && (nChild != 0 || ReadLE32(vchFingerprint) != 0)) || code[41] != 0) key = CKey();
 }
 
 KeyPair::KeyPair(const CKey& key, const uint256* merkle_root)
@@ -566,6 +438,11 @@ bool ECC_InitSanityCheck() {
     CKey key = GenerateRandomKey();
     CPubKey pubkey = key.GetPubKey();
     return key.VerifyPubKey(pubkey);
+}
+
+secp256k1_context* GetSecp256k1SignContext()
+{
+    return secp256k1_context_sign;
 }
 
 /** Initialize the elliptic curve support. May not be called twice without calling ECC_Stop first. */

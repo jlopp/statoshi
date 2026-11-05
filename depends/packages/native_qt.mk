@@ -10,6 +10,7 @@ $(package)_patches += qtbase_skip_tools.patch
 $(package)_patches += rcc_hardcode_timestamp.patch
 $(package)_patches += qttools_skip_dependencies.patch
 $(package)_patches += fix-macos26-qyield.patch
+$(package)_patches += fix_missed_headers.patch
 
 $(package)_qttranslations_file_name=$(qt_details_qttranslations_file_name)
 $(package)_qttranslations_sha256_hash=$(qt_details_qttranslations_sha256_hash)
@@ -94,6 +95,7 @@ $(package)_config_env += OBJCXX="$$(build_CXX)"
 endif
 
 $(package)_cmake_opts := -DCMAKE_EXE_LINKER_FLAGS="$$(build_LDFLAGS)"
+$(package)_cmake_opts += -DCMAKE_AR="$$(build_AR)"
 ifneq ($(V),)
 $(package)_cmake_opts += --log-level=STATUS
 endif
@@ -139,7 +141,8 @@ define $(package)_preprocess_cmds
   patch -p1 -i $($(package)_patch_dir)/qtbase_skip_tools.patch && \
   patch -p1 -i $($(package)_patch_dir)/rcc_hardcode_timestamp.patch && \
   patch -p1 -i $($(package)_patch_dir)/qttools_skip_dependencies.patch && \
-  patch -p1 -i $($(package)_patch_dir)/fix-macos26-qyield.patch
+  patch -p1 -i $($(package)_patch_dir)/fix-macos26-qyield.patch && \
+  patch -p1 -i $($(package)_patch_dir)/fix_missed_headers.patch
 endef
 
 define $(package)_config_cmds

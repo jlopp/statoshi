@@ -4,10 +4,10 @@
 
 #include <ipc/process.h>
 #include <ipc/protocol.h>
-#include <logging.h>
 #include <mp/util.h>
 #include <tinyformat.h>
 #include <util/fs.h>
+#include <util/log.h>
 #include <util/strencodings.h>
 #include <util/syserror.h>
 
@@ -17,12 +17,14 @@
 #include <cerrno>
 #include <exception>
 #include <iostream>
+#include <optional>
 #include <stdexcept>
+#include <utility>
+#include <vector>
+
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
-#include <utility>
-#include <vector>
 
 using util::RemovePrefixView;
 
@@ -31,41 +33,40 @@ namespace {
 class ProcessImpl : public Process
 {
 public:
-    int spawn(const std::string& new_exe_name, const fs::path& argv0_path, int& pid) override
+    std::tuple<mp::ProcessId, mp::SocketId> spawn(const std::string& new_exe_name, const fs::path& argv0_path) override
     {
-        return mp::SpawnProcess(pid, [&](int fd) {
+        return mp::SpawnProcess([&](std::string connect_info) {
             fs::path path = argv0_path;
             path.remove_filename();
             path /= fs::PathFromString(new_exe_name);
-            return std::vector<std::string>{fs::PathToString(path), "-ipcfd", strprintf("%i", fd)};
+            return std::vector<std::string>{fs::PathToString(path), "-ipcchild", std::move(connect_info)};
         });
     }
-    int waitSpawned(int pid) override { return mp::WaitProcess(pid); }
-    bool checkSpawned(int argc, char* argv[], int& fd) override
+    int waitSpawned(mp::ProcessId pid) override { return mp::WaitProcess(pid); }
+    std::optional<mp::SocketId> checkSpawned(int argc, char* argv[]) override
     {
-        // If this process was not started with a single -ipcfd argument, it is
-        // not a process spawned by the spawn() call above, so return false and
-        // do not try to serve requests.
-        if (argc != 3 || strcmp(argv[1], "-ipcfd") != 0) {
-            return false;
+        // If this process was not started with a single -ipcchild argument, it
+        // is not a process spawned by the spawn() call above, so return
+        // std::nullopt and do not try to serve requests.
+        if (argc != 3 || strcmp(argv[1], "-ipcchild") != 0) {
+            return std::nullopt;
         }
-        // If a single -ipcfd argument was provided, return true and get the
-        // file descriptor so Protocol::serve() can be called to handle
-        // requests from the parent process. The -ipcfd argument is not valid
-        // in combination with other arguments because the parent process
-        // should be able to control the child process through the IPC protocol
-        // without passing information out of band.
-        const auto maybe_fd{ToIntegral<int32_t>(argv[2])};
-        if (!maybe_fd) {
-            throw std::runtime_error(strprintf("Invalid -ipcfd number '%s'", argv[2]));
+        // If a single -ipcchild argument was provided, return the socket id so
+        // Protocol::serve() can be called to handle requests from the parent
+        // process. The -ipcchild argument is not valid in combination with
+        // other arguments because the parent process should be able to control
+        // the child process through the IPC protocol without passing
+        // information out of band.
+        try {
+            return mp::StartSpawned(argv[2]);
+        } catch (const std::exception& e) {
+            throw std::runtime_error(strprintf("Invalid -ipcchild value '%s' (%s)", argv[2], e.what()));
         }
-        fd = *maybe_fd;
-        return true;
     }
-    int connect(const fs::path& data_dir,
+    mp::SocketId connect(const fs::path& data_dir,
                 const std::string& dest_exe_name,
                 std::string& address) override;
-    int bind(const fs::path& data_dir, const std::string& exe_name, std::string& address) override;
+    mp::SocketId bind(const fs::path& data_dir, const std::string& exe_name, std::string& address) override;
 };
 
 static bool ParseAddress(std::string& address,
@@ -97,7 +98,7 @@ static bool ParseAddress(std::string& address,
     return false;
 }
 
-int ProcessImpl::connect(const fs::path& data_dir,
+mp::SocketId ProcessImpl::connect(const fs::path& data_dir,
                          const std::string& dest_exe_name,
                          std::string& address)
 {
@@ -107,8 +108,8 @@ int ProcessImpl::connect(const fs::path& data_dir,
         throw std::invalid_argument(error);
     }
 
-    int fd;
-    if ((fd = ::socket(addr.sun_family, SOCK_STREAM, 0)) == -1) {
+    mp::SocketId fd;
+    if ((fd = ::socket(addr.sun_family, SOCK_STREAM, 0)) == mp::SocketError) {
         throw std::system_error(errno, std::system_category());
     }
     if (::connect(fd, (struct sockaddr*)&addr, sizeof(addr)) == 0) {
@@ -121,7 +122,7 @@ int ProcessImpl::connect(const fs::path& data_dir,
     throw std::system_error(connect_error, std::system_category());
 }
 
-int ProcessImpl::bind(const fs::path& data_dir, const std::string& exe_name, std::string& address)
+mp::SocketId ProcessImpl::bind(const fs::path& data_dir, const std::string& exe_name, std::string& address)
 {
     struct sockaddr_un addr;
     std::string error;
@@ -137,8 +138,8 @@ int ProcessImpl::bind(const fs::path& data_dir, const std::string& exe_name, std
         }
     }
 
-    int fd;
-    if ((fd = ::socket(addr.sun_family, SOCK_STREAM, 0)) == -1) {
+    mp::SocketId fd;
+    if ((fd = ::socket(addr.sun_family, SOCK_STREAM, 0)) == mp::SocketError) {
         throw std::system_error(errno, std::system_category());
     }
 

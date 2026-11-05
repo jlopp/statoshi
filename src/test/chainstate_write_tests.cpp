@@ -2,12 +2,18 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include <node/blockstorage.h>
+#include <test/util/logging.h>
 #include <test/util/setup_common.h>
 #include <test/util/time.h>
+#include <txdb.h>
+#include <util/fs.h>
 #include <validation.h>
 #include <validationinterface.h>
 
 #include <boost/test/unit_test.hpp>
+
+#include <cstdlib>
 
 using kernel::ChainstateRole;
 
@@ -31,7 +37,7 @@ BOOST_FIXTURE_TEST_CASE(chainstate_write_interval, TestingSetup)
     m_node.validation_signals->RegisterSharedValidationInterface(sub);
     auto& chainstate{Assert(m_node.chainman)->ActiveChainstate()};
     BlockValidationState state_dummy{};
-    NodeClockContext clock_ctx{};
+    FakeNodeClock clock{};
 
     // The first periodic flush sets m_next_write and does not flush
     chainstate.FlushStateToDisk(state_dummy, FlushStateMode::PERIODIC);
@@ -39,12 +45,12 @@ BOOST_FIXTURE_TEST_CASE(chainstate_write_interval, TestingSetup)
     BOOST_CHECK(!sub->m_did_flush);
 
     // The periodic flush interval is between 50 and 70 minutes (inclusive)
-    clock_ctx += DATABASE_WRITE_INTERVAL_MIN - 1min;
+    clock += DATABASE_WRITE_INTERVAL_MIN - 1min;
     chainstate.FlushStateToDisk(state_dummy, FlushStateMode::PERIODIC);
     m_node.validation_signals->SyncWithValidationInterfaceQueue();
     BOOST_CHECK(!sub->m_did_flush);
 
-    clock_ctx += DATABASE_WRITE_INTERVAL_MAX;
+    clock += DATABASE_WRITE_INTERVAL_MAX;
     chainstate.FlushStateToDisk(state_dummy, FlushStateMode::PERIODIC);
     m_node.validation_signals->SyncWithValidationInterfaceQueue();
     BOOST_CHECK(sub->m_did_flush);
@@ -85,10 +91,11 @@ BOOST_FIXTURE_TEST_CASE(write_during_multiblock_activation, TestChain100Setup)
 
     // Set m_next_write to current time
     chainstate.FlushStateToDisk(state_dummy, FlushStateMode::FORCE_FLUSH);
+    BOOST_CHECK_EQUAL(WITH_LOCK(::cs_main, return chainstate.GetLastFlushedBlock()), second_from_tip->pprev);
     m_node.validation_signals->SyncWithValidationInterfaceQueue();
     // The periodic flush interval is between 50 and 70 minutes (inclusive)
     // The next call to a PERIODIC write will flush
-    SetMockTime(GetMockTime() + DATABASE_WRITE_INTERVAL_MAX);
+    m_clock += DATABASE_WRITE_INTERVAL_MAX;
 
     const auto sub{std::make_shared<TestSubscriber>()};
     m_node.validation_signals->RegisterSharedValidationInterface(sub);
@@ -101,6 +108,32 @@ BOOST_FIXTURE_TEST_CASE(write_during_multiblock_activation, TestChain100Setup)
     // inside the outer loop.
     m_node.validation_signals->SyncWithValidationInterfaceQueue();
     BOOST_CHECK_EQUAL(sub->m_flushed_at_block, second_from_tip);
+    BOOST_CHECK_EQUAL(WITH_LOCK(::cs_main, return chainstate.GetLastFlushedBlock()), second_from_tip);
+}
+
+BOOST_FIXTURE_TEST_CASE(chainstate_flush_failure_boundary, TestChain100Setup)
+{
+    auto inject_file_open_failure{[](const fs::path& file) { Assert(fs::remove(file)); Assert(fs::create_directory(file)); }};
+    auto& chainstate{Assert(m_node.chainman)->ActiveChainstate()};
+    BlockValidationState state{};
+
+    BOOST_REQUIRE(chainstate.FlushStateToDisk(state, FlushStateMode::FORCE_FLUSH) && state.IsValid());
+    auto* old_flushed{WITH_LOCK(::cs_main, return chainstate.GetLastFlushedBlock())};
+
+    mineBlocks(1);
+    auto* new_tip{WITH_LOCK(::cs_main, return chainstate.m_chain.Tip())};
+    BOOST_REQUIRE_NE(old_flushed, new_tip);
+    inject_file_open_failure(WITH_LOCK(::cs_main, return chainstate.m_blockman.GetBlockPosFilename(new_tip->GetBlockPos())));
+
+    ASSERT_DEBUG_LOG("Flushing block file to disk failed");
+    bool flushed{chainstate.FlushStateToDisk(state, FlushStateMode::FORCE_FLUSH)};
+    BOOST_CHECK_EQUAL(m_node.exit_status.load(), EXIT_FAILURE);
+    BOOST_CHECK(!flushed && state.IsError());
+    BOOST_CHECK_EQUAL(WITH_LOCK(::cs_main, return chainstate.GetLastFlushedBlock()), old_flushed);
+    BOOST_CHECK(WITH_LOCK(::cs_main, return chainstate.CoinsDB().GetBestBlock()) == old_flushed->GetBlockHash());
+    node::CBlockFileInfo file_info;
+    BOOST_REQUIRE(WITH_LOCK(::cs_main, return chainstate.m_blockman.m_block_tree_db->ReadBlockFileInfo(new_tip->nFile, file_info)));
+    BOOST_CHECK_EQUAL(file_info.nHeightLast, old_flushed->nHeight);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

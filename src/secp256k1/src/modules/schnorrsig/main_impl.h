@@ -88,7 +88,7 @@ static int nonce_function_bip340_impl(const secp256k1_hash_ctx *hash_ctx, unsign
 }
 
 static int nonce_function_bip340(unsigned char *nonce32, const unsigned char *msg, size_t msglen, const unsigned char *key32, const unsigned char *xonly_pk32, const unsigned char *algo, size_t algolen, void *data) {
-    return nonce_function_bip340_impl(secp256k1_get_hash_context(secp256k1_context_static), nonce32, msg, msglen, key32, xonly_pk32, algo, algolen, data);
+    return nonce_function_bip340_impl(&secp256k1_context_static->hash_ctx, nonce32, msg, msglen, key32, xonly_pk32, algo, algolen, data);
 }
 
 const secp256k1_nonce_function_hardened secp256k1_nonce_function_bip340 = nonce_function_bip340;
@@ -123,7 +123,6 @@ static int secp256k1_schnorrsig_sign_internal(const secp256k1_context* ctx, unsi
     secp256k1_scalar sk;
     secp256k1_scalar e;
     secp256k1_scalar k;
-    secp256k1_gej rj;
     secp256k1_ge pk;
     secp256k1_ge r;
     unsigned char nonce32[32] = { 0 };
@@ -151,7 +150,7 @@ static int secp256k1_schnorrsig_sign_internal(const secp256k1_context* ctx, unsi
     /* Compute nonce */
     if (noncefp == NULL || noncefp == secp256k1_nonce_function_bip340) {
         /* Use context-aware nonce function by default */
-        ret &= nonce_function_bip340_impl(secp256k1_get_hash_context(ctx), nonce32, msg, msglen, seckey, pk_buf, bip340_algo, sizeof(bip340_algo), ndata);
+        ret &= nonce_function_bip340_impl(&ctx->hash_ctx, nonce32, msg, msglen, seckey, pk_buf, bip340_algo, sizeof(bip340_algo), ndata);
     } else {
         ret &= !!noncefp(nonce32, msg, msglen, seckey, pk_buf, bip340_algo, sizeof(bip340_algo), ndata);
     }
@@ -160,8 +159,7 @@ static int secp256k1_schnorrsig_sign_internal(const secp256k1_context* ctx, unsi
     ret &= !secp256k1_scalar_is_zero(&k);
     secp256k1_scalar_cmov(&k, &secp256k1_scalar_one, !ret);
 
-    secp256k1_ecmult_gen(&ctx->ecmult_gen_ctx, &rj, &k);
-    secp256k1_ge_set_gej(&r, &rj);
+    secp256k1_ecmult_gen_ge(&ctx->ecmult_gen_ctx, &r, &k);
 
     /* We declassify r to allow using it as a branch point. This is fine
      * because r is not a secret. */
@@ -173,7 +171,7 @@ static int secp256k1_schnorrsig_sign_internal(const secp256k1_context* ctx, unsi
     secp256k1_fe_normalize_var(&r.x);
     secp256k1_fe_get_b32(&sig64[0], &r.x);
 
-    secp256k1_schnorrsig_challenge(secp256k1_get_hash_context(ctx), &e, &sig64[0], msg, msglen, pk_buf);
+    secp256k1_schnorrsig_challenge(&ctx->hash_ctx, &e, &sig64[0], msg, msglen, pk_buf);
     secp256k1_scalar_mul(&e, &e, &sk);
     secp256k1_scalar_add(&e, &e, &k);
     secp256k1_scalar_get_b32(&sig64[32], &e);
@@ -183,7 +181,6 @@ static int secp256k1_schnorrsig_sign_internal(const secp256k1_context* ctx, unsi
     secp256k1_scalar_clear(&sk);
     secp256k1_memclear_explicit(seckey, sizeof(seckey));
     secp256k1_memclear_explicit(nonce32, sizeof(nonce32));
-    secp256k1_gej_clear(&rj);
 
     return ret;
 }
@@ -191,10 +188,6 @@ static int secp256k1_schnorrsig_sign_internal(const secp256k1_context* ctx, unsi
 int secp256k1_schnorrsig_sign32(const secp256k1_context* ctx, unsigned char *sig64, const unsigned char *msg32, const secp256k1_keypair *keypair, const unsigned char *aux_rand32) {
     /* We cast away const from the passed aux_rand32 argument since we know the default nonce function does not modify it. */
     return secp256k1_schnorrsig_sign_internal(ctx, sig64, msg32, 32, keypair, secp256k1_nonce_function_bip340, (unsigned char*)aux_rand32);
-}
-
-int secp256k1_schnorrsig_sign(const secp256k1_context* ctx, unsigned char *sig64, const unsigned char *msg32, const secp256k1_keypair *keypair, const unsigned char *aux_rand32) {
-    return secp256k1_schnorrsig_sign32(ctx, sig64, msg32, keypair, aux_rand32);
 }
 
 int secp256k1_schnorrsig_sign_custom(const secp256k1_context* ctx, unsigned char *sig64, const unsigned char *msg, size_t msglen, const secp256k1_keypair *keypair, secp256k1_schnorrsig_extraparams *extraparams) {
@@ -243,7 +236,7 @@ int secp256k1_schnorrsig_verify(const secp256k1_context* ctx, const unsigned cha
 
     /* Compute e. */
     secp256k1_fe_get_b32(buf, &pk.x);
-    secp256k1_schnorrsig_challenge(secp256k1_get_hash_context(ctx), &e, &sig64[0], msg, msglen, buf);
+    secp256k1_schnorrsig_challenge(&ctx->hash_ctx, &e, &sig64[0], msg, msglen, buf);
 
     /* Compute rj =  s*G + (-e)*pkj */
     secp256k1_scalar_negate(&e, &e);

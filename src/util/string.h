@@ -18,10 +18,12 @@
 #include <string_view>
 #include <vector>
 
+#include <attributes.h>
+
 namespace util {
 namespace detail {
 template <unsigned num_params>
-constexpr static void CheckNumFormatSpecifiers(const char* str)
+constexpr void CheckNumFormatSpecifiers(const char* str)
 {
     unsigned count_normal{0}; // Number of "normal" specifiers, like %s
     unsigned count_pos{0};    // Max number in positional specifier, like %8$s
@@ -96,7 +98,8 @@ struct ConstevalFormatString {
     consteval ConstevalFormatString(const char* str) : fmt{str} { detail::CheckNumFormatSpecifiers<num_params>(fmt); }
 };
 
-void ReplaceAll(std::string& in_out, const std::string& search, const std::string& substitute);
+/// Replace every non-overlapping occurrence of `search` with `substitute`, treating both literally; the replacement text is not searched again.
+void ReplaceAll(std::string& in_out, std::string_view search, std::string_view substitute);
 
 /** Split a string on any char found in separators, returning a vector.
  *
@@ -114,7 +117,7 @@ void ReplaceAll(std::string& in_out, const std::string& search, const std::strin
  *  - 3)
  */
 template <typename T = std::span<const char>>
-std::vector<T> Split(const std::span<const char>& sp, std::string_view separators, bool include_sep = false)
+std::vector<T> Split(std::span<const char> sp LIFETIMEBOUND, std::string_view separators, bool include_sep = false)
 {
     std::vector<T> ret;
     auto it = sp.begin();
@@ -142,7 +145,7 @@ std::vector<T> Split(const std::span<const char>& sp, std::string_view separator
  * "foo(bar(1),2),3) on ',' will return {"foo(bar(1)", "2)", "3)"}.
  */
 template <typename T = std::span<const char>>
-std::vector<T> Split(const std::span<const char>& sp, char sep, bool include_sep = false)
+std::vector<T> Split(std::span<const char> sp LIFETIMEBOUND, char sep, bool include_sep = false)
 {
     return Split<T>(sp, std::string_view{&sep, 1}, include_sep);
 }
@@ -157,7 +160,7 @@ std::vector<T> Split(const std::span<const char>& sp, char sep, bool include_sep
     return Split<std::string>(str, separators);
 }
 
-[[nodiscard]] inline std::string_view TrimStringView(std::string_view str, std::string_view pattern = " \f\n\r\t\v")
+[[nodiscard]] inline std::string_view TrimStringView(std::string_view str LIFETIMEBOUND, std::string_view pattern = " \f\n\r\t\v")
 {
     std::string::size_type front = str.find_first_not_of(pattern);
     if (front == std::string::npos) {
@@ -172,7 +175,7 @@ std::vector<T> Split(const std::span<const char>& sp, char sep, bool include_sep
     return std::string(TrimStringView(str, pattern));
 }
 
-[[nodiscard]] inline std::string_view RemoveSuffixView(std::string_view str, std::string_view suffix)
+[[nodiscard]] inline std::string_view RemoveSuffixView(std::string_view str LIFETIMEBOUND, std::string_view suffix)
 {
     if (str.ends_with(suffix)) {
         return str.substr(0, str.size() - suffix.size());
@@ -180,7 +183,7 @@ std::vector<T> Split(const std::span<const char>& sp, char sep, bool include_sep
     return str;
 }
 
-[[nodiscard]] inline std::string_view RemovePrefixView(std::string_view str, std::string_view prefix)
+[[nodiscard]] inline std::string_view RemovePrefixView(std::string_view str LIFETIMEBOUND, std::string_view prefix)
 {
     if (str.starts_with(prefix)) {
         return str.substr(prefix.size());
@@ -230,14 +233,14 @@ inline std::string MakeUnorderedList(const std::vector<std::string>& items)
 }
 
 /**
- * Check if a string does not contain any embedded NUL (\0) characters
+ * Check if a string contains any embedded NUL (\0) characters
  */
-[[nodiscard]] inline bool ContainsNoNUL(std::string_view str) noexcept
+[[nodiscard]] inline bool ContainsNUL(std::string_view str) noexcept
 {
     for (auto c : str) {
-        if (c == 0) return false;
+        if (c == 0) return true;
     }
-    return true;
+    return false;
 }
 
 /**
@@ -263,14 +266,14 @@ template <typename T1, size_t PREFIX_LEN>
            std::equal(std::begin(prefix), std::end(prefix), std::begin(obj));
 }
 
-struct LineReader {
-    const std::span<const std::byte>::iterator start;
-    const std::span<const std::byte>::iterator end;
-    const size_t max_line_length;
-    std::span<const std::byte>::iterator it;
+class LineReader
+{
+    const std::string_view m_str;
+    const size_t m_max_line_length;
+    std::string_view::iterator m_it;
 
-    explicit LineReader(std::span<const std::byte> buffer, size_t max_line_length);
-    explicit LineReader(std::string_view str, size_t max_line_length) : LineReader{std::as_bytes(std::span{str}), max_line_length} {}
+public:
+    explicit LineReader(std::string_view str LIFETIMEBOUND, size_t max_line_length);
 
     /**
      * Returns a string from current iterator position up to (but not including) next \n
@@ -280,7 +283,7 @@ struct LineReader {
      *          std::nullopt if end of buffer is reached without finding a \n.
      * @throws a std::runtime_error if max_line_length + 1 bytes are read without finding \n.
      */
-    std::optional<std::string> ReadLine();
+    std::optional<std::string_view> ReadLine() LIFETIMEBOUND;
 
     /**
      * Returns string from current iterator position of specified length
@@ -290,7 +293,7 @@ struct LineReader {
      * @returns a string of the expected length.
      * @throws a std::runtime_error if there is not enough data in the buffer.
      */
-    std::string ReadLength(size_t len);
+    std::string_view ReadLength(size_t len) LIFETIMEBOUND;
 
     /**
      * Returns remaining size of bytes in buffer

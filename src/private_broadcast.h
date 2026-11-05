@@ -20,15 +20,20 @@
  * Store a list of transactions to be broadcast privately. Supports the following operations:
  * - Add a new transaction
  * - Remove a transaction
+ * - Mark a transaction as resolved, so no more retry send attempts are granted
+ * - Mark a connection finished
+ * - Grant an additional send attempt for an unresolved transaction
  * - Pick a transaction for sending to one recipient
  * - Query which transaction has been picked for sending to a given recipient node
  * - Mark that a given recipient node has confirmed receipt of a transaction
- * - Query whether a given recipient node has confirmed reception
  * - Query whether any transactions that need sending are currently on the list
  */
 class PrivateBroadcast
 {
 public:
+
+    /// Number of connections to make for initial broadcast.
+    static constexpr size_t INITIAL_CONNECTION_COUNT{3};
 
     /// If a transaction is not sent to any peer for this duration,
     /// then we consider it stale / for rebroadcasting.
@@ -37,6 +42,23 @@ public:
     /// If a transaction is not received back from the network for this duration
     /// after it is broadcast, then we consider it stale / for rebroadcasting.
     static constexpr auto STALE_DURATION{1min};
+
+    /// Maximum number of transactions tracked simultaneously.
+    /// Additions that would exceed this are rejected (see Add()).
+    static constexpr size_t MAX_TRANSACTIONS{10'000};
+
+    /// Maximum number of send attempts for a transaction. Once this limit is
+    /// reached, the transaction remains tracked but is not sent again unless
+    /// explicitly re-added.
+    static constexpr size_t MAX_SEND_ATTEMPTS{1'000};
+
+    /// @param[in] max_transactions Cap on the number of simultaneously tracked
+    /// transactions. Defaults to MAX_TRANSACTIONS.
+    /// @param[in] max_send_attempts Cap on the number of send attempts per
+    /// transaction. Defaults to MAX_SEND_ATTEMPTS.
+    explicit PrivateBroadcast(size_t max_transactions = MAX_TRANSACTIONS,
+                              size_t max_send_attempts = MAX_SEND_ATTEMPTS)
+        : m_max_transactions{max_transactions}, m_max_send_attempts{max_send_attempts} {}
 
     struct PeerSendInfo {
         CService address;
@@ -47,36 +69,79 @@ public:
     struct TxBroadcastInfo {
         CTransactionRef tx;
         NodeClock::time_point time_added;
+        /// Number of additional send attempts allowed for this transaction (0 if exhausted).
+        size_t attempts_remaining;
         std::vector<PeerSendInfo> peers;
     };
 
+    /// Outcome of Add().
+    enum class AddResult {
+        //! The transaction was newly added or reset after exhausting its send attempts.
+        Added,
+        //! The transaction was already present with send attempts remaining; no change.
+        AlreadyPresent,
+        //! Rejected: the queue is already at MAX_TRANSACTIONS.
+        QueueFull,
+    };
+
     /**
-     * Add a transaction to the storage.
+     * Add a transaction to the storage, or reset an exhausted transaction so it
+     * can be broadcast again.
      * @param[in] tx The transaction to add.
-     * @retval true The transaction was added.
-     * @retval false The transaction was already present.
+     * @return Whether the transaction was newly added or reset, was already
+     * present with send attempts remaining, or was rejected because the queue is
+     * full (see AddResult).
      */
-    bool Add(const CTransactionRef& tx)
+    [[nodiscard]] AddResult Add(const CTransactionRef& tx)
         EXCLUSIVE_LOCKS_REQUIRED(!m_mutex);
 
     /**
      * Forget a transaction.
      * @param[in] tx Transaction to forget.
-     * @retval !nullopt The number of times the transaction was sent and confirmed
-     * by the recipient (if the transaction existed and was removed).
+     * @retval !nullopt The number of planned send attempts not yet picked
+     * (if the transaction existed and was removed).
      * @retval nullopt The transaction was not in the storage.
      */
     std::optional<size_t> Remove(const CTransactionRef& tx)
         EXCLUSIVE_LOCKS_REQUIRED(!m_mutex);
 
     /**
+     * Mark a transaction as resolved because it was received back from the network
+     * or is no longer acceptable to the mempool.
+     * @param[in] tx Transaction to resolve.
+     * @return Whether the transaction was found in the storage.
+     */
+    bool MarkResolved(const CTransactionRef& tx)
+        EXCLUSIVE_LOCKS_REQUIRED(!m_mutex);
+
+    /**
+     * Mark a connection finished.
+     * @param[in] nodeid Node whose connection has ended.
+     */
+    void NodeDisconnected(NodeId nodeid)
+        EXCLUSIVE_LOCKS_REQUIRED(!m_mutex);
+
+    /**
+     * Grant one additional send attempt if the transaction is unresolved, all
+     * planned sends have been picked, and the attempt limit has not been reached.
+     * The caller schedules the connection separately.
+     * @param[in] tx Transaction to retry.
+     * @return Whether an additional send attempt was granted.
+     */
+    bool TryGrantRetry(const CTransactionRef& tx)
+        EXCLUSIVE_LOCKS_REQUIRED(!m_mutex);
+
+    /**
      * Pick the transaction with the fewest send attempts, and confirmations,
      * and oldest send/confirm times.
      * @param[in] will_send_to_nodeid Will remember that the returned transaction
-     * was picked for sending to this node.
+     * was picked for sending to this node. Calling this method more than once with
+     * the same `will_send_to_nodeid` is not allowed because sending more than one
+     * transaction to one node would be a privacy leak.
      * @param[in] will_send_to_address Address of the peer to which this transaction
      * will be sent.
-     * @return Most urgent transaction or nullopt if there are no transactions.
+     * @return Most urgent transaction or nullopt if there are no transactions
+     * with send attempts remaining.
      */
     std::optional<CTransactionRef> PickTxForSend(const NodeId& will_send_to_nodeid, const CService& will_send_to_address)
         EXCLUSIVE_LOCKS_REQUIRED(!m_mutex);
@@ -98,21 +163,14 @@ public:
         EXCLUSIVE_LOCKS_REQUIRED(!m_mutex);
 
     /**
-     * Check if the node has confirmed reception of the transaction.
-     * @retval true Node has confirmed, `NodeConfirmedReception()` has been called.
-     * @retval false Node has not confirmed, `NodeConfirmedReception()` has not been called.
-     */
-    bool DidNodeConfirmReception(const NodeId& nodeid)
-        EXCLUSIVE_LOCKS_REQUIRED(!m_mutex);
-
-    /**
-     * Check if there are transactions that need to be broadcast.
+     * Check if there are transactions with send attempts remaining.
      */
     bool HavePendingTransactions()
         EXCLUSIVE_LOCKS_REQUIRED(!m_mutex);
 
     /**
-     * Get the transactions that have not been broadcast recently.
+     * Get the transactions that have not been broadcast recently and have send
+     * attempts remaining.
      */
     std::vector<CTransactionRef> GetStale() const
         EXCLUSIVE_LOCKS_REQUIRED(!m_mutex);
@@ -134,6 +192,8 @@ private:
         const NodeClock::time_point picked;
         /// When was the transaction reception confirmed by the node (by PONG).
         std::optional<NodeClock::time_point> confirmed;
+        /// Whether the node has disconnected.
+        bool disconnected{false};
 
         SendStatus(const NodeId& nodeid, const CService& address, const NodeClock::time_point& picked) : nodeid{nodeid}, address{address}, picked{picked} {}
     };
@@ -191,9 +251,18 @@ private:
     std::optional<TxAndSendStatusForNode> GetSendStatusByNode(const NodeId& nodeid)
         EXCLUSIVE_LOCKS_REQUIRED(m_mutex);
     struct TxSendStatus {
-        const NodeClock::time_point time_added{NodeClock::now()};
+        NodeClock::time_point time_added{NodeClock::now()};
         std::vector<SendStatus> send_statuses;
+        /// Total number of sends granted, including initial count.
+        size_t planned_sends{INITIAL_CONNECTION_COUNT};
+        /// Whether the transaction no longer needs to be retried.
+        bool resolved{false};
     };
+    bool IsPending(const TxSendStatus& status) const;
+    /// Cap on the number of simultaneously tracked transactions (see Add()).
+    const size_t m_max_transactions;
+    /// Cap on the number of send attempts per transaction (see PickTxForSend()).
+    const size_t m_max_send_attempts;
     mutable Mutex m_mutex;
     std::unordered_map<CTransactionRef, TxSendStatus, CTransactionRefHash, CTransactionRefComp>
         m_transactions GUARDED_BY(m_mutex);

@@ -23,7 +23,7 @@
 using namespace std::chrono_literals;
 
 /// Version of the system clock that is mockable in the context of tests (via
-/// NodeClockContext or ::SetMockTime), otherwise the system clock.
+/// FakeNodeClock or ::SetMockTime), otherwise the system clock.
 struct NodeClock : public std::chrono::system_clock {
     using time_point = std::chrono::time_point<NodeClock>;
     /** Return current system time or mocked time, if set */
@@ -42,7 +42,7 @@ using SteadyMicroseconds = std::chrono::time_point<std::chrono::steady_clock, st
 using SystemClock = std::chrono::system_clock;
 
 /// Version of SteadyClock that is mockable in the context of tests (via
-/// SteadyClockContext, or Self::SetMockTime), otherwise the system steady
+/// FakeSteadyClock, or Self::SetMockTime), otherwise the system steady
 /// clock.
 struct MockableSteadyClock : public std::chrono::steady_clock {
     using time_point = std::chrono::time_point<MockableSteadyClock>;
@@ -111,14 +111,6 @@ using MillisecondsDouble = std::chrono::duration<double, std::chrono::millisecon
  * - NodeClock                             for mockable system time
  */
 int64_t GetTime();
-
-/**
- * DEPRECATED
- * Use SetMockTime with chrono type
- *
- * @param[in] nMockTimeIn Time in seconds.
- */
-void SetMockTime(int64_t nMockTimeIn);
 
 /** For testing. Set e.g. with the setmocktime rpc, or -mocktime argument */
 void SetMockTime(std::chrono::seconds mock_time_in);

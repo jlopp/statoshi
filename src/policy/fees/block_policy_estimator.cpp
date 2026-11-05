@@ -10,7 +10,6 @@
 #include <common/system.h>
 #include <consensus/amount.h>
 #include <kernel/mempool_entry.h>
-#include <logging.h>
 #include <policy/feerate.h>
 #include <primitives/transaction.h>
 #include <random.h>
@@ -20,6 +19,7 @@
 #include <tinyformat.h>
 #include <uint256.h>
 #include <util/fs.h>
+#include <util/log.h>
 #include <util/serfloat.h>
 #include <util/syserror.h>
 #include <util/time.h>
@@ -32,6 +32,7 @@
 #include <cstdint>
 #include <exception>
 #include <stdexcept>
+#include <system_error>
 #include <utility>
 
 extern statsd::StatsdClient statsClient;
@@ -47,6 +48,23 @@ std::string StringForFeeEstimateHorizon(FeeEstimateHorizon horizon)
     case FeeEstimateHorizon::SHORT_HALFLIFE: return "short";
     case FeeEstimateHorizon::MED_HALFLIFE: return "medium";
     case FeeEstimateHorizon::LONG_HALFLIFE: return "long";
+    } // no default case, so the compiler can warn about missing cases
+    assert(false);
+}
+
+std::string StringForBlockPolicyEstimateReason(BlockPolicyEstimateReason reason)
+{
+    switch (reason) {
+    case BlockPolicyEstimateReason::NONE:
+        return "None";
+    case BlockPolicyEstimateReason::HALF_ESTIMATE:
+        return "Half Target 60% Threshold";
+    case BlockPolicyEstimateReason::FULL_ESTIMATE:
+        return "Target 85% Threshold";
+    case BlockPolicyEstimateReason::DOUBLE_ESTIMATE:
+        return "Double Target 95% Threshold";
+    case BlockPolicyEstimateReason::CONSERVATIVE:
+        return "Conservative Double Target longer horizon";
     } // no default case, so the compiler can warn about missing cases
     assert(false);
 }
@@ -581,21 +599,6 @@ CBlockPolicyEstimator::CBlockPolicyEstimator(const fs::path& estimation_filepath
 
 CBlockPolicyEstimator::~CBlockPolicyEstimator() = default;
 
-void CBlockPolicyEstimator::TransactionAddedToMempool(const NewMempoolTransactionInfo& tx, uint64_t /*unused*/)
-{
-    processTransaction(tx);
-}
-
-void CBlockPolicyEstimator::TransactionRemovedFromMempool(const CTransactionRef& tx, MemPoolRemovalReason /*unused*/, uint64_t /*unused*/)
-{
-    removeTx(tx->GetHash());
-}
-
-void CBlockPolicyEstimator::MempoolTransactionsRemovedForBlock(const std::vector<RemovedMempoolTransactionInfo>& txs_removed_for_block, unsigned int nBlockHeight)
-{
-    processBlock(txs_removed_for_block, nBlockHeight);
-}
-
 void CBlockPolicyEstimator::processTransaction(const NewMempoolTransactionInfo& tx)
 {
     LOCK(m_cs_fee_estimator);
@@ -672,55 +675,60 @@ bool CBlockPolicyEstimator::processBlockTx(unsigned int nBlockHeight, const Remo
 void CBlockPolicyEstimator::processBlock(const std::vector<RemovedMempoolTransactionInfo>& txs_removed_for_block,
                                          unsigned int nBlockHeight)
 {
-    LOCK(m_cs_fee_estimator);
-    if (nBlockHeight <= nBestSeenHeight) {
-        // Ignore side chains and re-orgs; assuming they are random
-        // they don't affect the estimate.
-        // And if an attacker can re-org the chain at will, then
-        // you've got much bigger problems than "attacker can influence
-        // transaction fees."
-        return;
+    {
+        LOCK(m_cs_fee_estimator);
+
+        if (nBlockHeight <= nBestSeenHeight) {
+            // Ignore side chains and re-orgs; assuming they are random
+            // they don't affect the estimate.
+            // And if an attacker can re-org the chain at will, then
+            // you've got much bigger problems than "attacker can influence
+            // transaction fees."
+            return;
+        }
+
+        // Must update nBestSeenHeight in sync with ClearCurrent so that
+        // calls to removeTx (via processBlockTx) correctly calculate age
+        // of unconfirmed txs to remove from tracking.
+        nBestSeenHeight = nBlockHeight;
+
+        // Update unconfirmed circular buffer
+        feeStats->ClearCurrent(nBlockHeight);
+        shortStats->ClearCurrent(nBlockHeight);
+        longStats->ClearCurrent(nBlockHeight);
+
+        // Decay all exponential averages
+        feeStats->UpdateMovingAverages();
+        shortStats->UpdateMovingAverages();
+        longStats->UpdateMovingAverages();
+
+        unsigned int countedTxs = 0;
+        // Update averages with data points from current block
+        for (const auto& tx : txs_removed_for_block) {
+            if (processBlockTx(nBlockHeight, tx))
+                countedTxs++;
+        }
+
+        if (firstRecordedHeight == 0 && countedTxs > 0) {
+            firstRecordedHeight = nBestSeenHeight;
+            LogDebug(BCLog::ESTIMATEFEE, "Blockpolicy first recorded height %u\n", firstRecordedHeight);
+        }
+
+        LogDebug(BCLog::ESTIMATEFEE, "Blockpolicy estimates updated by %u of %u block txs, since last block %u of %u tracked, mempool map size %u, max target %u from %s\n",
+                 countedTxs, txs_removed_for_block.size(), trackedTxs, trackedTxs + untrackedTxs, mapMemPoolTxs.size(),
+                 MaxUsableEstimate(), HistoricalBlockSpan() > BlockSpan() ? "historical" : "current");
+
+        trackedTxs = 0;
+        untrackedTxs = 0;
     }
-
-    // Must update nBestSeenHeight in sync with ClearCurrent so that
-    // calls to removeTx (via processBlockTx) correctly calculate age
-    // of unconfirmed txs to remove from tracking.
-    nBestSeenHeight = nBlockHeight;
-
-    // Update unconfirmed circular buffer
-    feeStats->ClearCurrent(nBlockHeight);
-    shortStats->ClearCurrent(nBlockHeight);
-    longStats->ClearCurrent(nBlockHeight);
-
-    // Decay all exponential averages
-    feeStats->UpdateMovingAverages();
-    shortStats->UpdateMovingAverages();
-    longStats->UpdateMovingAverages();
-
-    unsigned int countedTxs = 0;
-    // Update averages with data points from current block
-    for (const auto& tx : txs_removed_for_block) {
-        if (processBlockTx(nBlockHeight, tx))
-            countedTxs++;
-    }
-
-    if (firstRecordedHeight == 0 && countedTxs > 0) {
-        firstRecordedHeight = nBestSeenHeight;
-        LogDebug(BCLog::ESTIMATEFEE, "Blockpolicy first recorded height %u\n", firstRecordedHeight);
-    }
-
-    LogDebug(BCLog::ESTIMATEFEE, "Blockpolicy estimates updated by %u of %u block txs, since last block %u of %u tracked, mempool map size %u, max target %u from %s\n",
-             countedTxs, txs_removed_for_block.size(), trackedTxs, trackedTxs + untrackedTxs, mapMemPoolTxs.size(),
-             MaxUsableEstimate(), HistoricalBlockSpan() > BlockSpan() ? "historical" : "current");
-
-    trackedTxs = 0;
-    untrackedTxs = 0;
 
     // emit stats for estimated fees
+    // NOTE: this must happen *after* releasing m_cs_fee_estimator, because
+    // estimateSmartFee() now acquires it (it is a non-recursive Mutex).
     for (unsigned int i = 1; i <= 1008; i++)
     {
         std::string feeName = "estimates.fee.block" + boost::lexical_cast<std::string>(i);
-        CFeeRate feeEstimate = estimateSmartFee(i, NULL, true);
+        CFeeRate feeEstimate = estimateSmartFee(i, nullptr, true);
         if (feeEstimate.GetFeePerK() > 0)
             statsClient.gauge(feeName, feeEstimate.GetFeePerK());
         else
@@ -883,12 +891,14 @@ double CBlockPolicyEstimator::estimateConservativeFee(unsigned int doubleTarget,
  */
 CFeeRate CBlockPolicyEstimator::estimateSmartFee(int confTarget, FeeCalculation *feeCalc, bool conservative) const
 {
-    // remove lock so that we can call this inside of processBlock()
-    if (feeCalc) {
-        feeCalc->desiredTarget = confTarget;
-        feeCalc->returnedTarget = confTarget;
-        feeCalc->best_height = nBestSeenHeight;
-    }
+    LOCK(m_cs_fee_estimator);
+
+    FeeCalculation temp_fee_calc;
+    if (!feeCalc) feeCalc = &temp_fee_calc;
+
+    feeCalc->desiredTarget = confTarget;
+    feeCalc->returnedTarget = confTarget;
+    feeCalc->best_height = nBestSeenHeight;
 
     double median = -1;
     EstimationResult tempResult;
@@ -905,7 +915,7 @@ CFeeRate CBlockPolicyEstimator::estimateSmartFee(int confTarget, FeeCalculation 
     if ((unsigned int)confTarget > maxUsableEstimate) {
         confTarget = maxUsableEstimate;
     }
-    if (feeCalc) feeCalc->returnedTarget = confTarget;
+    feeCalc->returnedTarget = confTarget;
 
     if (confTarget <= 1) return CFeeRate(0); // error condition
 
@@ -929,42 +939,58 @@ CFeeRate CBlockPolicyEstimator::estimateSmartFee(int confTarget, FeeCalculation 
      * See: https://github.com/bitcoin/bitcoin/issues/11800#issuecomment-349697807
      */
     double halfEst = estimateCombinedFee(confTarget/2, HALF_SUCCESS_PCT, true, &tempResult);
-    if (feeCalc) {
-        feeCalc->est = tempResult;
-        feeCalc->reason = FeeReason::HALF_ESTIMATE;
-    }
+    feeCalc->est = tempResult;
+    feeCalc->reason = BlockPolicyEstimateReason::HALF_ESTIMATE;
     median = halfEst;
     double actualEst = estimateCombinedFee(confTarget, SUCCESS_PCT, true, &tempResult);
     if (actualEst > median) {
         median = actualEst;
-        if (feeCalc) {
-            feeCalc->est = tempResult;
-            feeCalc->reason = FeeReason::FULL_ESTIMATE;
-        }
+        feeCalc->est = tempResult;
+        feeCalc->reason = BlockPolicyEstimateReason::FULL_ESTIMATE;
     }
     double doubleEst = estimateCombinedFee(2 * confTarget, DOUBLE_SUCCESS_PCT, !conservative, &tempResult);
     if (doubleEst > median) {
         median = doubleEst;
-        if (feeCalc) {
-            feeCalc->est = tempResult;
-            feeCalc->reason = FeeReason::DOUBLE_ESTIMATE;
-        }
+        feeCalc->est = tempResult;
+        feeCalc->reason = BlockPolicyEstimateReason::DOUBLE_ESTIMATE;
     }
 
     if (conservative || median == -1) {
         double consEst =  estimateConservativeFee(2 * confTarget, &tempResult);
         if (consEst > median) {
             median = consEst;
-            if (feeCalc) {
-                feeCalc->est = tempResult;
-                feeCalc->reason = FeeReason::CONSERVATIVE;
-            }
+            feeCalc->est = tempResult;
+            feeCalc->reason = BlockPolicyEstimateReason::CONSERVATIVE;
         }
     }
 
     if (median < 0) return CFeeRate(0); // error condition
 
+    LogDebug(BCLog::ESTIMATEFEE, "estimateSmartFee Selected feerate: %g Tgt: %d (requested %d) Reason: \"%s\" Decay %.5f: Estimation: (%g - %g) %.2f%% %.1f/(%.1f %d mem %.1f out) Fail: (%g - %g) %.2f%% %.1f/(%.1f %d mem %.1f out)",
+             median, feeCalc->returnedTarget, feeCalc->desiredTarget, StringForBlockPolicyEstimateReason(feeCalc->reason), feeCalc->est.decay,
+             feeCalc->est.pass.start, feeCalc->est.pass.end,
+             (feeCalc->est.pass.totalConfirmed + feeCalc->est.pass.inMempool + feeCalc->est.pass.leftMempool) > 0.0 ? 100 * feeCalc->est.pass.withinTarget / (feeCalc->est.pass.totalConfirmed + feeCalc->est.pass.inMempool + feeCalc->est.pass.leftMempool) : 0.0,
+             feeCalc->est.pass.withinTarget, feeCalc->est.pass.totalConfirmed, feeCalc->est.pass.inMempool, feeCalc->est.pass.leftMempool,
+             feeCalc->est.fail.start, feeCalc->est.fail.end,
+             (feeCalc->est.fail.totalConfirmed + feeCalc->est.fail.inMempool + feeCalc->est.fail.leftMempool) > 0.0 ? 100 * feeCalc->est.fail.withinTarget / (feeCalc->est.fail.totalConfirmed + feeCalc->est.fail.inMempool + feeCalc->est.fail.leftMempool) : 0.0,
+             feeCalc->est.fail.withinTarget, feeCalc->est.fail.totalConfirmed, feeCalc->est.fail.inMempool, feeCalc->est.fail.leftMempool);
+
     return CFeeRate(llround(median));
+}
+
+util::Expected<FeeRateEstimation, FeeRateEstimationError> CBlockPolicyEstimator::EstimateFeeRate(int target, bool conservative) const
+{
+    FeeCalculation fee_calc;
+    CFeeRate feerate{estimateSmartFee(target, &fee_calc, conservative)};
+    if (feerate == CFeeRate(0)) {
+        return EstimationError(FeeRateEstimatorType::BLOCK_POLICY, fee_calc.returnedTarget, "Insufficient data or no feerate found");
+    }
+    return FeeRateEstimation{FeeRateEstimatorType::BLOCK_POLICY, feerate.GetFeePerVSize(), fee_calc.returnedTarget};
+}
+
+unsigned int CBlockPolicyEstimator::MaximumTarget() const
+{
+    return HighestTargetTracked(FeeEstimateHorizon::LONG_HALFLIFE);
 }
 
 void CBlockPolicyEstimator::Flush() {
@@ -974,6 +1000,15 @@ void CBlockPolicyEstimator::Flush() {
 
 void CBlockPolicyEstimator::FlushFeeEstimates()
 {
+    if (!m_estimation_filepath.parent_path().empty()) {
+        std::error_code error;
+        fs::create_directories(m_estimation_filepath.parent_path(), error);
+        if (error) {
+            LogWarning("Failed to create fee estimates directory %s: %s. Continue anyway.", fs::PathToString(m_estimation_filepath.parent_path()), error.message());
+            return;
+        }
+    }
+
     AutoFile est_file{fsbridge::fopen(m_estimation_filepath, "wb")};
     if (est_file.IsNull() || !Write(est_file)) {
         LogWarning("Failed to write fee estimates to %s. Continue anyway.", fs::PathToString(m_estimation_filepath));
@@ -1020,51 +1055,51 @@ bool CBlockPolicyEstimator::Read(AutoFile& filein)
         if (nVersionRequired > CURRENT_FEES_FILE_VERSION) {
             throw std::runtime_error{strprintf("File version (%d) too high to be read.", nVersionRequired)};
         }
+        if (nVersionRequired < CURRENT_FEES_FILE_VERSION) {
+            throw std::runtime_error{strprintf("File version (%d) incompatible: Too old to be read", nVersionRequired)};
+        }
 
         // Read fee estimates file into temporary variables so existing data
         // structures aren't corrupted if there is an exception.
         unsigned int nFileBestSeenHeight;
         filein >> nFileBestSeenHeight;
 
-        if (nVersionRequired < CURRENT_FEES_FILE_VERSION) {
-            LogWarning("Incompatible old fee estimation data (non-fatal). Version: %d", nVersionRequired);
-        } else { // nVersionRequired == CURRENT_FEES_FILE_VERSION
-            unsigned int nFileHistoricalFirst, nFileHistoricalBest;
-            filein >> nFileHistoricalFirst >> nFileHistoricalBest;
-            if (nFileHistoricalFirst > nFileHistoricalBest || nFileHistoricalBest > nFileBestSeenHeight) {
-                throw std::runtime_error("Corrupt estimates file. Historical block range for estimates is invalid");
-            }
-            std::vector<double> fileBuckets;
-            filein >> Using<VectorFormatter<EncodedDoubleFormatter>>(fileBuckets);
-            size_t numBuckets = fileBuckets.size();
-            if (numBuckets <= 1 || numBuckets > 1000) {
-                throw std::runtime_error("Corrupt estimates file. Must have between 2 and 1000 feerate buckets");
-            }
-
-            std::unique_ptr<TxConfirmStats> fileFeeStats(new TxConfirmStats(buckets, bucketMap, MED_BLOCK_PERIODS, MED_DECAY, MED_SCALE));
-            std::unique_ptr<TxConfirmStats> fileShortStats(new TxConfirmStats(buckets, bucketMap, SHORT_BLOCK_PERIODS, SHORT_DECAY, SHORT_SCALE));
-            std::unique_ptr<TxConfirmStats> fileLongStats(new TxConfirmStats(buckets, bucketMap, LONG_BLOCK_PERIODS, LONG_DECAY, LONG_SCALE));
-            fileFeeStats->Read(filein, numBuckets);
-            fileShortStats->Read(filein, numBuckets);
-            fileLongStats->Read(filein, numBuckets);
-
-            // Fee estimates file parsed correctly
-            // Copy buckets from file and refresh our bucketmap
-            buckets = fileBuckets;
-            bucketMap.clear();
-            for (unsigned int i = 0; i < buckets.size(); i++) {
-                bucketMap[buckets[i]] = i;
-            }
-
-            // Destroy old TxConfirmStats and point to new ones that already reference buckets and bucketMap
-            feeStats = std::move(fileFeeStats);
-            shortStats = std::move(fileShortStats);
-            longStats = std::move(fileLongStats);
-
-            nBestSeenHeight = nFileBestSeenHeight;
-            historicalFirst = nFileHistoricalFirst;
-            historicalBest = nFileHistoricalBest;
+        // nVersionRequired == CURRENT_FEES_FILE_VERSION
+        unsigned int nFileHistoricalFirst, nFileHistoricalBest;
+        filein >> nFileHistoricalFirst >> nFileHistoricalBest;
+        if (nFileHistoricalFirst > nFileHistoricalBest || nFileHistoricalBest > nFileBestSeenHeight) {
+            throw std::runtime_error("Corrupt estimates file. Historical block range for estimates is invalid");
         }
+        std::vector<double> fileBuckets;
+        filein >> Using<VectorFormatter<EncodedDoubleFormatter>>(fileBuckets);
+        size_t numBuckets = fileBuckets.size();
+        if (numBuckets <= 1 || numBuckets > 1000) {
+            throw std::runtime_error("Corrupt estimates file. Must have between 2 and 1000 feerate buckets");
+        }
+
+        std::unique_ptr<TxConfirmStats> fileFeeStats(new TxConfirmStats(buckets, bucketMap, MED_BLOCK_PERIODS, MED_DECAY, MED_SCALE));
+        std::unique_ptr<TxConfirmStats> fileShortStats(new TxConfirmStats(buckets, bucketMap, SHORT_BLOCK_PERIODS, SHORT_DECAY, SHORT_SCALE));
+        std::unique_ptr<TxConfirmStats> fileLongStats(new TxConfirmStats(buckets, bucketMap, LONG_BLOCK_PERIODS, LONG_DECAY, LONG_SCALE));
+        fileFeeStats->Read(filein, numBuckets);
+        fileShortStats->Read(filein, numBuckets);
+        fileLongStats->Read(filein, numBuckets);
+
+        // Fee estimates file parsed correctly
+        // Copy buckets from file and refresh our bucketmap
+        buckets = fileBuckets;
+        bucketMap.clear();
+        for (unsigned int i = 0; i < buckets.size(); i++) {
+            bucketMap[buckets[i]] = i;
+        }
+
+        // Destroy old TxConfirmStats and point to new ones that already reference buckets and bucketMap
+        feeStats = std::move(fileFeeStats);
+        shortStats = std::move(fileShortStats);
+        longStats = std::move(fileLongStats);
+
+        nBestSeenHeight = nFileBestSeenHeight;
+        historicalFirst = nFileHistoricalFirst;
+        historicalBest = nFileHistoricalBest;
     }
     catch (const std::exception& e) {
         LogWarning("Unable to read policy estimator data (non-fatal): %s", e.what());

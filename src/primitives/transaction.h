@@ -12,6 +12,7 @@
 #include <script/script.h>
 #include <serialize.h>
 
+#include <algorithm>
 #include <compare>
 #include <cstddef>
 #include <cstdint>
@@ -73,13 +74,13 @@ public:
      * it set (BIP 65).
      * It has SEQUENCE_LOCKTIME_DISABLE_FLAG set (BIP 68/112).
      */
-    static const uint32_t SEQUENCE_FINAL = 0xffffffff;
+    static constexpr uint32_t SEQUENCE_FINAL{0xffffffff};
     /**
      * This is the maximum sequence number that enables both nLockTime and
      * OP_CHECKLOCKTIMEVERIFY (BIP 65).
      * It has SEQUENCE_LOCKTIME_DISABLE_FLAG set (BIP 68/112).
      */
-    static const uint32_t MAX_SEQUENCE_NONFINAL{SEQUENCE_FINAL - 1};
+    static constexpr uint32_t MAX_SEQUENCE_NONFINAL{SEQUENCE_FINAL - 1};
 
     // Below flags apply in the context of BIP 68. BIP 68 requires the tx
     // version to be set to 2, or higher.
@@ -90,18 +91,18 @@ public:
      * It fails OP_CHECKSEQUENCEVERIFY/CheckSequence() for any input that has
      * it set (BIP 112).
      */
-    static const uint32_t SEQUENCE_LOCKTIME_DISABLE_FLAG = (1U << 31);
+    static constexpr uint32_t SEQUENCE_LOCKTIME_DISABLE_FLAG{1U << 31};
 
     /**
      * If CTxIn::nSequence encodes a relative lock-time and this flag
      * is set, the relative lock-time has units of 512 seconds,
      * otherwise it specifies blocks with a granularity of 1. */
-    static const uint32_t SEQUENCE_LOCKTIME_TYPE_FLAG = (1 << 22);
+    static constexpr uint32_t SEQUENCE_LOCKTIME_TYPE_FLAG{1 << 22};
 
     /**
      * If CTxIn::nSequence encodes a relative lock-time, this mask is
      * applied to extract that lock-time from the sequence field. */
-    static const uint32_t SEQUENCE_LOCKTIME_MASK = 0x0000ffff;
+    static constexpr uint32_t SEQUENCE_LOCKTIME_MASK{0x0000ffff};
 
     /**
      * In order to use the same number of bits to encode roughly the
@@ -111,7 +112,7 @@ public:
      * Converting from CTxIn::nSequence to seconds is performed by
      * multiplying by 512 = 2^9, or equivalently shifting up by
      * 9 bits. */
-    static const int SEQUENCE_LOCKTIME_GRANULARITY = 9;
+    static constexpr int SEQUENCE_LOCKTIME_GRANULARITY{9};
 
     CTxIn()
     {
@@ -177,8 +178,8 @@ struct TransactionSerParams {
     const bool allow_witness;
     SER_PARAMS_OPFUNC
 };
-static constexpr TransactionSerParams TX_WITH_WITNESS{.allow_witness = true};
-static constexpr TransactionSerParams TX_NO_WITNESS{.allow_witness = false};
+inline constexpr TransactionSerParams TX_WITH_WITNESS{.allow_witness = true};
+inline constexpr TransactionSerParams TX_NO_WITNESS{.allow_witness = false};
 
 /**
  * Basic transaction serialization format:
@@ -273,6 +274,11 @@ inline CAmount CalculateOutputValue(const TxType& tx)
     return std::accumulate(tx.vout.cbegin(), tx.vout.cend(), CAmount{0}, [](CAmount sum, const auto& txout) { return sum + txout.nValue; });
 }
 
+struct EqualsOptions {
+    bool include_script_sig{true};
+    bool include_witness_data{true};
+};
+
 
 /** The basic transaction that is broadcasted on the network and contained in
  * blocks.  A transaction can contain multiple inputs and outputs.
@@ -281,7 +287,7 @@ class CTransaction
 {
 public:
     // Default transaction version.
-    static const uint32_t CURRENT_VERSION{2};
+    static constexpr uint32_t CURRENT_VERSION{2};
 
     // The local variables are made const to prevent unintended modification
     // without updating the cached hash value. However, CTransaction is not
@@ -343,9 +349,17 @@ public:
         return (vin.size() == 1 && vin[0].prevout.IsNull());
     }
 
-    friend bool operator==(const CTransaction& a, const CTransaction& b)
+    bool Equals(const CTransaction& other, const EqualsOptions opts = {}) const
     {
-        return a.GetWitnessHash() == b.GetWitnessHash();
+        return nLockTime == other.nLockTime &&
+            version == other.version &&
+            vout == other.vout &&
+            std::ranges::equal(vin, other.vin, [&opts](const CTxIn& self, const CTxIn& other) {
+                return self.prevout == other.prevout &&
+                    self.nSequence == other.nSequence &&
+                    (opts.include_script_sig ? self.scriptSig == other.scriptSig : true) &&
+                    (opts.include_witness_data ? self.scriptWitness.stack == other.scriptWitness.stack : true);
+            });
     }
 
     std::string ToString() const;
@@ -402,5 +416,17 @@ struct CMutableTransaction
 
 typedef std::shared_ptr<const CTransaction> CTransactionRef;
 template <typename Tx> static inline CTransactionRef MakeTransactionRef(Tx&& txIn) { return std::make_shared<const CTransaction>(std::forward<Tx>(txIn)); }
+
+namespace std {
+/** Disable default std::hash for CTransactionRef to prevent accidentally
+ *  comparing by pointer. Use CTransactionRefHash or provide a custom
+ *  hasher. */
+template <>
+struct hash<CTransactionRef> {
+    hash() = delete;
+    // Belt-and-suspenders, already implied by the above.
+    size_t operator()(const CTransactionRef&) const = delete;
+};
+} // namespace std
 
 #endif // BITCOIN_PRIMITIVES_TRANSACTION_H

@@ -14,7 +14,7 @@
 
 #include <limits>
 
-using util::ContainsNoNUL;
+using util::ContainsNUL;
 
 /** All alphanumeric characters except for "0", "I", "O", and "l" */
 static const char* pszBase58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
@@ -57,7 +57,7 @@ static const int8_t mapBase58[256] = {
     static_assert(std::size(mapBase58) == 256, "mapBase58.size() should be 256"); // guarantee not out of range
     while (*psz && !IsSpace(*psz)) {
         // Decode base58 character
-        int carry = mapBase58[(uint8_t)*psz];
+        int carry{mapBase58[uint8_t(*psz)]};
         if (carry == -1)  // Invalid b58 character
             return false;
         int i = 0;
@@ -128,7 +128,7 @@ std::string EncodeBase58(std::span<const unsigned char> input)
 
 bool DecodeBase58(const std::string& str, std::vector<unsigned char>& vchRet, int max_ret_len)
 {
-    if (!ContainsNoNUL(str)) {
+    if (ContainsNUL(str)) {
         return false;
     }
     return DecodeBase58(str.c_str(), vchRet, max_ret_len);
@@ -162,7 +162,7 @@ std::string EncodeBase58Check(std::span<const unsigned char> input)
 
 bool DecodeBase58Check(const std::string& str, std::vector<unsigned char>& vchRet, int max_ret)
 {
-    if (!ContainsNoNUL(str)) {
+    if (ContainsNUL(str)) {
         return false;
     }
     return DecodeBase58Check(str.c_str(), vchRet, max_ret);

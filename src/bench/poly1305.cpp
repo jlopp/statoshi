@@ -2,19 +2,19 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-
 #include <bench/bench.h>
 #include <crypto/poly1305.h>
-#include <span.h>
+#include <util/byte_units.h>
 
 #include <cstddef>
 #include <cstdint>
+#include <span>
 #include <vector>
 
 /* Number of bytes to process per iteration */
 static constexpr uint64_t BUFFER_SIZE_TINY  = 64;
 static constexpr uint64_t BUFFER_SIZE_SMALL = 256;
-static constexpr uint64_t BUFFER_SIZE_LARGE = 1024*1024;
+static constexpr uint64_t BUFFER_SIZE_LARGE{1_MiB};
 
 static void POLY1305(benchmark::Bench& bench, size_t buffersize)
 {

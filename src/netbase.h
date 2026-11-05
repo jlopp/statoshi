@@ -11,6 +11,7 @@
 #include <util/sock.h>
 #include <util/threadinterrupt.h>
 
+#include <chrono>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -24,12 +25,12 @@ extern int nConnectTimeout;
 extern bool fNameLookup;
 
 //! -timeout default
-static const int DEFAULT_CONNECT_TIMEOUT = 5000;
+inline constexpr int DEFAULT_CONNECT_TIMEOUT = 5000;
 //! -dns default
-static const int DEFAULT_NAME_LOOKUP = true;
+inline constexpr int DEFAULT_NAME_LOOKUP = true;
 
 /** Prefix for unix domain socket addresses (which are local filesystem paths) */
-const std::string ADDR_PREFIX_UNIX = "unix:";
+inline const std::string ADDR_PREFIX_UNIX = "unix:";
 
 enum class ConnectionDirection {
     None = 0,
@@ -73,12 +74,6 @@ public:
     {
         if (m_is_unix_socket) return IsUnixSocketPath(m_unix_socket_path);
         return proxy.IsValid();
-    }
-
-    sa_family_t GetFamily() const
-    {
-        if (m_is_unix_socket) return AF_UNIX;
-        return proxy.GetSAFamily();
     }
 
     std::string ToString() const
@@ -304,6 +299,11 @@ extern std::function<std::unique_ptr<Sock>(int, int, int)> CreateSock;
  * @returns the connected socket if the operation succeeded, empty unique_ptr otherwise
  */
 std::unique_ptr<Sock> ConnectDirectly(const CService& dest, bool manual_connection);
+
+/** Create a socket and try to connect to the specified service, using the provided timeout. */
+std::unique_ptr<Sock> ConnectDirectly(const CService& dest,
+                                      bool manual_connection,
+                                      std::chrono::milliseconds timeout);
 
 /**
  * Connect to a specified destination service through a SOCKS5 proxy by first

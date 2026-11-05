@@ -88,7 +88,7 @@ static void bench_ecmult_teardown_helper(bench_data* data, size_t* seckey_offset
             secp256k1_scalar_add(&sum_scalars, &sum_scalars, &s);
         }
     }
-    secp256k1_ecmult_gen(&data->ctx->ecmult_gen_ctx, &tmp, &sum_scalars);
+    secp256k1_ecmult_gen_gej(&data->ctx->ecmult_gen_ctx, &tmp, &sum_scalars);
     CHECK(secp256k1_gej_eq_var(&tmp, &sum_output));
 }
 
@@ -104,7 +104,7 @@ static void bench_ecmult_gen(void* arg, int iters) {
     int i;
 
     for (i = 0; i < iters; ++i) {
-        secp256k1_ecmult_gen(&data->ctx->ecmult_gen_ctx, &data->output[i], &data->scalars[(data->offset1+i) % POINTS]);
+        secp256k1_ecmult_gen_gej(&data->ctx->ecmult_gen_ctx, &data->output[i], &data->scalars[(data->offset1+i) % POINTS]);
     }
 }
 
@@ -269,8 +269,8 @@ static void generate_scalar(const secp256k1_context *ctx, uint32_t num, secp256k
     c[8] = num >> 16;
     c[9] = num >> 24;
     secp256k1_sha256_initialize(&sha256);
-    secp256k1_sha256_write(secp256k1_get_hash_context(ctx), &sha256, c, sizeof(c));
-    secp256k1_sha256_finalize(secp256k1_get_hash_context(ctx), &sha256, buf);
+    secp256k1_sha256_write(&ctx->hash_ctx, &sha256, c, sizeof(c));
+    secp256k1_sha256_finalize(&ctx->hash_ctx, &sha256, buf);
     secp256k1_scalar_set_b32(scalar, buf, &overflow);
     CHECK(!overflow);
 }

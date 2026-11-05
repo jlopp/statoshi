@@ -8,10 +8,10 @@
 
 #include <chainparams.h>
 #include <crypto/common.h>
-#include <logging.h>
 #include <sync.h>
 #include <util/check.h>
 #include <util/fs_helpers.h>
+#include <util/log.h>
 #include <util/strencodings.h>
 #include <util/translation.h>
 #include <wallet/db.h>
@@ -104,7 +104,7 @@ static void SetPragma(sqlite3* db, const std::string& key, const std::string& va
     std::string stmt_text = strprintf("PRAGMA %s = %s", key, value);
     int ret = sqlite3_exec(db, stmt_text.c_str(), nullptr, nullptr, nullptr);
     if (ret != SQLITE_OK) {
-        throw std::runtime_error(strprintf("SQLiteDatabase: %s: %s\n", err_msg, sqlite3_errstr(ret)));
+        throw std::runtime_error(strprintf("SQLiteDatabase: %s: %s", err_msg, sqlite3_errstr(ret)));
     }
 }
 
@@ -116,7 +116,7 @@ SQLiteDatabase::SQLiteDatabase(const fs::path& dir_path, const fs::path& file_pa
 {}
 
 SQLiteDatabase::SQLiteDatabase(const fs::path& dir_path, const fs::path& file_path, const DatabaseOptions& options, int additional_flags)
-    : WalletDatabase(), m_dir_path(dir_path), m_file_path(fs::PathToString(file_path)), m_write_semaphore(1), m_use_unsafe_sync(options.use_unsafe_sync)
+    : WalletDatabase(), m_dir_path(dir_path), m_file_path(fs::PathToString(file_path)), m_additional_flags(additional_flags), m_write_semaphore(1), m_use_unsafe_sync(options.use_unsafe_sync)
 {
     {
         LOCK(g_sqlite_mutex);
@@ -124,22 +124,22 @@ SQLiteDatabase::SQLiteDatabase(const fs::path& dir_path, const fs::path& file_pa
             // Setup logging
             int ret = sqlite3_config(SQLITE_CONFIG_LOG, ErrorLogCallback, nullptr);
             if (ret != SQLITE_OK) {
-                throw std::runtime_error(strprintf("SQLiteDatabase: Failed to setup error log: %s\n", sqlite3_errstr(ret)));
+                throw std::runtime_error(strprintf("SQLiteDatabase: Failed to setup error log: %s", sqlite3_errstr(ret)));
             }
             // Force serialized threading mode
             ret = sqlite3_config(SQLITE_CONFIG_SERIALIZED);
             if (ret != SQLITE_OK) {
-                throw std::runtime_error(strprintf("SQLiteDatabase: Failed to configure serialized threading mode: %s\n", sqlite3_errstr(ret)));
+                throw std::runtime_error(strprintf("SQLiteDatabase: Failed to configure serialized threading mode: %s", sqlite3_errstr(ret)));
             }
         }
         int ret = sqlite3_initialize(); // This is a no-op if sqlite3 is already initialized
         if (ret != SQLITE_OK) {
-            throw std::runtime_error(strprintf("SQLiteDatabase: Failed to initialize SQLite: %s\n", sqlite3_errstr(ret)));
+            throw std::runtime_error(strprintf("SQLiteDatabase: Failed to initialize SQLite: %s", sqlite3_errstr(ret)));
         }
     }
 
     try {
-        Open(additional_flags);
+        Open(m_additional_flags);
     } catch (const std::runtime_error&) {
         // If open fails, cleanup this object and rethrow the exception
         Cleanup();
@@ -162,7 +162,7 @@ void SQLiteBatch::SetupSQLStatements()
             int res = sqlite3_prepare_v2(m_database.m_db, stmt_text, -1, stmt_prepared, nullptr);
             if (res != SQLITE_OK) {
                 throw std::runtime_error(strprintf(
-                    "SQLiteDatabase: Failed to setup SQL statements: %s\n", sqlite3_errstr(res)));
+                    "SQLiteDatabase: Failed to setup SQL statements: %s", sqlite3_errstr(res)));
             }
         }
     }
@@ -247,7 +247,10 @@ bool SQLiteDatabase::Verify(bilingual_str& error)
 
 void SQLiteDatabase::Open()
 {
-    Open(/*additional_flags*/0);
+    if (m_additional_flags & SQLITE_OPEN_MEMORY) {
+        throw std::runtime_error("SQLiteDatabase: Cannot reopen an in-memory database");
+    }
+    Open(m_additional_flags);
 }
 
 void SQLiteDatabase::Open(int additional_flags)
@@ -257,17 +260,21 @@ void SQLiteDatabase::Open(int additional_flags)
     if (m_db == nullptr) {
         if (!(flags & SQLITE_OPEN_MEMORY)) {
             TryCreateDirectories(m_dir_path);
+            if (!IsDirWritable(m_dir_path)) {
+                throw std::runtime_error(strprintf("SQLiteDatabase: Failed to open database in directory '%s': directory is not writable", fs::PathToString(m_dir_path)));
+            }
         }
+
         int ret = sqlite3_open_v2(m_file_path.c_str(), &m_db, flags, nullptr);
         if (ret != SQLITE_OK) {
-            throw std::runtime_error(strprintf("SQLiteDatabase: Failed to open database: %s\n", sqlite3_errstr(ret)));
+            throw std::runtime_error(strprintf("SQLiteDatabase: Failed to open database: %s", sqlite3_errstr(ret)));
         }
         ret = sqlite3_extended_result_codes(m_db, 1);
         if (ret != SQLITE_OK) {
-            throw std::runtime_error(strprintf("SQLiteDatabase: Failed to enable extended result codes: %s\n", sqlite3_errstr(ret)));
+            throw std::runtime_error(strprintf("SQLiteDatabase: Failed to enable extended result codes: %s", sqlite3_errstr(ret)));
         }
         // Trace SQL statements if tracing is enabled with -debug=walletdb -loglevel=walletdb:trace
-        if (LogAcceptCategory(BCLog::WALLETDB, BCLog::Level::Trace)) {
+        if (util::log::ShouldTraceLog(BCLog::WALLETDB)) {
            ret = sqlite3_trace_v2(m_db, SQLITE_TRACE_STMT, TraceSqlCallback, this);
            if (ret != SQLITE_OK) {
                LogWarning("Failed to enable SQL tracing for %s", Filename());
@@ -285,11 +292,11 @@ void SQLiteDatabase::Open(int additional_flags)
     // Now begin a transaction to acquire the exclusive lock. This lock won't be released until we close because of the exclusive locking mode.
     int ret = sqlite3_exec(m_db, "BEGIN EXCLUSIVE TRANSACTION", nullptr, nullptr, nullptr);
     if (ret != SQLITE_OK) {
-        throw std::runtime_error("SQLiteDatabase: Unable to obtain an exclusive lock on the database, is it being used by another instance of " CLIENT_NAME "?\n");
+        throw std::runtime_error("SQLiteDatabase: Unable to obtain an exclusive lock on the database, is it being used by another instance of " CLIENT_NAME "?");
     }
     ret = sqlite3_exec(m_db, "COMMIT", nullptr, nullptr, nullptr);
     if (ret != SQLITE_OK) {
-        throw std::runtime_error(strprintf("SQLiteDatabase: Unable to end exclusive lock transaction: %s\n", sqlite3_errstr(ret)));
+        throw std::runtime_error(strprintf("SQLiteDatabase: Unable to end exclusive lock transaction: %s", sqlite3_errstr(ret)));
     }
 
     // Enable fullfsync for the platforms that use it
@@ -306,11 +313,11 @@ void SQLiteDatabase::Open(int additional_flags)
     sqlite3_stmt* check_main_stmt{nullptr};
     ret = sqlite3_prepare_v2(m_db, "SELECT name FROM sqlite_master WHERE type='table' AND name='main'", -1, &check_main_stmt, nullptr);
     if (ret != SQLITE_OK) {
-        throw std::runtime_error(strprintf("SQLiteDatabase: Failed to prepare statement to check table existence: %s\n", sqlite3_errstr(ret)));
+        throw std::runtime_error(strprintf("SQLiteDatabase: Failed to prepare statement to check table existence: %s", sqlite3_errstr(ret)));
     }
     ret = sqlite3_step(check_main_stmt);
     if (sqlite3_finalize(check_main_stmt) != SQLITE_OK) {
-        throw std::runtime_error(strprintf("SQLiteDatabase: Failed to finalize statement checking table existence: %s\n", sqlite3_errstr(ret)));
+        throw std::runtime_error(strprintf("SQLiteDatabase: Failed to finalize statement checking table existence: %s", sqlite3_errstr(ret)));
     }
     bool table_exists;
     if (ret == SQLITE_DONE) {
@@ -318,14 +325,14 @@ void SQLiteDatabase::Open(int additional_flags)
     } else if (ret == SQLITE_ROW) {
         table_exists = true;
     } else {
-        throw std::runtime_error(strprintf("SQLiteDatabase: Failed to execute statement to check table existence: %s\n", sqlite3_errstr(ret)));
+        throw std::runtime_error(strprintf("SQLiteDatabase: Failed to execute statement to check table existence: %s", sqlite3_errstr(ret)));
     }
 
     // Do the db setup things because the table doesn't exist only when we are creating a new wallet
     if (!table_exists) {
         ret = sqlite3_exec(m_db, "CREATE TABLE main(key BLOB PRIMARY KEY NOT NULL, value BLOB NOT NULL)", nullptr, nullptr, nullptr);
         if (ret != SQLITE_OK) {
-            throw std::runtime_error(strprintf("SQLiteDatabase: Failed to create new database: %s\n", sqlite3_errstr(ret)));
+            throw std::runtime_error(strprintf("SQLiteDatabase: Failed to create new database: %s", sqlite3_errstr(ret)));
         }
 
         // Set the application id
@@ -377,7 +384,7 @@ void SQLiteDatabase::Close()
 {
     int res = sqlite3_close(m_db);
     if (res != SQLITE_OK) {
-        throw std::runtime_error(strprintf("SQLiteDatabase: Failed to close database: %s\n", sqlite3_errstr(res)));
+        throw std::runtime_error(strprintf("SQLiteDatabase: Failed to close database: %s", sqlite3_errstr(res)));
     }
     m_db = nullptr;
 }
@@ -444,6 +451,9 @@ void SQLiteBatch::Close()
     }
 
     if (force_conn_refresh) {
+        if (m_database.m_additional_flags & SQLITE_OPEN_MEMORY) {
+            throw std::runtime_error("SQLiteDatabase: Cannot recover in-memory database connection");
+        }
         m_database.Close();
         try {
             m_database.Open();
@@ -603,7 +613,7 @@ std::unique_ptr<DatabaseCursor> SQLiteBatch::GetNewCursor()
     int res = sqlite3_prepare_v2(m_database.m_db, stmt_text, -1, &cursor->m_cursor_stmt, nullptr);
     if (res != SQLITE_OK) {
         throw std::runtime_error(strprintf(
-            "%s: Failed to setup cursor SQL statement: %s\n", __func__, sqlite3_errstr(res)));
+            "%s: Failed to setup cursor SQL statement: %s", __func__, sqlite3_errstr(res)));
     }
 
     return cursor;
@@ -640,7 +650,7 @@ std::unique_ptr<DatabaseCursor> SQLiteBatch::GetNewPrefixCursor(std::span<const 
     int res = sqlite3_prepare_v2(m_database.m_db, stmt_text, -1, &cursor->m_cursor_stmt, nullptr);
     if (res != SQLITE_OK) {
         throw std::runtime_error(strprintf(
-            "SQLiteDatabase: Failed to setup cursor SQL statement: %s\n", sqlite3_errstr(res)));
+            "SQLiteDatabase: Failed to setup cursor SQL statement: %s", sqlite3_errstr(res)));
     }
 
     if (!BindBlobToStatement(cursor->m_cursor_stmt, 1, cursor->m_prefix_range_start, "prefix_start")) return nullptr;
@@ -710,6 +720,15 @@ std::unique_ptr<SQLiteDatabase> MakeSQLiteDatabase(const fs::path& path, const D
         error = Untranslated(e.what());
         return nullptr;
     }
+}
+
+InMemoryWalletDatabase::InMemoryWalletDatabase()
+    : SQLiteDatabase(fs::path{}, fs::path{":memory:"}, DatabaseOptions(), SQLITE_OPEN_MEMORY)
+{}
+
+std::unique_ptr<WalletDatabase> MakeInMemoryWalletDatabase()
+{
+    return std::make_unique<InMemoryWalletDatabase>();
 }
 
 std::string SQLiteDatabaseVersion()

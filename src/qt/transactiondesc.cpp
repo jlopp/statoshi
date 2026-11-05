@@ -6,7 +6,6 @@
 
 #include <qt/bitcoinunits.h>
 #include <qt/guiutil.h>
-#include <qt/paymentserver.h>
 #include <qt/transactionrecord.h>
 
 #include <common/system.h>
@@ -14,8 +13,8 @@
 #include <interfaces/node.h>
 #include <interfaces/wallet.h>
 #include <key_io.h>
-#include <logging.h>
 #include <policy/policy.h>
+#include <util/log.h>
 #include <validation.h>
 
 #include <cstdint>
@@ -66,41 +65,14 @@ QString TransactionDesc::FormatTxStatus(const interfaces::WalletTxStatus& status
     }
 }
 
-// Takes an encoded PaymentRequest as a string and tries to find the Common Name of the X.509 certificate
-// used to sign the PaymentRequest.
-bool GetPaymentRequestMerchant(const std::string& pr, QString& merchant)
-{
-    // Search for the supported pki type strings
-    if (pr.find(std::string({0x12, 0x0b}) + "x509+sha256") != std::string::npos || pr.find(std::string({0x12, 0x09}) + "x509+sha1") != std::string::npos) {
-        // We want the common name of the Subject of the cert. This should be the second occurrence
-        // of the bytes 0x0603550403. The first occurrence of those is the common name of the issuer.
-        // After those bytes will be either 0x13 or 0x0C, then length, then either the ascii or utf8
-        // string with the common name which is the merchant name
-        size_t cn_pos = pr.find({0x06, 0x03, 0x55, 0x04, 0x03});
-        if (cn_pos != std::string::npos) {
-            cn_pos = pr.find({0x06, 0x03, 0x55, 0x04, 0x03}, cn_pos + 5);
-            if (cn_pos != std::string::npos) {
-                cn_pos += 5;
-                if (pr[cn_pos] == 0x13 || pr[cn_pos] == 0x0c) {
-                    cn_pos++; // Consume the type
-                    int str_len = pr[cn_pos];
-                    cn_pos++; // Consume the string length
-                    merchant = QString::fromUtf8(pr.data() + cn_pos, str_len);
-                    return true;
-                }
-            }
-        }
-    }
-    return false;
-}
-
 QString TransactionDesc::toHTML(interfaces::Node& node, interfaces::Wallet& wallet, TransactionRecord* rec, BitcoinUnit unit)
 {
     int numBlocks;
     interfaces::WalletTxStatus status;
-    interfaces::WalletOrderForm orderForm;
     bool inMempool;
-    interfaces::WalletTx wtx = wallet.getWalletTxDetails(rec->hash, status, orderForm, inMempool, numBlocks);
+    std::vector<std::string> messages;
+    std::vector<std::string> payment_requests;
+    interfaces::WalletTx wtx = wallet.getWalletTxDetails(rec->hash, status, messages, payment_requests, inMempool, numBlocks);
 
     QString strHTML;
 
@@ -123,11 +95,9 @@ QString TransactionDesc::toHTML(interfaces::Node& node, interfaces::Wallet& wall
     if (wtx.is_coinbase)
     {
         strHTML += "<b>" + tr("Source") + ":</b> " + tr("Generated") + "<br>";
-    }
-    else if (wtx.value_map.contains("from") && !wtx.value_map["from"].empty())
-    {
+    } else if (wtx.from) {
         // Online transaction
-        strHTML += "<b>" + tr("From") + ":</b> " + GUIUtil::HtmlEscape(wtx.value_map["from"]) + "<br>";
+        strHTML += "<b>" + tr("From") + ":</b> " + GUIUtil::HtmlEscape(*wtx.from) + "<br>";
     }
     else
     {
@@ -157,10 +127,9 @@ QString TransactionDesc::toHTML(interfaces::Node& node, interfaces::Wallet& wall
     //
     // To
     //
-    if (wtx.value_map.contains("to") && !wtx.value_map["to"].empty())
-    {
+    if (wtx.comment_to) {
         // Online transaction
-        std::string strAddress = wtx.value_map["to"];
+        std::string strAddress = *wtx.comment_to;
         strHTML += "<b>" + tr("To") + ":</b> ";
         CTxDestination dest = DecodeDestination(strAddress);
         std::string name;
@@ -212,8 +181,7 @@ QString TransactionDesc::toHTML(interfaces::Node& node, interfaces::Wallet& wall
                 if (toSelf && all_from_me)
                     continue;
 
-                if (!wtx.value_map.contains("to") || wtx.value_map["to"].empty())
-                {
+                if (!wtx.comment_to) {
                     // Offline transaction
                     CTxDestination address;
                     if (ExtractDestination(txout.scriptPubKey, address))
@@ -273,10 +241,12 @@ QString TransactionDesc::toHTML(interfaces::Node& node, interfaces::Wallet& wall
     //
     // Message
     //
-    if (wtx.value_map.contains("message") && !wtx.value_map["message"].empty())
-        strHTML += "<br><b>" + tr("Message") + ":</b><br>" + GUIUtil::HtmlEscape(wtx.value_map["message"], true) + "<br>";
-    if (wtx.value_map.contains("comment") && !wtx.value_map["comment"].empty())
-        strHTML += "<br><b>" + tr("Comment") + ":</b><br>" + GUIUtil::HtmlEscape(wtx.value_map["comment"], true) + "<br>";
+    if (wtx.message) {
+        strHTML += "<br><b>" + tr("Message") + ":</b><br>" + GUIUtil::HtmlEscape(*wtx.message, true) + "<br>";
+    }
+    if (wtx.comment) {
+        strHTML += "<br><b>" + tr("Comment") + ":</b><br>" + GUIUtil::HtmlEscape(*wtx.comment, true) + "<br>";
+    }
 
     strHTML += "<b>" + tr("Transaction ID") + ":</b> " + rec->getTxHash() + "<br>";
     strHTML += "<b>" + tr("Transaction total size") + ":</b> " + QString::number(wtx.tx->ComputeTotalSize()) + " bytes<br>";
@@ -284,25 +254,8 @@ QString TransactionDesc::toHTML(interfaces::Node& node, interfaces::Wallet& wall
     strHTML += "<b>" + tr("Output index") + ":</b> " + QString::number(rec->getOutputIndex()) + "<br>";
 
     // Message from normal bitcoin:URI (bitcoin:123...?message=example)
-    for (const std::pair<std::string, std::string>& r : orderForm) {
-        if (r.first == "Message")
-            strHTML += "<br><b>" + tr("Message") + ":</b><br>" + GUIUtil::HtmlEscape(r.second, true) + "<br>";
-
-        //
-        // PaymentRequest info:
-        //
-        if (r.first == "PaymentRequest")
-        {
-            QString merchant;
-            if (!GetPaymentRequestMerchant(r.second, merchant)) {
-                merchant.clear();
-            } else {
-                merchant = tr("%1 (Certificate was not verified)").arg(merchant);
-            }
-            if (!merchant.isNull()) {
-                strHTML += "<b>" + tr("Merchant") + ":</b> " + GUIUtil::HtmlEscape(merchant) + "<br>";
-            }
-        }
+    for (const std::string& msg : messages) {
+        strHTML += "<br><b>" + tr("Message") + ":</b><br>" + GUIUtil::HtmlEscape(msg, true) + "<br>";
     }
 
     if (wtx.is_coinbase)

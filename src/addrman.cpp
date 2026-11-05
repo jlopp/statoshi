@@ -9,9 +9,9 @@
 #include <addrman_impl.h>
 
 #include <hash.h>
-#include <logging.h>
 #include <logging/timer.h>
 #include <netaddress.h>
+#include <netgroup.h>
 #include <protocol.h>
 #include <random.h>
 #include <serialize.h>
@@ -19,6 +19,7 @@
 #include <tinyformat.h>
 #include <uint256.h>
 #include <util/check.h>
+#include <util/log.h>
 #include <util/time.h>
 
 #include <cmath>
@@ -732,29 +733,36 @@ std::pair<CAddress, NodeSeconds> AddrManImpl::Select_(bool new_only, const std::
     // Loop through the addrman table until we find an appropriate entry
     double chance_factor = 1.0;
     while (1) {
-        // Pick a bucket, and an initial position in that bucket.
+        // Pick a bucket.
         int bucket = insecure_rand.randrange(bucket_count);
-        int initial_position = insecure_rand.randrange(ADDRMAN_BUCKET_SIZE);
 
-        // Iterate over the positions of that bucket, starting at the initial one,
-        // and looping around.
-        int i, position;
-        nid_type node_id;
-        for (i = 0; i < ADDRMAN_BUCKET_SIZE; ++i) {
-            position = (initial_position + i) % ADDRMAN_BUCKET_SIZE;
-            node_id = GetEntry(search_tried, bucket, position);
-            if (node_id != -1) {
-                if (!networks.empty()) {
-                    const auto it{mapInfo.find(node_id)};
-                    if (Assume(it != mapInfo.end()) && networks.contains(it->second.GetNetwork())) break;
-                } else {
-                    break;
-                }
-            }
+        // Copy the bucket's non-empty entries over to a temporary buffer, so we can pick a random one.
+        // This loop copies without applying network filtering; we do that lazily below in the
+        // sampling loop instead.
+        nid_type copied_bucket[ADDRMAN_BUCKET_SIZE];
+        int copied_count = 0;
+        for (int i = 0; i < ADDRMAN_BUCKET_SIZE; ++i) {
+            auto node_id = GetEntry(search_tried, bucket, i);
+            if (node_id != -1) copied_bucket[copied_count++] = node_id;
         }
-
-        // If the bucket is entirely empty, start over with a (likely) different one.
-        if (i == ADDRMAN_BUCKET_SIZE) continue;
+        // Then try to find a random non-filtered one among them.
+        nid_type node_id = -1;
+        while (copied_count > 0) {
+            // Pick a random entry.
+            auto pos = insecure_rand.randrange(copied_count);
+            node_id = copied_bucket[pos];
+            // No filtering is to be applied; we are good.
+            if (networks.empty()) break;
+            // Check the filter otherwise.
+            const auto it{mapInfo.find(node_id)};
+            if (Assume(it != mapInfo.end()) && networks.contains(it->second.GetNetwork())) break;
+            // If this entry was for the wrong network, remove it from the buffer and retry.
+            copied_bucket[pos] = copied_bucket[--copied_count];
+        }
+        // If the bucket is empty or only contains filtered entries, start over with a (likely)
+        // different one.
+        if (copied_count == 0) continue;
+        Assume(node_id != -1);
 
         // Find the entry to return.
         const auto it_found{mapInfo.find(node_id)};
@@ -909,7 +917,10 @@ void AddrManImpl::ResolveCollisions_()
             int tried_bucket_pos = info_new.GetBucketPosition(nKey, false, tried_bucket);
             if (!info_new.IsValid()) { // id_new may no longer map to a valid address
                 erase_collision = true;
-            } else if (vvTried[tried_bucket][tried_bucket_pos] != -1) { // The position in the tried bucket is not empty
+            } else {
+                // A pending tried collision implies that the destination tried slot
+                // remains occupied until we resolve it.
+                Assume(vvTried[tried_bucket][tried_bucket_pos] != -1);
 
                 // Get the to-be-evicted address that is being tested
                 nid_type id_old = vvTried[tried_bucket][tried_bucket_pos];
@@ -938,9 +949,6 @@ void AddrManImpl::ResolveCollisions_()
                     Good_(info_new, false, current_time);
                     erase_collision = true;
                 }
-            } else { // Collision is not actually a collision anymore
-                Good_(info_new, false, Now<NodeSeconds>());
-                erase_collision = true;
             }
         }
 
@@ -976,6 +984,7 @@ std::pair<CAddress, NodeSeconds> AddrManImpl::SelectTriedCollision_()
     int tried_bucket = newInfo.GetTriedBucket(nKey, m_netgroupman);
     int tried_bucket_pos = newInfo.GetBucketPosition(nKey, false, tried_bucket);
 
+    Assume(vvTried[tried_bucket][tried_bucket_pos] != -1);
     const AddrInfo& info_old = mapInfo[vvTried[tried_bucket][tried_bucket_pos]];
     return {info_old, info_old.m_last_try};
 }
@@ -1269,7 +1278,6 @@ void AddrMan::Unserialize(Stream& s_)
 // explicit instantiation
 template void AddrMan::Serialize(HashedSourceWriter<AutoFile>&) const;
 template void AddrMan::Serialize(DataStream&) const;
-template void AddrMan::Unserialize(AutoFile&);
 template void AddrMan::Unserialize(HashVerifier<AutoFile>&);
 template void AddrMan::Unserialize(DataStream&);
 template void AddrMan::Unserialize(HashVerifier<DataStream>&);

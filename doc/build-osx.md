@@ -16,7 +16,9 @@ macOS comes with a built-in Terminal located in:
 ### 1. Xcode Command Line Tools
 
 The Xcode Command Line Tools are a collection of build tools for macOS.
-These tools must be installed in order to build Bitcoin Core from source.
+Version 26.3 (or higher) of these tools must be
+[installed](https://developer.apple.com/documentation/xcode/installing-the-command-line-tools)
+in order to build Bitcoin Core from source.
 
 To install, run the following command from your terminal:
 
@@ -48,7 +50,7 @@ See [dependencies.md](dependencies.md) for a complete overview.
 To install, run the following from your terminal:
 
 ``` bash
-brew install cmake boost pkgconf libevent capnp
+brew install cmake boost capnp
 ```
 
 #### Wallet Dependencies
@@ -104,11 +106,11 @@ Otherwise, if you don't need QR encoding support, you can pass `-DWITH_QRENCODE=
 
 #### ZMQ Dependencies
 
-Support for ZMQ notifications requires the following dependency.
+Bitcoin Core can provide notifications via ZeroMQ. To compile ZMQ support, install the following dependency and pass `-DWITH_ZMQ=ON` when configuring.
 Skip if you do not need ZMQ functionality.
 
 ``` bash
-brew install zeromq
+brew install zeromq pkgconf
 ```
 
 Check out the [further configuration](#further-configuration) section for more information.
@@ -119,12 +121,7 @@ For more information on ZMQ, see: [zmq.md](zmq.md)
 
 #### Test Suite Dependencies
 
-There is an included test suite that is useful for testing code changes when developing.
-To run the test suite (recommended), you will need to have Python 3 installed:
-
-``` bash
-brew install python
-```
+See [`test/README.md`](/test/README.md#dependencies-and-prerequisites).
 
 ---
 
@@ -139,7 +136,7 @@ It is required that you have `python` and `zip` installed.
 
 There are many ways to configure Bitcoin Core, here are a few common examples:
 
-##### Wallet (only SQlite) and GUI Support:
+##### Wallet and GUI:
 
 This enables the GUI.
 If `sqlite` or `qt` are not installed, this will throw an error.
@@ -175,7 +172,7 @@ ctest --test-dir build  # Append "-j N" for N parallel tests.
 
 ### 3. Deploy (optional)
 
-You can also create a  `.zip` containing the `.app` bundle by running the following command:
+You can also create a `.zip` containing the `.app` bundle by running the following command:
 
 ``` bash
 cmake --build build --target deploy

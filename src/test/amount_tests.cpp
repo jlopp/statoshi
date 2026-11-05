@@ -28,6 +28,8 @@ BOOST_AUTO_TEST_CASE(GetFeeTest)
     // Must always return 0
     BOOST_CHECK_EQUAL(feeRate.GetFee(0), CAmount(0));
     BOOST_CHECK_EQUAL(feeRate.GetFee(1e5), CAmount(0));
+    BOOST_CHECK_EQUAL(CFeeRate(0, 0).GetFeePerK(), CAmount{0});
+    BOOST_CHECK_EQUAL(CFeeRate(CAmount{5}, 0).GetFeePerK(), CAmount{0});
 
     feeRate = CFeeRate(1000);
     // Must always just return the arg
@@ -81,13 +83,22 @@ BOOST_AUTO_TEST_CASE(GetFeeTest)
     // Previously, precision was limited to three decimal digits
     // due to only supporting satoshis per kB, so CFeeRate(CAmount(1), 1001) was equal to CFeeRate(0)
     // Since #32750, higher precision is maintained.
-    BOOST_CHECK(CFeeRate(CAmount(1), 1001) > CFeeRate(0) && CFeeRate(CAmount(1), 1001) < CFeeRate(1));
-    BOOST_CHECK(CFeeRate(CAmount(2), 1001) > CFeeRate(1) && CFeeRate(CAmount(2), 1001) < CFeeRate(2));
+    BOOST_CHECK(CFeeRate(CAmount(1), 1001) > CFeeRate(0));
+    BOOST_CHECK(CFeeRate(CAmount(1), 1001) < CFeeRate(1));
+    BOOST_CHECK(CFeeRate(CAmount(2), 1001) > CFeeRate(1));
+    BOOST_CHECK(CFeeRate(CAmount(2), 1001) < CFeeRate(2));
     // some more integer checks
-    BOOST_CHECK(CFeeRate(CAmount(26), 789) > CFeeRate(32) && CFeeRate(CAmount(26), 789) < CFeeRate(33));
-    BOOST_CHECK(CFeeRate(CAmount(27), 789) > CFeeRate(34) && CFeeRate(CAmount(27), 789) < CFeeRate(35));
+    BOOST_CHECK(CFeeRate(CAmount(26), 789) > CFeeRate(32));
+    BOOST_CHECK(CFeeRate(CAmount(26), 789) < CFeeRate(33));
+    BOOST_CHECK(CFeeRate(CAmount(27), 789) > CFeeRate(34));
+    BOOST_CHECK(CFeeRate(CAmount(27), 789) < CFeeRate(35));
     // Maximum size in bytes, should not crash
     CFeeRate(MAX_MONEY, std::numeric_limits<int32_t>::max()).GetFeePerK();
+
+    // Adding to a zero size fee rate should not crash
+    CFeeRate empty_rate(0, 0);
+    empty_rate += CFeeRate(1, 1);
+    BOOST_CHECK(empty_rate == CFeeRate(1, 1));
 
     // check multiplication operator
     // check multiplying by zero
@@ -140,6 +151,24 @@ BOOST_AUTO_TEST_CASE(ToStringTest)
     BOOST_CHECK_EQUAL(feeRate.ToString(), "0.00000001 BTC/kvB");
     BOOST_CHECK_EQUAL(feeRate.ToString(FeeRateFormat::BTC_KVB), "0.00000001 BTC/kvB");
     BOOST_CHECK_EQUAL(feeRate.ToString(FeeRateFormat::SAT_VB), "0.001 sat/vB");
+
+    feeRate = CFeeRate(0);
+    BOOST_CHECK_EQUAL(feeRate.ToString(), "0.00000000 BTC/kvB");
+    BOOST_CHECK_EQUAL(feeRate.ToString(FeeRateFormat::BTC_KVB), "0.00000000 BTC/kvB");
+    BOOST_CHECK_EQUAL(feeRate.ToString(FeeRateFormat::SAT_VB), "0.000 sat/vB");
+
+    feeRate = CFeeRate(-1);
+    BOOST_CHECK_EQUAL(feeRate.ToString(), "-0.00000001 BTC/kvB");
+    BOOST_CHECK_EQUAL(feeRate.ToString(FeeRateFormat::BTC_KVB), "-0.00000001 BTC/kvB");
+    BOOST_CHECK_EQUAL(feeRate.ToString(FeeRateFormat::SAT_VB), "-0.001 sat/vB");
+
+    feeRate = CFeeRate(-1000);
+    BOOST_CHECK_EQUAL(feeRate.ToString(), "-0.00001000 BTC/kvB");
+    BOOST_CHECK_EQUAL(feeRate.ToString(FeeRateFormat::SAT_VB), "-1.000 sat/vB");
+
+    feeRate = CFeeRate(-COIN - 1);
+    BOOST_CHECK_EQUAL(feeRate.ToString(), "-1.00000001 BTC/kvB");
+    BOOST_CHECK_EQUAL(feeRate.ToString(FeeRateFormat::SAT_VB), "-100000.001 sat/vB");
 }
 
 BOOST_AUTO_TEST_SUITE_END()

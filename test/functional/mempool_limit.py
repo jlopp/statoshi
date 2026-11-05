@@ -5,6 +5,7 @@
 """Test mempool limiting together/eviction with the wallet."""
 
 from decimal import Decimal
+import time
 
 from test_framework.mempool_util import (
     fill_mempool,
@@ -28,6 +29,7 @@ class MempoolLimitTest(BitcoinTestFramework):
     def set_test_params(self):
         self.setup_clean_chain = True
         self.num_nodes = 1
+        self.noban_tx_relay = True  # faster tx relay
         self.extra_args = [[
             "-maxmempool=5",
         ]]
@@ -205,7 +207,9 @@ class MempoolLimitTest(BitcoinTestFramework):
         self.log.info('Check that mempoolminfee is minrelaytxfee')
         assert_equal(node.getmempoolinfo()['minrelaytxfee'], node.getmempoolinfo()["mempoolminfee"])
 
+        node.setmocktime(int(time.time())-3600)
         fill_mempool(self, node)
+        node.setmocktime(0) # bump time forward so the rate limit buckets refresh and don't block broadcast
 
         # Deliberately try to create a tx with a fee less than the minimum mempool fee to assert that it does not get added to the mempool
         self.log.info('Create a mempool tx that will not pass mempoolminfee')

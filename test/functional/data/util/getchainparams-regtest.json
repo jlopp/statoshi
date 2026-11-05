@@ -1,0 +1,19 @@
+{
+  "chain": "regtest",
+  "test_chain": true,
+  "genesis": "0f9188f13cb7b2c71f2a335e3a4fc328bf5beb436012afca590b1a11466e2206",
+  "subsidy_halving_interval": 150,
+  "pow": {
+    "limit": "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+  },
+  "net": {
+    "default_port": 18444,
+    "magic": "fabfb5da",
+    "dns_seeds": [
+      "dummySeed.invalid."
+    ]
+  },
+  "addresses": {
+    "bech32_hrp": "bcrt"
+  }
+}

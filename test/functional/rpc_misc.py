@@ -11,9 +11,8 @@ from test_framework.util import (
     assert_equal,
     assert_greater_than,
     assert_greater_than_or_equal,
+    JSONRPCException,
 )
-
-from test_framework.authproxy import JSONRPCException
 
 import http
 import subprocess
@@ -28,6 +27,7 @@ class RpcMiscTest(BitcoinTestFramework):
 
         self.log.info("test CHECK_NONFATAL")
         msg_internal_bug = 'request.params[9].get_str() != "trigger_internal_bug"'
+        msg_failed_check = f"`{msg_internal_bug}` check failed"
         self.restart_node(0)  # Required to flush the chainstate
         try:
             node.echo(arg9="trigger_internal_bug")
@@ -42,7 +42,7 @@ class RpcMiscTest(BitcoinTestFramework):
             self.start_node(0)
         except JSONRPCException as e:
             assert_equal(e.error["code"], -1)
-            assert f"Internal bug detected: {msg_internal_bug}" in e.error["message"]
+            assert f"Internal bug detected: {msg_failed_check}" in e.error["message"]
 
         self.log.info("test max arg size")
         ARG_SZ_COMMON = 131071  # Common limit, used previously in the test framework, serves as a regression test
@@ -99,9 +99,8 @@ class RpcMiscTest(BitcoinTestFramework):
         # Without any indices running the RPC returns an empty object
         assert_equal(node.getindexinfo(), {})
 
-        # Restart the node with indices and wait for them to sync
+        # Restart the node with indices.
         self.restart_node(0, ["-txindex", "-blockfilterindex", "-coinstatsindex", "-txospenderindex"])
-        self.wait_until(lambda: all(i["synced"] for i in node.getindexinfo().values()))
 
         # Returns a list of all running indices by default
         values = {"synced": True, "best_block_height": 200}
@@ -120,6 +119,19 @@ class RpcMiscTest(BitcoinTestFramework):
 
         # Specifying an unknown index name returns an empty result
         assert_equal(node.getindexinfo("foo"), {})
+
+        # Test a deprecated category
+        all_result = node.logging(include=['all'])
+        assert_equal(True, all(enabled is True for category, enabled in all_result.items()))
+        assert_equal(True, 'libevent' not in all_result)
+        assert_equal(all_result, node.logging())
+        libevent_warning = "The logging category `libevent` is deprecated"
+        with self.nodes[0].assert_debug_log([libevent_warning]):
+            assert_equal(all_result, node.logging(include=['libevent']))
+        assert_equal(all_result, node.logging())
+        with self.nodes[0].assert_debug_log([libevent_warning]):
+            assert_equal(all_result, node.logging(exclude=['libevent']))
+        assert_equal(all_result, node.logging())
 
 
 if __name__ == '__main__':

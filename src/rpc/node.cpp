@@ -5,8 +5,10 @@
 
 #include <bitcoin-build-config.h> // IWYU pragma: keep
 
+#include <rpc/register.h> // IWYU pragma: associated
+
 #include <chainparams.h>
-#include <httpserver.h>
+#include <index/base.h>
 #include <index/blockfilterindex.h>
 #include <index/coinstatsindex.h>
 #include <index/txindex.h>
@@ -18,17 +20,30 @@
 #include <kernel/cs_main.h>
 #include <logging.h>
 #include <node/context.h>
+#include <rpc/protocol.h>
+#include <rpc/request.h>
 #include <rpc/server.h>
 #include <rpc/server_util.h>
 #include <rpc/util.h>
 #include <scheduler.h>
+#include <support/lockedpool.h>
+#include <sync.h>
 #include <tinyformat.h>
 #include <univalue.h>
-#include <util/any.h>
 #include <util/check.h>
 #include <util/time.h>
+#include <validationinterface.h>
 
 #include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <limits>
+#include <memory>
+#include <optional>
+#include <stdexcept>
+#include <string>
+#include <utility>
+#include <vector>
 #ifdef HAVE_MALLOC_INFO
 #include <malloc.h>
 #endif
@@ -61,12 +76,14 @@ static RPCMethod setmocktime()
     LOCK(cs_main);
 
     const int64_t time{request.params[0].getInt<int64_t>()};
-    constexpr int64_t max_time{Ticks<std::chrono::seconds>(std::chrono::nanoseconds::max())};
+    // block timestamps are uint32_t, so mocking time beyond that is meaningless for anything
+    // consensus-related and can cause integer overflow/truncation issues in time arithmetic.
+    constexpr int64_t max_time{std::numeric_limits<uint32_t>::max()};
     if (time < 0 || time > max_time) {
         throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Mocktime must be in the range [0, %s], not %s.", max_time, time));
     }
 
-    SetMockTime(time);
+    SetMockTime(std::chrono::seconds{time});
     const NodeContext& node_context{EnsureAnyNodeContext(request.context)};
     for (const auto& chain_client : node_context.chain_clients) {
         chain_client->setMockTime(time);
@@ -245,23 +262,15 @@ static RPCMethod logging()
                 },
                 RPCExamples{
                     HelpExampleCli("logging", "\"[\\\"all\\\"]\" \"[\\\"http\\\"]\"")
-            + HelpExampleRpc("logging", "[\"all\"], [\"libevent\"]")
+            + HelpExampleRpc("logging", "[\"all\"], [\"leveldb\"]")
                 },
         [](const RPCMethod& self, const JSONRPCRequest& request) -> UniValue
 {
-    BCLog::CategoryMask original_log_categories = LogInstance().GetCategoryMask();
     if (request.params[0].isArray()) {
         EnableOrDisableLogCategories(request.params[0], true);
     }
     if (request.params[1].isArray()) {
         EnableOrDisableLogCategories(request.params[1], false);
-    }
-    BCLog::CategoryMask updated_log_categories = LogInstance().GetCategoryMask();
-    BCLog::CategoryMask changed_log_categories = original_log_categories ^ updated_log_categories;
-
-    // Update libevent logging if BCLog::LIBEVENT has changed.
-    if (changed_log_categories & BCLog::LIBEVENT) {
-        UpdateHTTPServerLogging(LogInstance().WillLogCategory(BCLog::LIBEVENT));
     }
 
     UniValue result(UniValue::VOBJ);
@@ -383,7 +392,7 @@ static RPCMethod getindexinfo()
                     HelpExampleCli("getindexinfo", "")
                   + HelpExampleRpc("getindexinfo", "")
                   + HelpExampleCli("getindexinfo", "txindex")
-                  + HelpExampleRpc("getindexinfo", "txindex")
+                  + HelpExampleRpc("getindexinfo", R"("txindex")")
                 },
                 [](const RPCMethod& self, const JSONRPCRequest& request) -> UniValue
 {

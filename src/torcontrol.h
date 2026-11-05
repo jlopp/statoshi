@@ -21,15 +21,15 @@
 #include <thread>
 #include <vector>
 
-constexpr uint16_t DEFAULT_TOR_SOCKS_PORT{9050};
-constexpr int DEFAULT_TOR_CONTROL_PORT = 9051;
+inline constexpr uint16_t DEFAULT_TOR_SOCKS_PORT{9050};
+inline constexpr int DEFAULT_TOR_CONTROL_PORT = 9051;
 extern const std::string DEFAULT_TOR_CONTROL;
-static const bool DEFAULT_LISTEN_ONION = true;
+inline constexpr bool DEFAULT_LISTEN_ONION = true;
 
 /** Tor control reply code. Ref: https://spec.torproject.org/control-spec/replies.html */
-constexpr int TOR_REPLY_OK{250};
-constexpr int TOR_REPLY_UNRECOGNIZED{510};
-constexpr int TOR_REPLY_SYNTAX_ERROR{512}; //!< Syntax error in command argument
+inline constexpr int TOR_REPLY_OK{250};
+inline constexpr int TOR_REPLY_UNRECOGNIZED{510};
+inline constexpr int TOR_REPLY_SYNTAX_ERROR{512}; //!< Syntax error in command argument
 
 CService DefaultOnionServiceTarget(uint16_t port);
 
@@ -109,7 +109,7 @@ private:
     /** Response handlers */
     std::deque<ReplyHandlerCB> m_reply_handlers;
     /** Buffer for incoming data */
-    std::vector<std::byte> m_recv_buffer;
+    std::string m_recv_buffer;
     /** Process complete lines from the receive buffer */
     bool ProcessBuffer();
 };
@@ -151,7 +151,8 @@ private:
     std::vector<uint8_t> m_cookie;
     /** ClientNonce for SAFECOOKIE auth */
     std::vector<uint8_t> m_client_nonce;
-    /** Main control thread */
+
+    /// \anchor torcontrol
     void ThreadControl();
 
 public:

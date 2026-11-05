@@ -65,7 +65,6 @@ struct ScriptHash : public BaseHash<uint160>
 
     explicit ScriptHash(const uint160& hash) : BaseHash(hash) {}
     explicit ScriptHash(const CScript& script);
-    explicit ScriptHash(const CScriptID& script);
 };
 CScriptID ToScriptID(const ScriptHash& script_hash);
 
@@ -118,7 +117,7 @@ public:
 };
 
 /** Witness program for Pay-to-Anchor output script type */
-static const std::vector<unsigned char> ANCHOR_BYTES{0x4e, 0x73};
+inline const std::vector<unsigned char> ANCHOR_BYTES{0x4e, 0x73};
 
 struct PayToAnchor : public WitnessUnknown
 {

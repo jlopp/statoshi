@@ -4,20 +4,26 @@
 
 #include <addresstype.h>
 #include <bench/bench.h>
+#include <coins.h>
 #include <key.h>
 #include <policy/policy.h>
 #include <primitives/transaction.h>
 #include <pubkey.h>
 #include <script/interpreter.h>
 #include <script/script.h>
+#include <script/script_error.h>
+#include <script/sign.h>
+#include <script/signingprovider.h>
+#include <script/verify_flags.h>
 #include <span.h>
 #include <test/util/transaction_utils.h>
 #include <uint256.h>
+#include <util/check.h>
 #include <util/translation.h>
 
-#include <array>
-#include <cassert>
-#include <cstdint>
+#include <cstddef>
+#include <map>
+#include <span>
 #include <vector>
 
 enum class ScriptType {
@@ -77,7 +83,8 @@ static void VerifyScriptBench(benchmark::Bench& bench, ScriptType script_type)
             {txSpend.vin[0].prevout, Coin(txCredit.vout[0], /*nHeightIn=*/100, /*fCoinBaseIn=*/false)}
         };
         std::map<int, bilingual_str> input_errors;
-        assert(SignTransaction(txSpend, &keystore, coins, SIGHASH_ALL, input_errors));
+        bool complete = SignTransaction(txSpend, &keystore, coins, {.sighash_type = SIGHASH_ALL}, input_errors);
+        assert(complete);
         // Weak sanity check on witness data to ensure we produced the intended spending type
         assert(txSpend.vin[0].scriptWitness.stack.size() == ExpectedWitnessStackSize(script_type));
         txdata.Init(txSpend, /*spent_outputs=*/{txCredit.vout[0]});
@@ -115,7 +122,7 @@ static void VerifyNestedIfScript(benchmark::Bench& bench)
     for (int i = 0; i < 100; ++i) {
         script << OP_ENDIF;
     }
-    bench.unit("script").epochIterations(1)
+    bench.unit("script")
         .setup([&] { stack.clear(); })
         .run([&] {
             ScriptError error;

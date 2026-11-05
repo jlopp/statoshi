@@ -126,11 +126,11 @@ class NodeNetworkLimitedTest(BitcoinTestFramework):
         self.connect_nodes(0, 1)
         blocks = self.generate(self.nodes[1], 292, sync_fun=lambda: self.sync_blocks([self.nodes[0], self.nodes[1]]))
 
-        self.log.info("Make sure we can max retrieve block at tip-288.")
+        self.log.info("Retrieve a block at height 2 (tip-290).")
         node.send_getdata_for_block(blocks[1])  # last block in valid range
         node.wait_for_block(int(blocks[1], 16), timeout=3)
 
-        self.log.info("Requesting block at height 2 (tip-289) must fail (ignored).")
+        self.log.info("Requesting a block at height 1 (tip-291) must fail.")
         node.send_getdata_for_block(blocks[0])  # first block outside of the 288+2 limit
         node.wait_for_disconnect(timeout=5)
         self.nodes[0].disconnect_p2ps()
@@ -138,12 +138,27 @@ class NodeNetworkLimitedTest(BitcoinTestFramework):
         # connect unsynced node 2 with pruned NODE_NETWORK_LIMITED peer
         # because node 2 is in IBD and node 0 is a NODE_NETWORK_LIMITED peer, sync must not be possible
         self.connect_nodes(0, 2)
-        try:
-            self.sync_blocks([self.nodes[0], self.nodes[2]], timeout=5)
-        except Exception:
-            pass
-        # node2 must remain at height 0
-        assert_equal(self.nodes[2].getblockheader(self.nodes[2].getbestblockhash())['height'], 0)
+        pruned_node = self.nodes[0]
+        full_node = self.nodes[2]
+        # Wait for headers and a ping roundtrip so the block request decision
+        # has had time to run before checking the negative case.
+        limited_tip = pruned_node.getbestblockhash()
+        self.wait_until(lambda: any(
+            tip["hash"] == limited_tip and tip["status"] == "headers-only"
+            for tip in full_node.getchaintips()
+        ))
+        peers = full_node.getpeerinfo()
+        assert_equal(len(peers), 1)
+        received_pongs = peers[0]["bytesrecv_per_msg"].get("pong", 0)
+        full_node.ping()
+        self.wait_until(lambda: full_node.getpeerinfo()[0]["bytesrecv_per_msg"].get("pong", 0) > received_pongs)
+
+        self.log.info("Check the full node is still connected but did not request any blocks.")
+        peers = full_node.getpeerinfo()
+        assert_equal(len(peers), 1)
+        assert_equal(full_node.getblockcount(), 0)
+        assert_equal(peers[0]["inflight"], [])
+        assert_equal(peers[0]["bytessent_per_msg"].get("getdata", 0), 0)
 
         # now connect also to node 1 (non pruned)
         self.connect_nodes(1, 2)

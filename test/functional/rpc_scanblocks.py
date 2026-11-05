@@ -43,7 +43,6 @@ class ScanblocksTest(BitcoinTestFramework):
         # mine a block and assure that the mined blockhash is in the filterresult
         blockhash = self.generate(node, 1)[0]
         height = node.getblockheader(blockhash)['height']
-        self.wait_until(lambda: all(i["synced"] for i in node.getindexinfo().values()))
 
         out = node.scanblocks("start", [f"addr({addr_1})"])
         assert blockhash in out['relevant_blocks']
@@ -133,6 +132,9 @@ class ScanblocksTest(BitcoinTestFramework):
 
         # test invalid command
         assert_raises_rpc_error(-8, "Invalid action 'foobar'", node.scanblocks, "foobar")
+
+        # test that null scanobjects is rejected for start
+        assert_raises_rpc_error(-1, "scanobjects argument is required for the start action", node.scanblocks, "start", None)
 
 
 if __name__ == '__main__':

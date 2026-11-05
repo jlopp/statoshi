@@ -11,14 +11,19 @@ with missing and unparseable files.
 The tests are order-independent.
 
 """
+import hashlib
 import os
 import shutil
 
 from test_framework.test_framework import BitcoinTestFramework
-from test_framework.util import assert_equal
+from test_framework.util import (
+    assert_equal,
+    assert_raises_rpc_error,
+)
 
 ASMAP = 'src/test/data/asmap.raw' # path to unit test skeleton asmap
-VERSION = 'bafc9da308f45179443bd1d22325400ac9104f741522d003e3fac86700f68895'
+VERSION = '55dcec00c72b8a33a271dad20271e14cfbe5526aa1dc12e2559f30c376d85a35'
+EMBEDDED_VERSION = '03580ade8ec0036ad3d6a5a91602b995c89387f722d3fee58127219de6aafc12' # SHA256 of src/node/data/ip_asn.dat
 
 def expected_messages(filename):
     return [f'Opened asmap file "{filename}" (59 bytes) from disk',
@@ -40,6 +45,7 @@ class AsmapTest(BitcoinTestFramework):
         self.stop_node(0)
         with self.node.assert_debug_log(['Using /16 prefix for IP bucketing']):
             self.start_node(0)
+        assert "asmap_version" not in self.node.getnetworkinfo()
 
     def test_noasmap_arg(self):
         self.log.info('Test bitcoind with -noasmap arg passed')
@@ -54,6 +60,7 @@ class AsmapTest(BitcoinTestFramework):
         shutil.copyfile(self.asmap_raw, filename)
         with self.node.assert_debug_log(expected_messages(filename)):
             self.start_node(0, [f'-asmap={filename}'])
+        assert_equal(self.node.getnetworkinfo()["asmap_version"], VERSION)
         os.remove(filename)
 
     def test_asmap_with_relative_path(self):
@@ -71,8 +78,10 @@ class AsmapTest(BitcoinTestFramework):
             self.log.info('Test bitcoind -asmap (using embedded map data)')
             for arg in ['-asmap', '-asmap=1']:
                 self.stop_node(0)
-                with self.node.assert_debug_log(["Opened asmap data", "from embedded byte array"]):
+                with self.node.assert_debug_log(["Opened asmap data", "from embedded byte array",
+                                                 f"Using asmap version {EMBEDDED_VERSION} for IP bucketing"]):
                     self.start_node(0, [arg])
+                assert_equal(self.node.getnetworkinfo()["asmap_version"], EMBEDDED_VERSION)
         else:
             self.log.info('Test bitcoind -asmap (compiled without embedded map data)')
             for arg in ['-asmap', '-asmap=1']:
@@ -85,7 +94,9 @@ class AsmapTest(BitcoinTestFramework):
         self.stop_node(0)
         self.start_node(0, [f"-asmap={self.asmap_raw}", "-checkaddrman=1", "-test=addrman"])
         self.fill_addrman(node_id=0)
-        self.restart_node(0, [f"-asmap={self.asmap_raw}", "-checkaddrman=1", "-test=addrman"])
+        rebucket_msg = "Bucketing method was updated, re-bucketing addrman entries from disk"
+        with self.node.assert_debug_log(expected_msgs=[], unexpected_msgs=[rebucket_msg]):
+            self.restart_node(0, [f"-asmap={self.asmap_raw}", "-checkaddrman=1", "-test=addrman"])
         with self.node.assert_debug_log(
             expected_msgs=[
                 "CheckAddrman: new 2, tried 2, total 4 started",
@@ -93,6 +104,10 @@ class AsmapTest(BitcoinTestFramework):
             ]
         ):
             self.node.getnodeaddresses()  # getnodeaddresses re-runs the addrman checks
+
+        self.log.info("Test bitcoind restart without -asmap re-buckets the addrman entries")
+        with self.node.assert_debug_log(expected_msgs=[rebucket_msg]):
+            self.restart_node(0, ["-checkaddrman=1", "-test=addrman"])
 
     def test_asmap_with_missing_file(self):
         self.log.info('Test bitcoind -asmap with missing map file')
@@ -124,11 +139,35 @@ class AsmapTest(BitcoinTestFramework):
                     asns.append(asn)
         assert_equal(len(asns), 3)
 
+    def test_export_embedded_asmap(self):
+        self.log.info('Test exportasmap RPC')
+        export_path = os.path.join(self.datadir, "asmap.dat")
+
+        if not self.is_embedded_asmap_compiled():
+            assert_raises_rpc_error(-1, "No embedded ASMap data available", self.node.exportasmap, export_path)
+            return
+
+        # Relative paths are resolved against the datadir.
+        result = self.node.exportasmap("asmap.dat")
+        assert_equal(result["path"], export_path)
+
+        with open(export_path, 'rb') as f:
+            data = f.read()
+        assert_equal(result["bytes_written"], len(data))
+
+        assert_equal(hashlib.sha256(data).hexdigest(), EMBEDDED_VERSION)
+        assert_equal(result["file_hash"], EMBEDDED_VERSION)
+
+        os.remove(export_path)
+
     def run_test(self):
         self.node = self.nodes[0]
         self.datadir = self.node.chain_path
         base_dir = self.config["environment"]["SRCDIR"]
         self.asmap_raw = os.path.join(base_dir, ASMAP)
+        # The asmap version from the logs is the plain SHA256 of the file
+        with open(self.asmap_raw, 'rb') as f:
+            assert_equal(hashlib.sha256(f.read()).hexdigest(), VERSION)
 
         self.test_without_asmap_arg()
         self.test_noasmap_arg()
@@ -139,6 +178,7 @@ class AsmapTest(BitcoinTestFramework):
         self.test_asmap_with_missing_file()
         self.test_empty_asmap()
         self.test_asmap_health_check()
+        self.test_export_embedded_asmap()
 
 
 if __name__ == '__main__':

@@ -18,6 +18,7 @@
 #include <numeric>
 #include <ranges>
 #include <utility>
+#include <vector>
 
 namespace node {
 
@@ -184,12 +185,12 @@ struct AncestorFeerateComparator
         auto min_feerate = [](const MiniMinerMempoolEntry& e) -> FeeFrac {
             FeeFrac self_feerate(e.GetModifiedFee(), e.GetTxSize());
             FeeFrac ancestor_feerate(e.GetModFeesWithAncestors(), e.GetSizeWithAncestors());
-            return std::min(ancestor_feerate, self_feerate);
+            return std::min<ByRatioNegSize<FeeFrac>>(ancestor_feerate, self_feerate);
         };
         FeeFrac a_feerate{min_feerate(a->second)};
         FeeFrac b_feerate{min_feerate(b->second)};
         if (a_feerate != b_feerate) {
-            return a_feerate > b_feerate;
+            return ByRatioNegSize{a_feerate} > ByRatioNegSize{b_feerate};
         }
         // Use txid as tiebreaker for stable sorting
         return a->first < b->first;
@@ -221,9 +222,7 @@ void MiniMiner::DeleteAncestorPackage(const std::set<MockEntryMap::iterator, Ite
         // respective descendants exactly once.
         Assume(anc->second.GetModFeesWithAncestors() == 0);
         Assume(anc->second.GetSizeWithAncestors() == 0);
-        auto vec_it = std::find(m_entries.begin(), m_entries.end(), anc);
-        Assume(vec_it != m_entries.end());
-        m_entries.erase(vec_it);
+        Assume(std::erase(m_entries, anc) == 1);
         m_entries_by_txid.erase(anc);
     }
 }

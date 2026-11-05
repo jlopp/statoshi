@@ -9,9 +9,9 @@ function(create_test_config)
 
   macro(set_configure_variable var conf_var)
     if(${var})
-      set(${conf_var}_TRUE "")
+      set(${conf_var}_VALUE true)
     else()
-      set(${conf_var}_TRUE "#")
+      set(${conf_var}_VALUE false)
     endif()
   endmacro()
 
@@ -29,8 +29,10 @@ function(create_test_config)
   set_configure_variable(ENABLE_EXTERNAL_SIGNER ENABLE_EXTERNAL_SIGNER)
   set_configure_variable(WITH_USDT ENABLE_USDT_TRACEPOINTS)
   set_configure_variable(ENABLE_IPC ENABLE_IPC)
+  set_configure_variable(BUILD_GUI BUILD_GUI)
 
   configure_file(config.ini.in config.ini USE_SOURCE_PERMISSIONS @ONLY)
+  configure_file(with_sanitizer_env.py.in with_sanitizer_env.py USE_SOURCE_PERMISSIONS @ONLY)
 endfunction()
 
 create_test_config()
@@ -94,6 +96,8 @@ function(create_test_directory_links)
     endif()
     file(CREATE_LINK ${CMAKE_CURRENT_SOURCE_DIR}/${f} ${CMAKE_CURRENT_BINARY_DIR}/${f} COPY_ON_ERROR ${symlink})
   endforeach()
+
+  configure_file(${PROJECT_SOURCE_DIR}/src/test/data/siphash.json ${PROJECT_BINARY_DIR}/src/test/data/siphash.json COPYONLY)
 endfunction()
 
 create_test_directory_links()

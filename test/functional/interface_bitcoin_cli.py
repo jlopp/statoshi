@@ -6,7 +6,9 @@
 
 from decimal import Decimal
 import re
+import socket
 import subprocess
+import threading
 
 from test_framework.blocktools import COINBASE_MATURITY
 from test_framework.netutil import test_ipv6_local
@@ -115,6 +117,28 @@ class TestBitcoinCli(BitcoinTestFramework):
         expected = [["data=test"], 42]
         assert_equal(result, expected)
 
+    def test_empty_response_body(self):
+        self.log.info("Test that a response with Content-Length: 0 does not wait for the peer to close")
+
+        # A real node closes the connection, so only a raw socket can keep it open
+        listener = socket.socket()
+        listener.bind(('127.0.0.1', 0))
+        listener.listen(1)
+
+        def serve():
+            conn, _ = listener.accept()
+            with conn:
+                conn.sendall(b'HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\n\r\n')
+                # Keep the connection open so the client cannot rely on EOF
+                while conn.recv(4096):
+                    pass
+
+        threading.Thread(target=serve, daemon=True).start()
+        with listener:
+            assert_raises_process_error(
+                1, 'Authorization failed',
+                self.nodes[0].cli(f'-rpcport={listener.getsockname()[1]}', '-rpcclienttimeout=10').echo)
+
     def run_test(self):
         """Main test logic"""
         self.test_echojson_positional_equals()
@@ -145,8 +169,13 @@ class TestBitcoinCli(BitcoinTestFramework):
         assert_equal(['foo', 'bar'], self.nodes[0].cli(f'-rpcuser={user}', '-stdin', '-stdinrpcpass', input=f'{password}\nfoo\nbar').echo())
         assert_raises_process_error(1, 'Incorrect rpcuser or rpcpassword were specified', self.nodes[0].cli(f'-rpcuser={user}', '-stdin', '-stdinrpcpass', input='foo').echo)
 
+        self.log.info("Test -rpcclienttimeout=0 (no timeout)")
+        assert_equal(BLOCKS, self.nodes[0].cli('-rpcclienttimeout=0').getblockcount())
+
         self.log.info("Test connecting to a non-existing server")
         assert_raises_process_error(1, "Could not connect to the server", self.nodes[0].cli('-rpcport=1').echo)
+
+        self.test_empty_response_body()
 
         self.log.info("Test handling of invalid ports in rpcconnect")
         assert_raises_process_error(1, "Invalid port provided in -rpcconnect: 127.0.0.1:notaport", self.nodes[0].cli("-rpcconnect=127.0.0.1:notaport").echo)
@@ -177,9 +206,9 @@ class TestBitcoinCli(BitcoinTestFramework):
         conf_rpcport = "rpcport=" + str(node_rpc_port)
         self.nodes[0].replace_in_config([(conf_rpcport, "#" + conf_rpcport)])
         # prefer rpcport over rpcconnect
-        assert_raises_process_error(1, "Could not connect to the server 127.0.0.1:1", self.nodes[0].cli(f"-rpcconnect=127.0.0.1:{node_rpc_port}", "-rpcport=1").echo)
+        assert_raises_process_error(1, "Error while attempting to communicate with server 127.0.0.1:1 (Could not connect to the server)", self.nodes[0].cli(f"-rpcconnect=127.0.0.1:{node_rpc_port}", "-rpcport=1").echo)
         if have_ipv6:
-            assert_raises_process_error(1, "Could not connect to the server ::1:1", self.nodes[0].cli(f"-rpcconnect=[::1]:{node_rpc_port}", "-rpcport=1").echo)
+            assert_raises_process_error(1, "Error while attempting to communicate with server ::1:1 (Could not connect to the server)", self.nodes[0].cli(f"-rpcconnect=[::1]:{node_rpc_port}", "-rpcport=1").echo)
 
         assert_equal(BLOCKS, self.nodes[0].cli("-rpcconnect=127.0.0.1:18999", f'-rpcport={node_rpc_port}').getblockcount())
         if have_ipv6:
@@ -445,11 +474,11 @@ class TestBitcoinCli(BitcoinTestFramework):
         self.nodes[0].wait_for_rpc_connection()
         assert_equal(blocks, BLOCKS + 25)
 
-        self.log.info("Test -rpcwait option waits at most -rpcwaittimeout seconds for startup")
+        self.log.info("Test -rpcwait option waits at least -rpcwaittimeout seconds for startup")
         self.stop_node(0)  # stop the node so we time out
-        start_time = time.time()
-        assert_raises_process_error(1, "Could not connect to the server", self.nodes[0].cli('-rpcwait', '-rpcwaittimeout=5').echo)
-        assert_greater_than_or_equal(time.time(), start_time + 5)
+        start_time = time.monotonic()  # match bitcoin-cli steady_clock so the floor measures real wait
+        assert_raises_process_error(1, "Could not connect to the server", self.nodes[0].cli('-rpcwait', '-rpcwaittimeout=1').echo)
+        assert_greater_than_or_equal(time.monotonic() - start_time, 1)
 
         self.log.info("Test that only one of -addrinfo, -generate, -getinfo, -netinfo may be specified at a time")
         assert_raises_process_error(1, "Only one of -getinfo, -netinfo may be specified", self.nodes[0].cli('-getinfo', '-netinfo').send_cli)
@@ -458,7 +487,8 @@ class TestBitcoinCli(BitcoinTestFramework):
             # This tests behavior when ENABLE_IPC is off. When it is on,
             # behavior is checked by the interface_ipc_cli.py test.
             self.log.info("Test bitcoin-cli -ipcconnect triggers error if not built with IPC support")
-            args = [self.binary_paths.bitcoincli, "-ipcconnect=unix", "-getinfo"]
+            # node.cli.options includes -rpcconnect which can't be combined with -ipcconnect, so pass just -datadir directly to keep bitcoin-cli on the test's bitcoin.conf
+            args = self.nodes[0].binaries.valgrind_cmd + [self.nodes[0].binaries.paths.bitcoincli, f"-datadir={self.nodes[0].datadir_path}", "-ipcconnect=unix", "-getinfo"]
             result = subprocess.run(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
             assert_equal(result.stdout, "error: bitcoin-cli was not built with IPC support\n")
             assert_equal(result.stderr, None)

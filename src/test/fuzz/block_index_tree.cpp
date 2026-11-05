@@ -17,6 +17,7 @@
 #include <validation.h>
 
 #include <ranges>
+#include <unordered_map>
 #include <vector>
 
 const TestingSetup* g_setup;
@@ -42,7 +43,7 @@ void initialize_block_index_tree()
 FUZZ_TARGET(block_index_tree, .init = initialize_block_index_tree)
 {
     FuzzedDataProvider fuzzed_data_provider(buffer.data(), buffer.size());
-    NodeClockContext clock_ctx{ConsumeTime(fuzzed_data_provider)};
+    FakeNodeClock clock{ConsumeTime(fuzzed_data_provider)};
     auto& chainman = static_cast<TestChainstateManager&>(*g_setup->m_node.chainman);
     auto& blockman = static_cast<TestBlockManager&>(chainman.m_blockman);
     CBlockIndex* genesis = chainman.ActiveChainstate().m_chain[0];
@@ -53,8 +54,7 @@ FUZZ_TARGET(block_index_tree, .init = initialize_block_index_tree)
 
     std::vector<CBlockIndex*> pruned_blocks;
 
-    LIMITED_WHILE(fuzzed_data_provider.ConsumeBool(), 1000)
-    {
+    LIMITED_WHILE (fuzzed_data_provider.ConsumeBool(), 1000) {
         if (abort_run) break;
         CallOneOf(
             fuzzed_data_provider,
@@ -102,7 +102,7 @@ FUZZ_TARGET(block_index_tree, .init = initialize_block_index_tree)
                     assert(best_tip);                   // Should at least return current tip
                     if (best_tip == chain.Tip()) break; // Nothing to do
                     // Rewind chain to forking point
-                    const CBlockIndex* fork = chain.FindFork(best_tip);
+                    const CBlockIndex* fork = chain.FindFork(*best_tip);
                     // If we can't go back to the fork point due to pruned data, abort this run. In reality, a pruned node would also currently just crash in this scenario.
                     // This is very unlikely to happen due to the minimum pruning threshold of 550MiB.
                     CBlockIndex* it = chain.Tip();
@@ -214,13 +214,7 @@ FUZZ_TARGET(block_index_tree, .init = initialize_block_index_tree)
         blockman.CleanupForFuzzing();
         // Delete all blocks but Genesis from block index
         uint256 genesis_hash = genesis->GetBlockHash();
-        for (auto it = blockman.m_block_index.begin(); it != blockman.m_block_index.end();) {
-            if (it->first != genesis_hash) {
-                it = blockman.m_block_index.erase(it);
-            } else {
-                ++it;
-            }
-        }
+        std::erase_if(blockman.m_block_index, [&](const auto& entry) { return entry.first != genesis_hash; });
         chainman.ActiveChainstate().TryAddBlockIndexCandidate(genesis);
         assert(blockman.m_block_index.size() == 1);
         assert(chainman.ActiveChainstate().setBlockIndexCandidates.size() == 1);

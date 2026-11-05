@@ -1,8 +1,8 @@
 package=boost
-$(package)_version = 1.90.0
+$(package)_version = 1.92.0
 $(package)_download_path = https://github.com/boostorg/boost/releases/download/boost-$($(package)_version)
 $(package)_file_name = boost-$($(package)_version)-cmake.tar.gz
-$(package)_sha256_hash = 913ca43d49e93d1b158c9862009add1518a4c665e7853b349a6492d158b036d4
+$(package)_sha256_hash = f51707c27359a0df0cac1beada86de31bb5eed5e8285592dadec384df99c2984
 $(package)_build_subdir = build
 
 define $(package)_set_vars

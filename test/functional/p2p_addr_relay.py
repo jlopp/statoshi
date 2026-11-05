@@ -185,14 +185,6 @@ class AddrTest(BitcoinTestFramework):
         inbound_peer.send_and_ping(msg_addr())
 
         full_outbound_peer = self.nodes[0].add_outbound_p2p_connection(AddrReceiver(), p2p_idx=0, connection_type="outbound-full-relay")
-        msg = self.setup_addr_msg(2)
-        self.send_addr_msg(full_outbound_peer, msg, [inbound_peer])
-        self.log.info('Check that the first addr message received from an outbound peer is not relayed')
-        # Currently, there is a flag that prevents the first addr message received
-        # from a new outbound peer to be relayed to others. Originally meant to prevent
-        # large GETADDR responses from being relayed, it now typically affects the self-announcement
-        # of the outbound peer which is often sent before the GETADDR response.
-        assert_equal(inbound_peer.num_ipv4_received, 0)
 
         self.log.info('Check that subsequent addr messages sent from an outbound peer are relayed')
         msg2 = self.setup_addr_msg(2)
@@ -280,11 +272,16 @@ class AddrTest(BitcoinTestFramework):
         tip_header = from_hex(CBlockHeader(), self.nodes[0].getblockheader(self.nodes[0].getbestblockhash(), False))
         full_outbound_peer.send_and_ping(msg_headers([tip_header]))
 
-        self.log.info('Check that we do not send a getaddr message to a block-relay-only or inbound peer')
+        self.log.info('Check that we do not send a getaddr message to a block-relay-only, feeler or inbound peer')
         block_relay_peer = self.nodes[0].add_outbound_p2p_connection(AddrReceiver(), p2p_idx=1, connection_type="block-relay-only")
         block_relay_peer.sync_with_ping()
         assert_equal(block_relay_peer.getaddr_received(), False)
         block_relay_peer.send_and_ping(msg_headers([tip_header]))
+
+        feeler_peer = self.nodes[0].add_outbound_p2p_connection(AddrReceiver(), p2p_idx=2, connection_type="feeler")
+        # bitcoind closes feeler connections as soon as it receives a version message
+        assert_equal(feeler_peer.is_connected, False)
+        assert_equal(feeler_peer.getaddr_received(), False)
 
         inbound_peer = self.nodes[0].add_p2p_connection(AddrReceiver(send_getaddr=False))
         inbound_peer.sync_with_ping()

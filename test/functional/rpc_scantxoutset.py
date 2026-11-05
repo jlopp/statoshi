@@ -36,9 +36,9 @@ class ScantxoutsetTest(BitcoinTestFramework):
         assert_equal(sum(u["coinbase"] for u in self.nodes[0].scantxoutset("start", [self.wallet.get_descriptor()])["unspents"]), 49)
 
         self.log.info("Create UTXOs...")
-        pubk1, spk_P2SH_SEGWIT, addr_P2SH_SEGWIT = getnewdestination("p2sh-segwit")
-        pubk2, spk_LEGACY, addr_LEGACY = getnewdestination("legacy")
-        pubk3, spk_BECH32, addr_BECH32 = getnewdestination("bech32")
+        (_, pubk1), spk_P2SH_SEGWIT, addr_P2SH_SEGWIT = getnewdestination("p2sh-segwit")
+        (_, pubk2), spk_LEGACY, addr_LEGACY = getnewdestination("legacy")
+        (_, pubk3), spk_BECH32, addr_BECH32 = getnewdestination("bech32")
         self.sendtodestination(spk_P2SH_SEGWIT, 0.001)
         self.sendtodestination(spk_LEGACY, 0.002)
         self.sendtodestination(spk_BECH32, 0.004)
@@ -80,6 +80,8 @@ class ScantxoutsetTest(BitcoinTestFramework):
         assert_raises_rpc_error(-8, "End of range is too high", self.nodes[0].scantxoutset, "start", [{"desc": "desc", "range": [(2 << 31 + 1) - 1000000, (2 << 31 + 1)]}])
         assert_raises_rpc_error(-8, "Range specified as [begin,end] must not have begin after end", self.nodes[0].scantxoutset, "start", [{"desc": "desc", "range": [2, 1]}])
         assert_raises_rpc_error(-8, "Range is too large", self.nodes[0].scantxoutset, "start", [{"desc": "desc", "range": [0, 1000001]}])
+        range_end = 2**31 - 1
+        assert_equal(self.nodes[0].scantxoutset("start", [{"desc": "combo(tprv8ZgxMBicQKsPd7Uf69XL1XwhmjHopUGep8GuEiJDZmbQz6o58LninorQAfcKZWARbtRtfnLcJ5MQ2AtHcQJCCRUcMRvmDUjyEmNUWwx8UbK/0h/0'/*)", "range": [range_end, range_end]}])['success'], True)
 
         self.log.info("Test extended key derivation.")
         # Run various scans, and verify that the sum of the amounts of the matches corresponds to the expected subset.
@@ -134,6 +136,7 @@ class ScantxoutsetTest(BitcoinTestFramework):
 
         # Check that second arg is needed for start
         assert_raises_rpc_error(-1, "scanobjects argument is required for the start action", self.nodes[0].scantxoutset, "start")
+        assert_raises_rpc_error(-1, "scanobjects argument is required for the start action", self.nodes[0].scantxoutset, "start", None)
 
         # Check that invalid command give error
         assert_raises_rpc_error(-8, "Invalid action 'invalid_command'", self.nodes[0].scantxoutset, "invalid_command")

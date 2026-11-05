@@ -2,16 +2,17 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include <wallet/feebumper.h>
+
+#include <coins.h>
 #include <common/system.h>
 #include <consensus/validation.h>
 #include <interfaces/chain.h>
-#include <policy/fees/block_policy_estimator.h>
 #include <policy/policy.h>
 #include <util/moneystr.h>
 #include <util/rbf.h>
 #include <util/translation.h>
 #include <wallet/coincontrol.h>
-#include <wallet/feebumper.h>
 #include <wallet/fees.h>
 #include <wallet/receive.h>
 #include <wallet/spend.h>
@@ -22,7 +23,7 @@ namespace wallet {
 //! mined, or conflicts with a mined transaction. Return a feebumper::Result.
 static feebumper::Result PreconditionChecks(const CWallet& wallet, const CWalletTx& wtx, bool require_mine, std::vector<bilingual_str>& errors) EXCLUSIVE_LOCKS_REQUIRED(wallet.cs_wallet)
 {
-    if (wallet.HasWalletSpend(wtx.tx)) {
+    if (wallet.HasWalletSpend(wtx.GetTx())) {
         errors.emplace_back(Untranslated("Transaction has descendants in the wallet"));
         return feebumper::Result::INVALID_PARAMETER;
     }
@@ -39,15 +40,15 @@ static feebumper::Result PreconditionChecks(const CWallet& wallet, const CWallet
         return feebumper::Result::WALLET_ERROR;
     }
 
-    if (wtx.mapValue.contains("replaced_by_txid")) {
-        errors.push_back(Untranslated(strprintf("Cannot bump transaction %s which was already bumped by transaction %s", wtx.GetHash().ToString(), wtx.mapValue.at("replaced_by_txid"))));
+    if (wtx.m_replaced_by_txid) {
+        errors.push_back(Untranslated(strprintf("Cannot bump transaction %s which was already bumped by transaction %s", wtx.GetHash().ToString(), wtx.m_replaced_by_txid->ToString())));
         return feebumper::Result::WALLET_ERROR;
     }
 
     if (require_mine) {
         // check that original tx consists entirely of our inputs
         // if not, we can't bump the fee, because the wallet has no way of knowing the value of the other inputs (thus the fee)
-        if (!AllInputsMine(wallet, *wtx.tx)) {
+        if (!AllInputsMine(wallet, *wtx.GetTx())) {
             errors.emplace_back(Untranslated("Transaction contains inputs that don't belong to this wallet"));
             return feebumper::Result::WALLET_ERROR;
         }
@@ -105,8 +106,15 @@ static feebumper::Result CheckFeeRate(const CWallet& wallet, const CMutableTrans
         return feebumper::Result::INVALID_PARAMETER;
     }
 
+    const CFeeRate new_feerate{new_total_fee, static_cast<int32_t>(maxTxSize)};
+    if (new_feerate > wallet.m_max_tx_fee_rate) {
+        errors.push_back(Untranslated(strprintf("New fee rate %s %s/kvB is too high (cannot be higher than -maxfeerate %s %s/kvB)",
+                                                FormatMoney(new_feerate.GetFeePerK()), CURRENCY_UNIT, FormatMoney(wallet.m_max_tx_fee_rate.GetFeePerK()), CURRENCY_UNIT)));
+        return feebumper::Result::WALLET_ERROR;
+    }
+
     // Check that in all cases the new fee doesn't violate maxTxFee
-    const CAmount max_tx_fee = wallet.m_default_max_tx_fee;
+    const CAmount max_tx_fee = wallet.m_max_tx_fee;
     if (new_total_fee > max_tx_fee) {
         errors.push_back(Untranslated(strprintf("Specified or calculated fee %s is too high (cannot be higher than -maxtxfee %s)",
             FormatMoney(new_total_fee), FormatMoney(max_tx_fee))));
@@ -121,7 +129,7 @@ static CFeeRate EstimateFeeRate(const CWallet& wallet, const CWalletTx& wtx, con
     // Get the fee rate of the original transaction. This is calculated from
     // the tx fee/vsize, so it may have been rounded down. Add 1 satoshi to the
     // result.
-    int64_t txSize = GetVirtualTransactionSize(*(wtx.tx));
+    int64_t txSize = GetVirtualTransactionSize(*(wtx.GetTx()));
     CFeeRate feerate(old_fee, txSize);
     feerate += CFeeRate(1);
 
@@ -137,7 +145,7 @@ static CFeeRate EstimateFeeRate(const CWallet& wallet, const CWalletTx& wtx, con
     feerate += std::max(node_incremental_relay_fee, wallet_incremental_relay_fee);
 
     // Fee rate must also be at least the wallet's GetMinimumFeeRate
-    CFeeRate min_feerate(GetMinimumFeeRate(wallet, coin_control, /*feeCalc=*/nullptr));
+    CFeeRate min_feerate(GetMinimumFeeRate(wallet, coin_control).fee_rate);
 
     // Set the required fee rate for the replacement transaction in coin control.
     return std::max(feerate, min_feerate);
@@ -176,9 +184,10 @@ Result CreateRateBumpTransaction(CWallet& wallet, const Txid& txid, const CCoinC
         return Result::INVALID_ADDRESS_OR_KEY;
     }
     const CWalletTx& wtx = it->second;
+    const CTransactionRef& tx = wtx.GetTx();
 
     // Make sure that original_change_index is valid
-    if (original_change_index.has_value() && original_change_index.value() >= wtx.tx->vout.size()) {
+    if (original_change_index.has_value() && original_change_index.value() >= tx->vout.size()) {
         errors.emplace_back(Untranslated("Change position is out of range"));
         return Result::INVALID_PARAMETER;
     }
@@ -188,11 +197,11 @@ Result CreateRateBumpTransaction(CWallet& wallet, const Txid& txid, const CCoinC
     std::map<COutPoint, Coin> coins;
     CAmount input_value = 0;
     std::vector<CTxOut> spent_outputs;
-    for (const CTxIn& txin : wtx.tx->vin) {
+    for (const CTxIn& txin : tx->vin) {
         coins[txin.prevout]; // Create empty map entry keyed by prevout.
     }
     wallet.chain().findCoins(coins);
-    for (const CTxIn& txin : wtx.tx->vin) {
+    for (const CTxIn& txin : tx->vin) {
         const Coin& coin = coins.at(txin.prevout);
         if (coin.out.IsNull()) {
             errors.emplace_back(Untranslated(strprintf("%s:%u is already spent", txin.prevout.hash.GetHex(), txin.prevout.n)));
@@ -208,9 +217,9 @@ Result CreateRateBumpTransaction(CWallet& wallet, const Txid& txid, const CCoinC
 
     // Figure out if we need to compute the input weight, and do so if necessary
     PrecomputedTransactionData txdata;
-    txdata.Init(*wtx.tx, std::move(spent_outputs), /* force=*/ true);
-    for (unsigned int i = 0; i < wtx.tx->vin.size(); ++i) {
-        const CTxIn& txin = wtx.tx->vin.at(i);
+    txdata.Init(*tx, std::move(spent_outputs), /* force=*/ true);
+    for (unsigned int i = 0; i < tx->vin.size(); ++i) {
+        const CTxIn& txin = tx->vin.at(i);
         const Coin& coin = coins.at(txin.prevout);
 
         if (new_coin_control.IsExternalSelected(txin.prevout)) {
@@ -221,7 +230,7 @@ Result CreateRateBumpTransaction(CWallet& wallet, const Txid& txid, const CCoinC
             // In order to do this, we verify the script with a special SignatureChecker which
             // will observe the signatures verified and record their sizes.
             SignatureWeights weights;
-            TransactionSignatureChecker tx_checker(wtx.tx.get(), i, coin.out.nValue, txdata, MissingDataBehavior::FAIL);
+            TransactionSignatureChecker tx_checker(tx.get(), i, coin.out.nValue, txdata, MissingDataBehavior::FAIL);
             SignatureWeightChecker size_checker(weights, tx_checker);
             VerifyScript(txin.scriptSig, coin.out.scriptPubKey, &txin.scriptWitness, STANDARD_SCRIPT_VERIFY_FLAGS, size_checker);
             // Add the difference between max and current to input_weight so that it represents the largest the input could be
@@ -237,7 +246,7 @@ Result CreateRateBumpTransaction(CWallet& wallet, const Txid& txid, const CCoinC
 
     // Calculate the old output amount.
     CAmount output_value = 0;
-    for (const auto& old_output : wtx.tx->vout) {
+    for (const auto& old_output : tx->vout) {
         output_value += old_output.nValue;
     }
 
@@ -248,7 +257,7 @@ Result CreateRateBumpTransaction(CWallet& wallet, const Txid& txid, const CCoinC
     // outputs with its contents, otherwise use original outputs.
     std::vector<CRecipient> recipients;
     CAmount new_outputs_value = 0;
-    const auto& txouts = outputs.empty() ? wtx.tx->vout : outputs;
+    const auto& txouts = outputs.empty() ? tx->vout : outputs;
     for (size_t i = 0; i < txouts.size(); ++i) {
         const CTxOut& output = txouts.at(i);
         CTxDestination dest;
@@ -280,7 +289,7 @@ Result CreateRateBumpTransaction(CWallet& wallet, const Txid& txid, const CCoinC
         // The user provided a feeRate argument.
         // We calculate this here to avoid compiler warning on the cs_wallet lock
         // We need to make a temporary transaction with no input witnesses as the dummy signer expects them to be empty for external inputs
-        CMutableTransaction temp_mtx{*wtx.tx};
+        CMutableTransaction temp_mtx{*tx};
         for (auto& txin : temp_mtx.vin) {
             txin.scriptSig.clear();
             txin.scriptWitness.SetNull();
@@ -303,7 +312,7 @@ Result CreateRateBumpTransaction(CWallet& wallet, const Txid& txid, const CCoinC
     // A2 and A3 where A2 and A3 don't conflict (or alternatively bump A to A2 and A2
     // to A3 where A and A3 don't conflict). If both later get confirmed then the sender
     // has accidentally double paid.
-    for (const auto& inputs : wtx.tx->vin) {
+    for (const auto& inputs : tx->vin) {
         new_coin_control.Select(COutPoint(inputs.prevout));
     }
     new_coin_control.m_allow_other_inputs = true;
@@ -337,8 +346,8 @@ bool SignTransaction(CWallet& wallet, CMutableTransaction& mtx) {
         // First fill transaction with our data without signing,
         // so external signers are not asked to sign more than once.
         bool complete;
-        wallet.FillPSBT(psbtx, complete, std::nullopt, /*sign=*/false, /*bip32derivs=*/true);
-        auto err{wallet.FillPSBT(psbtx, complete, std::nullopt, /*sign=*/true, /*bip32derivs=*/false)};
+        wallet.FillPSBT(psbtx, {.sign = false, .bip32_derivs = true}, complete);
+        auto err{wallet.FillPSBT(psbtx, {.sign = true, .bip32_derivs = false}, complete)};
         if (err) return false;
         complete = FinalizeAndExtractPSBT(psbtx, mtx);
         return complete;
@@ -368,10 +377,7 @@ Result CommitTransaction(CWallet& wallet, const Txid& txid, CMutableTransaction&
 
     // commit/broadcast the tx
     CTransactionRef tx = MakeTransactionRef(std::move(mtx));
-    mapValue_t mapValue = oldWtx.mapValue;
-    mapValue["replaces_txid"] = oldWtx.GetHash().ToString();
-
-    wallet.CommitTransaction(tx, std::move(mapValue), oldWtx.vOrderForm);
+    wallet.CommitTransaction(tx, oldWtx.GetHash(), oldWtx.m_comment, oldWtx.m_comment_to, oldWtx.m_messages, oldWtx.m_payment_requests);
 
     // mark the original tx as bumped
     bumped_txid = tx->GetHash();

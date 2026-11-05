@@ -8,6 +8,7 @@
 #include <consensus/consensus.h>
 #include <consensus/validation.h>
 #include <kernel/coinstats.h>
+#include <node/block_template_manager.h>
 #include <node/blockstorage.h>
 #include <node/utxo_snapshot.h>
 #include <primitives/block.h>
@@ -19,6 +20,7 @@
 #include <test/fuzz/FuzzedDataProvider.h>
 #include <test/fuzz/fuzz.h>
 #include <test/fuzz/util.h>
+#include <test/fuzz/util/reachability.h>
 #include <test/util/mining.h>
 #include <test/util/setup_common.h>
 #include <test/util/time.h>
@@ -42,6 +44,7 @@ namespace {
 
 const std::vector<std::shared_ptr<CBlock>>* g_chain;
 TestingSetup* g_setup{nullptr};
+constexpr ReachabilityGoal UTXO_SNAPSHOT_ACTIVATION_SUCCEEDS{"UTXO snapshot activation succeeds"};
 
 /** Sanity check the assumeutxo values hardcoded in chainparams for the fuzz target. */
 void sanity_check_snapshot()
@@ -59,7 +62,7 @@ void sanity_check_snapshot()
     LOCK(cs_main);
     auto& cs{node.chainman->ActiveChainstate()};
     cs.ForceFlushStateToDisk(/*wipe_cache=*/false);
-    const auto stats{*Assert(kernel::ComputeUTXOStats(kernel::CoinStatsHashType::HASH_SERIALIZED, &cs.CoinsDB(), node.chainman->m_blockman))};
+    const auto stats{*Assert(kernel::ComputeUTXOStats(kernel::CoinStatsHashType::HASH_SERIALIZED, cs.CoinsDB(), node.chainman->m_blockman))};
     const auto cp_au_data{*Assert(node.chainman->GetParams().AssumeutxoForHeight(2 * COINBASE_MATURITY))};
     Assert(stats.nHeight == cp_au_data.height);
     Assert(stats.nTransactions + 1 == cp_au_data.m_chain_tx_count); // +1 for the genesis tx.
@@ -70,10 +73,13 @@ void sanity_check_snapshot()
 template <bool INVALID>
 void initialize_chain()
 {
+    if constexpr (!INVALID) {
+        RegisterReachabilityGoal(UTXO_SNAPSHOT_ACTIVATION_SUCCEEDS);
+    }
     const auto params{CreateChainParams(ArgsManager{}, ChainType::REGTEST)};
     static const auto chain{CreateBlockChain(2 * COINBASE_MATURITY, *params)};
     g_chain = &chain;
-    SetMockTime(chain.back()->Time());
+    FakeNodeClock node_clock{chain.back()->Time()};
 
     // Make sure we can generate a valid snapshot.
     sanity_check_snapshot();
@@ -104,7 +110,7 @@ void utxo_snapshot_fuzz(FuzzBufferType buffer)
 {
     SeedRandomStateForTest(SeedRand::ZEROS);
     FuzzedDataProvider fuzzed_data_provider(buffer.data(), buffer.size());
-    NodeClockContext clock_ctx{ConsumeTime(fuzzed_data_provider, /*min=*/1296688602)}; // regtest genesis block timestamp
+    FakeNodeClock node_clock{ConsumeTime(fuzzed_data_provider, /*min=*/1296688602)}; // regtest genesis block timestamp
     auto& setup{*g_setup};
     bool dirty_chainman{false}; // Reuse the global chainman, but reset it when it is dirty
     auto& chainman{*setup.m_node.chainman};
@@ -181,7 +187,8 @@ void utxo_snapshot_fuzz(FuzzBufferType buffer)
         }
     }
 
-    if (ActivateFuzzedSnapshot()) {
+    const bool snapshot_activated{ActivateFuzzedSnapshot()};
+    if (snapshot_activated) {
         LOCK(::cs_main);
         Assert(!chainman.ActiveChainstate().m_from_snapshot_blockhash->IsNull());
         const auto& coinscache{chainman.ActiveChainstate().CoinsTip()};
@@ -211,9 +218,14 @@ void utxo_snapshot_fuzz(FuzzBufferType buffer)
         Assert(!dirty_chainman);
     }
     if (dirty_chainman) {
+        setup.m_node.block_template_manager.reset();
         setup.m_node.chainman.reset();
         setup.m_make_chainman();
         setup.LoadVerifyActivateChainstate();
+        setup.CreateBlockTemplateManager();
+    }
+    if constexpr (!INVALID) {
+        ObserveReachabilityGoal(snapshot_activated, UTXO_SNAPSHOT_ACTIVATION_SUCCEEDS);
     }
 }
 

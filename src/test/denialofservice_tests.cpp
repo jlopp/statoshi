@@ -7,11 +7,14 @@
 #include <banman.h>
 #include <chainparams.h>
 #include <common/args.h>
+#include <key.h>
 #include <net.h>
 #include <net_processing.h>
+#include <primitives/transaction.h>
 #include <pubkey.h>
 #include <script/sign.h>
 #include <script/signingprovider.h>
+#include <script/solver.h>
 #include <serialize.h>
 #include <test/util/net.h>
 #include <test/util/random.h>
@@ -91,8 +94,8 @@ BOOST_AUTO_TEST_CASE(outbound_slow_chain_eviction)
     }
     connman.FlushSendBuffer(dummyNode1);
 
-    NodeClockContext clock_ctx{};
-    clock_ctx += 21min;
+    FakeNodeClock clock{};
+    clock += 21min;
 
     BOOST_CHECK(peerman.SendMessages(dummyNode1)); // should result in getheaders
     {
@@ -101,7 +104,7 @@ BOOST_AUTO_TEST_CASE(outbound_slow_chain_eviction)
         BOOST_CHECK(!to_send.empty());
     }
 
-    clock_ctx += 3min;
+    clock += 3min;
     BOOST_CHECK(peerman.SendMessages(dummyNode1)); // should result in disconnect
     BOOST_CHECK(dummyNode1.fDisconnect == true);
 
@@ -153,7 +156,7 @@ BOOST_FIXTURE_TEST_CASE(stale_tip_peer_management, OutboundTest)
     options.m_max_automatic_connections = DEFAULT_MAX_PEER_CONNECTIONS;
 
     const auto time_init{Now<NodeSeconds>()};
-    NodeClockContext clock_ctx{time_init};
+    FakeNodeClock clock{time_init};
     const auto delta{3 * std::chrono::seconds{m_node.chainman->GetConsensus().nPowTargetSpacing} + 1s};
     connman->Init(options);
     std::vector<CNode *> vNodes;
@@ -170,7 +173,7 @@ BOOST_FIXTURE_TEST_CASE(stale_tip_peer_management, OutboundTest)
         BOOST_CHECK(node->fDisconnect == false);
     }
 
-    clock_ctx += delta;
+    clock += delta;
 
     // Now tip should definitely be stale, and we should look for an extra
     // outbound peer
@@ -185,9 +188,9 @@ BOOST_FIXTURE_TEST_CASE(stale_tip_peer_management, OutboundTest)
     // If we add one more peer, something should get marked for eviction
     // on the next check (since we're mocking the time to be in the future, the
     // required time connected check should be satisfied).
-    clock_ctx.set(time_init);
+    clock.set(time_init);
     AddRandomOutboundPeer(id, vNodes, *peerLogic, *connman, ConnectionType::OUTBOUND_FULL_RELAY);
-    clock_ctx += delta;
+    clock += delta;
 
     peerLogic->CheckForStaleTipAndEvictPeers();
     for (int i = 0; i < max_outbound_full_relay; ++i) {
@@ -200,7 +203,7 @@ BOOST_FIXTURE_TEST_CASE(stale_tip_peer_management, OutboundTest)
 
     // Update the last announced block time for the last
     // peer, and check that the next newest node gets evicted.
-    peerLogic->UpdateLastBlockAnnounceTime(vNodes.back()->GetId(), GetTime());
+    peerLogic->UpdateLastBlockAnnounceTime(vNodes.back()->GetId(), NodeClock::now());
 
     peerLogic->CheckForStaleTipAndEvictPeers();
     for (int i = 0; i < max_outbound_full_relay - 1; ++i) {
@@ -213,9 +216,9 @@ BOOST_FIXTURE_TEST_CASE(stale_tip_peer_management, OutboundTest)
 
     // Add an onion peer, that will be protected because it is the only one for
     // its network, so another peer gets disconnected instead.
-    clock_ctx.set(time_init);
+    clock.set(time_init);
     AddRandomOutboundPeer(id, vNodes, *peerLogic, *connman, ConnectionType::OUTBOUND_FULL_RELAY, /*onion_peer=*/true);
-    clock_ctx += delta;
+    clock += delta;
     peerLogic->CheckForStaleTipAndEvictPeers();
 
     for (int i = 0; i < max_outbound_full_relay - 2; ++i) {
@@ -226,9 +229,9 @@ BOOST_FIXTURE_TEST_CASE(stale_tip_peer_management, OutboundTest)
     BOOST_CHECK(vNodes[max_outbound_full_relay]->fDisconnect == false);
 
     // Add a second onion peer which won't be protected
-    clock_ctx.set(time_init);
+    clock.set(time_init);
     AddRandomOutboundPeer(id, vNodes, *peerLogic, *connman, ConnectionType::OUTBOUND_FULL_RELAY, /*onion_peer=*/true);
-    clock_ctx += delta;
+    clock += delta;
     peerLogic->CheckForStaleTipAndEvictPeers();
 
     BOOST_CHECK(vNodes.back()->fDisconnect == true);
@@ -243,6 +246,7 @@ BOOST_FIXTURE_TEST_CASE(stale_tip_peer_management, OutboundTest)
 BOOST_FIXTURE_TEST_CASE(block_relay_only_eviction, OutboundTest)
 {
     NodeId id{0};
+    FakeNodeClock clock{};
     auto connman = std::make_unique<ConnmanTestMsg>(0x1337, 0x1337, *m_node.addrman, *m_node.netgroupman, Params());
     auto peerLogic = PeerManager::make(*connman, *m_node.addrman, nullptr, *m_node.chainman, *m_node.mempool, *m_node.warnings, {});
 
@@ -274,8 +278,7 @@ BOOST_FIXTURE_TEST_CASE(block_relay_only_eviction, OutboundTest)
     }
     BOOST_CHECK(vNodes.back()->fDisconnect == false);
 
-    NodeClockContext clock_ctx{};
-    clock_ctx += MINIMUM_CONNECT_TIME;
+    clock += MINIMUM_CONNECT_TIME;
     peerLogic->CheckForStaleTipAndEvictPeers();
     for (int i = 0; i < max_outbound_block_relay; ++i) {
         BOOST_CHECK(vNodes[i]->fDisconnect == false);
@@ -319,7 +322,7 @@ BOOST_AUTO_TEST_CASE(peer_discouragement)
 
     const CNetAddr other_addr{ip(0xa0b0ff01)}; // Not any of addr[].
 
-    std::array<CNode*, 3> nodes;
+    std::array<CNode*, 5> nodes;
 
     banman->ClearBanned();
     NodeId id{0};
@@ -389,6 +392,20 @@ BOOST_AUTO_TEST_CASE(peer_discouragement)
     peerLogic->InitializeNode(*nodes[2], NODE_NETWORK);
     nodes[2]->fSuccessfullyConnected = true;
     connman->AddTestNode(*nodes[2]);
+
+    nodes[3] = new CNode{/*id=*/id++,
+                         /*sock=*/nullptr,
+                         /*addrIn=*/addr[2],
+                         /*nKeyedNetGroupIn=*/0,
+                         /*nLocalHostNonceIn=*/0,
+                         /*addrBindIn=*/CAddress{},
+                         /*addrNameIn=*/"",
+                         /*conn_type_in=*/ConnectionType::PRIVATE_BROADCAST,
+                         /*inbound_onion=*/false,
+                         /*network_key=*/0};
+    peerLogic->InitializeNode(*nodes[3], NODE_NETWORK);
+    connman->AddTestNode(*nodes[3]);
+
     peerLogic->UnitTestMisbehaving(nodes[2]->GetId());
     BOOST_CHECK(peerLogic->SendMessages(*nodes[2]));
     BOOST_CHECK(banman->IsDiscouraged(addr[0]));
@@ -397,6 +414,25 @@ BOOST_AUTO_TEST_CASE(peer_discouragement)
     BOOST_CHECK(nodes[0]->fDisconnect);
     BOOST_CHECK(nodes[1]->fDisconnect);
     BOOST_CHECK(nodes[2]->fDisconnect);
+    BOOST_CHECK(!nodes[3]->fDisconnect);
+
+    nodes[4] = new CNode{/*id=*/id++,
+                         /*sock=*/nullptr,
+                         /*addrIn=*/CAddress{CService{other_addr, Params().GetDefaultPort()}, NODE_NONE},
+                         /*nKeyedNetGroupIn=*/0,
+                         /*nLocalHostNonceIn=*/0,
+                         /*addrBindIn=*/CAddress{},
+                         /*addrNameIn=*/"",
+                         /*conn_type_in=*/ConnectionType::PRIVATE_BROADCAST,
+                         /*inbound_onion=*/false,
+                         /*network_key=*/0};
+    peerLogic->InitializeNode(*nodes[4], NODE_NETWORK);
+    connman->AddTestNode(*nodes[4]);
+
+    peerLogic->UnitTestMisbehaving(nodes[4]->GetId());
+    BOOST_CHECK(peerLogic->SendMessages(*nodes[4]));
+    BOOST_CHECK(nodes[4]->fDisconnect);
+    BOOST_CHECK(!banman->IsDiscouraged(other_addr));
 
     for (CNode* node : nodes) {
         peerLogic->FinalizeNode(*node);
@@ -413,7 +449,7 @@ BOOST_AUTO_TEST_CASE(DoS_bantime)
     auto peerLogic = PeerManager::make(*connman, *m_node.addrman, banman.get(), *m_node.chainman, *m_node.mempool, *m_node.warnings, {});
 
     banman->ClearBanned();
-    const NodeClockContext clock_ctx{}; // keep mocktime constant
+    const FakeNodeClock clock{}; // keep mocktime constant
 
     CAddress addr(ip(0xa0b0c001), NODE_NONE);
     NodeId id{0};
@@ -436,6 +472,99 @@ BOOST_AUTO_TEST_CASE(DoS_bantime)
     BOOST_CHECK(banman->IsDiscouraged(addr));
 
     peerLogic->FinalizeNode(dummyNode);
+}
+
+// Reconsidering orphans must be interruptible: at most one orphan is accepted
+// or rejected per ProcessMessages() call.
+// See https://bitcoincore.org/en/2024/07/03/disclose-orphan-dos.
+BOOST_FIXTURE_TEST_CASE(orphan_reconsideration_interruptible, TestChain100Setup)
+{
+    LOCK(NetEventsInterface::g_msgproc_mutex);
+
+    ConnmanTestMsg& connman = static_cast<ConnmanTestMsg&>(*m_node.connman);
+    PeerManager& peerman = *m_node.peerman;
+    const CTxMemPool& mempool = *m_node.mempool;
+
+    CNode peer{/*id=*/0,
+               /*sock=*/nullptr,
+               CAddress(ip(0xa0b0c001), NODE_NONE),
+               /*nKeyedNetGroupIn=*/0,
+               /*nLocalHostNonceIn=*/0,
+               CAddress(),
+               /*addrNameIn=*/"",
+               ConnectionType::OUTBOUND_FULL_RELAY,
+               /*inbound_onion=*/false,
+               /*network_key=*/0};
+    connman.Handshake(
+        /*node=*/peer,
+        /*successfully_connected=*/true,
+        /*remote_services=*/ServiceFlags(NODE_NETWORK | NODE_WITNESS),
+        /*local_services=*/ServiceFlags(NODE_NETWORK | NODE_WITNESS),
+        /*version=*/PROTOCOL_VERSION,
+        /*relay_txs=*/true);
+
+    const CScript script{GetScriptForRawPubKey(coinbaseKey.GetPubKey())};
+    const int num_children{6};
+    const auto parent{MakeTransactionRef(CreateValidMempoolTransaction(
+        {m_coinbase_txns[0]}, {COutPoint{m_coinbase_txns[0]->GetHash(), 0}}, /*input_height=*/1, {coinbaseKey},
+        std::vector<CTxOut>(num_children, CTxOut{5 * COIN, script}), /*submit=*/false))};
+
+    const auto send_tx{[&](const CTransactionRef& tx) EXCLUSIVE_LOCKS_REQUIRED(NetEventsInterface::g_msgproc_mutex) {
+        connman.FlushSendBuffer(peer); // Drop messages we sent, the transport is shared with the fake peer.
+        BOOST_REQUIRE(connman.ReceiveMsgFrom(peer, NetMsg::Make(NetMsgType::TX, TX_WITH_WITNESS(*tx))));
+        peer.fPauseSend = false;
+        return connman.ProcessMessagesOnce(peer);
+    }};
+
+    // Children arrive first and become orphans. Half of them pay no fee and will be rejected.
+    for (int i{0}; i < num_children; ++i) {
+        const CAmount output_value{i % 2 ? 5 * COIN : 4 * COIN};
+        send_tx(MakeTransactionRef(CreateValidMempoolTransaction(parent, i, /*input_height=*/101, coinbaseKey, script, output_value, /*submit=*/false)));
+    }
+    BOOST_CHECK_EQUAL(peerman.GetOrphanTransactions().size(), num_children);
+    BOOST_CHECK_EQUAL(mempool.size(), 0U);
+
+    // Accepting the parent schedules all children for reconsideration.
+    BOOST_CHECK(send_tx(parent));
+    BOOST_CHECK_EQUAL(peerman.GetOrphanTransactions().size(), num_children);
+    BOOST_CHECK_EQUAL(mempool.size(), 1U);
+
+    // Each call accepts or rejects exactly one orphan, whether it is valid or not.
+    for (int i{1}; i <= num_children; ++i) {
+        BOOST_CHECK(connman.ProcessMessagesOnce(peer));
+        BOOST_CHECK_EQUAL(peerman.GetOrphanTransactions().size(), num_children - i);
+    }
+    BOOST_CHECK_EQUAL(mempool.size(), 1U + num_children / 2);
+    BOOST_CHECK(!connman.ProcessMessagesOnce(peer));
+
+    // Create a new parent for the purpose of testing a single orphan is reconsidered per call.
+    mineBlocks(1);
+    const int child_count{2};
+    const auto new_parent{MakeTransactionRef(CreateValidMempoolTransaction(
+        {m_coinbase_txns[1]}, {COutPoint{m_coinbase_txns[1]->GetHash(), 0}}, /*input_height=*/2, {coinbaseKey},
+        std::vector<CTxOut>(child_count, CTxOut{5 * COIN, script}), /*submit=*/false))};
+
+    // Now create 2 children. Each spends the parent and a non-existing input.
+    for (int i{0}; i < child_count; ++i) {
+        CMutableTransaction mtx;
+        mtx.vin.emplace_back(COutPoint{new_parent->GetHash(), uint32_t(i)});
+        mtx.vin.emplace_back(COutPoint{Txid::FromUint256(m_rng.rand256()), 0});
+        mtx.vout.emplace_back(COIN, script);
+        send_tx(MakeTransactionRef(mtx));
+    }
+    BOOST_CHECK_EQUAL(peerman.GetOrphanTransactions().size(), child_count);
+
+    // Processing the parent will lead to processing a single orphan per run, even though each fails
+    // on a missing-input error (orphanage size does not decrease).
+    BOOST_CHECK(send_tx(new_parent));
+    BOOST_CHECK(mempool.exists(new_parent->GetHash()));
+    for (int i{0}; i < child_count; ++i) {
+        BOOST_CHECK(connman.ProcessMessagesOnce(peer));
+        BOOST_CHECK_EQUAL(peerman.GetOrphanTransactions().size(), child_count);
+    }
+    BOOST_CHECK(!connman.ProcessMessagesOnce(peer));
+
+    peerman.FinalizeNode(peer);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

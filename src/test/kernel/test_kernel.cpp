@@ -4,18 +4,24 @@
 
 #include <kernel/bitcoinkernel.h>
 #include <kernel/bitcoinkernel_wrapper.h>
+#include <util/byte_units.h>
 #include <util/fs.h>
 
+// Boost.Test's SIGSTKSZ alternate stack can be smaller than Linux requires on musl.
+#define BOOST_TEST_DISABLE_ALT_STACK
 #define BOOST_TEST_MODULE Bitcoin Kernel Test Suite
 #include <boost/test/included/unit_test.hpp>
 
 #include <test/kernel/block_data.h>
 #include <test/util/common.h>
 
+#include <algorithm>
 #include <charconv>
+#include <concepts>
 #include <cstdint>
 #include <cstdlib>
 #include <iostream>
+#include <map>
 #include <memory>
 #include <optional>
 #include <random>
@@ -80,7 +86,7 @@ constexpr auto VERIFY_ALL_PRE_SEGWIT{ScriptVerificationFlags::P2SH | ScriptVerif
                                      ScriptVerificationFlags::CHECKSEQUENCEVERIFY};
 constexpr auto VERIFY_ALL_PRE_TAPROOT{VERIFY_ALL_PRE_SEGWIT | ScriptVerificationFlags::WITNESS};
 
-void check_equal(std::span<const std::byte> _actual, std::span<const std::byte> _expected, bool equal = true)
+void check_equal(std::span<const std::byte> _actual, std::span<const std::byte> _expected)
 {
     std::span<const uint8_t> actual{reinterpret_cast<const unsigned char*>(_actual.data()), _actual.size()};
     std::span<const uint8_t> expected{reinterpret_cast<const unsigned char*>(_expected.data()), _expected.size()};
@@ -92,9 +98,12 @@ void check_equal(std::span<const std::byte> _actual, std::span<const std::byte> 
 class TestLog
 {
 public:
-    void LogMessage(std::string_view message)
+    void LogMessage(const LogEntry& entry)
     {
-        std::cout << "kernel: " << message;
+        std::cout << "kernel: " << entry.Timestamp().time_since_epoch().count()
+                  << " [" << Name(entry.Category()) << ":"
+                  << Name(entry.Level()) << "] "
+                  << entry.Message() << "\n";
     }
 };
 
@@ -118,16 +127,6 @@ public:
     void HeaderTipHandler(SynchronizationState state, int64_t height, int64_t timestamp, bool presync) override
     {
         BOOST_CHECK_GT(timestamp, 0);
-    }
-
-    void WarningSetHandler(Warning warning, std::string_view message) override
-    {
-        std::cout << "Kernel warning is set: " << message << std::endl;
-    }
-
-    void WarningUnsetHandler(Warning warning) override
-    {
-        std::cout << "Kernel warning was unset." << std::endl;
     }
 
     void FlushErrorHandler(std::string_view error) override
@@ -315,6 +314,16 @@ void CheckHandle(T object, T distinct_object)
     if constexpr (HasToBytes<T>) {
         check_equal(object2.ToBytes(), object3.ToBytes());
     }
+
+    // Self move-assignment must not destroy the held resource.
+    // Use a reference to avoid -Wself-move warnings.
+    original_ptr = object2.get();
+    auto& object2_ref = object2;
+    object2 = std::move(object2_ref);
+    BOOST_CHECK_EQUAL(object2.get(), original_ptr);
+    if constexpr (HasToBytes<T>) {
+        check_equal(object2.ToBytes(), object3.ToBytes());
+    }
 }
 
 template <typename RangeType>
@@ -405,6 +414,14 @@ BOOST_AUTO_TEST_CASE(btck_transaction_tests)
     BOOST_CHECK_EQUAL(tx.CountOutputs(), 2);
     BOOST_CHECK_EQUAL(tx.CountInputs(), 1);
     BOOST_CHECK_EQUAL(tx.GetLocktime(), 510826);
+
+    BOOST_CHECK_EQUAL(tx.GetVersion(), 2);
+    for (const auto& [version_hex, version] : {std::pair{"00000000", 0u}, {"ffffffff", 0xffffffffu}}) {
+        auto versioned_tx_data{tx_data};
+        std::ranges::copy(hex_string_to_byte_vec(version_hex), versioned_tx_data.begin());
+        BOOST_CHECK_EQUAL(Transaction{versioned_tx_data}.GetVersion(), version);
+    }
+
     auto broken_tx_data{std::span<std::byte>{tx_data.begin(), tx_data.begin() + 10}};
     BOOST_CHECK_THROW(Transaction{broken_tx_data}, std::runtime_error);
     auto input{tx.GetInput(0)};
@@ -471,6 +488,46 @@ BOOST_AUTO_TEST_CASE(btck_transaction_tests)
     check_equal(script_pubkey_roundtrip.ToBytes(), script_pubkey.ToBytes());
 }
 
+BOOST_AUTO_TEST_CASE(btck_transaction_id_tests)
+{
+    auto legacy_tx{Transaction{hex_string_to_byte_vec("02000000013f7cebd65c27431a90bba7f796914fe8cc2ddfc3f2cbd6f7e5f2fc854534da95000000006b483045022100de1ac3bcdfb0332207c4a91f3832bd2c2915840165f876ab47c5f8996b971c3602201c6c053d750fadde599e6f5c4e1963df0f01fc0d97815e8157e3d59fe09ca30d012103699b464d1d8bc9e47d4fb1cdaa89a1c5783d68363c4dbc4b524ed3d857148617feffffff02836d3c01000000001976a914fc25d6d5c94003bf5b0c7b640a248e2c637fcfb088ac7ada8202000000001976a914fbed3d9b11183209a57999d54d59f67c019e756c88ac6acb0700")}};
+    auto witness_tx{Transaction{hex_string_to_byte_vec("02000000000101904f4ee5c87d20090b642f116e458cd6693292ad9ece23e72f15fb6c05b956210500000000fdffffff02e2010000000000002251200839a723933b56560487ec4d67dda58f09bae518ffa7e148313c5696ac837d9f10060000000000002251205826bcdae7abfb1c468204170eab00d887b61ab143464a4a09e1450bdc59a3340140f26e7af574e647355830772946356c27e7bbc773c5293688890f58983499581be84de40be7311a14e6d6422605df086620e75adae84ff06b75ce5894de5e994a00000000")}};
+
+    BOOST_CHECK(!legacy_tx.HasWitness());
+    BOOST_CHECK(witness_tx.HasWitness());
+
+    // Txid and Wtxid are distinct types and cannot be compared with each other.
+    static_assert(!std::equality_comparable_with<TxidView, WtxidView>);
+    static_assert(!std::equality_comparable_with<Txid, Wtxid>);
+
+    // View equality on the same object and across objects.
+    BOOST_CHECK(legacy_tx.Txid() == legacy_tx.Txid());
+    BOOST_CHECK(legacy_tx.Wtxid() == legacy_tx.Wtxid());
+    BOOST_CHECK(legacy_tx.Txid() != witness_tx.Txid());
+    BOOST_CHECK(legacy_tx.Wtxid() != witness_tx.Wtxid());
+
+    // Owned handles created from views compare equal to their copies.
+    Txid owned_txid{legacy_tx.Txid()};
+    Txid owned_txid_copy{owned_txid}; // NOLINT(performance-unnecessary-copy-initialization)
+    BOOST_CHECK(owned_txid == owned_txid_copy);
+    BOOST_CHECK(owned_txid != Txid{witness_tx.Txid()});
+    CheckHandle(owned_txid, Txid{witness_tx.Txid()});
+
+    Wtxid owned_wtxid{legacy_tx.Wtxid()};
+    Wtxid owned_wtxid_copy{owned_wtxid}; // NOLINT(performance-unnecessary-copy-initialization)
+    BOOST_CHECK(owned_wtxid == owned_wtxid_copy);
+    BOOST_CHECK(owned_wtxid != Wtxid{witness_tx.Wtxid()});
+    CheckHandle(owned_wtxid, Wtxid{witness_tx.Wtxid()});
+
+    // Without witness data, the wtxid equals the txid; with witness data, it differs.
+    BOOST_CHECK_EQUAL(byte_span_to_hex_string_reversed(legacy_tx.Txid().ToBytes()), "aca326a724eda9a461c10a876534ecd5ae7b27f10f26c3862fb996f80ea2d45d");
+    check_equal(legacy_tx.Txid().ToBytes(), legacy_tx.Wtxid().ToBytes());
+
+    BOOST_CHECK_EQUAL(byte_span_to_hex_string_reversed(witness_tx.Txid().ToBytes()), "9d04c6435f39a114f26b5807e92117b388f15c54c2afe7e62c96757f18cec891");
+    BOOST_CHECK_EQUAL(byte_span_to_hex_string_reversed(witness_tx.Wtxid().ToBytes()), "c5cd58b8eb3dda755eb99c89c4bcb7409e4074c8942c263e3d6d09011984a210");
+    BOOST_CHECK(!std::ranges::equal(witness_tx.Txid().ToBytes(), witness_tx.Wtxid().ToBytes()));
+}
+
 BOOST_AUTO_TEST_CASE(btck_script_pubkey)
 {
     auto script_data{hex_string_to_byte_vec("76a9144bfbaf6afb76cc5771bc6404810d1cc041a6933988ac")};
@@ -503,6 +560,33 @@ BOOST_AUTO_TEST_CASE(btck_transaction_input)
     OutPoint point_0 = input_0.OutPoint();
     OutPoint point_1 = input_1.OutPoint();
     CheckHandle(point_0, point_1);
+
+    WitnessStackView ws_0 = input_0.GetWitnessStack();
+    BOOST_CHECK_EQUAL(ws_0.CountItems(), 0);
+    BOOST_CHECK(ws_0.Items().empty());
+
+    // P2PKH: DER sig + compressed pubkey push.
+    BOOST_CHECK(input_0.GetScriptSig() == hex_string_to_byte_vec("473044022004893432347f39beaa280e99da595681ddb20fc45010176897e6e055d716dbfa022040a9e46648a5d10c33ef7cee5e6cf4b56bd513eae3ae044f0039824b02d0f44c012102982331a52822fd9b62e9b5d120da1d248558fac3da3a3c51cd7d9c8ad3da760e"));
+    BOOST_CHECK(input_1.GetScriptSig() == hex_string_to_byte_vec("473044022068bcedc7fe39c9f21ad318df2c2da62c2dc9522a89c28c8420ff9d03d2e6bf7b0220132afd752754e5cb1ea2fd0ed6a38ec666781e34b0e93dc9a08f2457842cf5660121033aeb9c079ea3e08ea03556182ab520ce5c22e6b0cb95cee6435ee17144d860cd"));
+
+    // P2WSH input: OP_0, sig, sig, redeem_script (0, 71, 71, 105 bytes); no scriptSig.
+    Transaction segwit_tx{hex_string_to_byte_vec("010000000001011f97548fbbe7a0db7588a66e18d803d0089315aa7d4cc28360b6ec50ef36718a0100000000ffffffff02df1776000000000017a9146c002a686959067f4866b8fb493ad7970290ab728757d29f0000000000220020701a8d401c84fb13e6baf169d59684e17abd9fa216c8cc5b9fc63d622ff8c58d04004730440220565d170eed95ff95027a69b313758450ba84a01224e1f7f130dda46e94d13f8602207bdd20e307f062594022f12ed5017bbf4a055a06aea91c10110a0e3bb23117fc014730440220647d2dc5b15f60bc37dc42618a370b2a1490293f9e5c8464f53ec4fe1dfe067302203598773895b4b16d37485cbe21b337f4e4b650739880098c592553add7dd4355016952210375e00eb72e29da82b89367947f29ef34afb75e8654f6ea368e0acdfd92976b7c2103a1b26313f430c4b15bb1fdce663207659d8cac749a0e53d70eff01874496feff2103c96d495bfdd5ba4145e3e046fee45e84a8a48ad05bd8dbb395c011a32cf9f88053ae00000000")};
+    TransactionInputView segwit_input = segwit_tx.GetInput(0);
+    WitnessStackView ws = segwit_input.GetWitnessStack();
+    BOOST_CHECK_EQUAL(ws.CountItems(), 4);
+    BOOST_CHECK(ws.GetItem(0).empty());
+    BOOST_CHECK(ws.GetItem(1) == hex_string_to_byte_vec("30440220565d170eed95ff95027a69b313758450ba84a01224e1f7f130dda46e94d13f8602207bdd20e307f062594022f12ed5017bbf4a055a06aea91c10110a0e3bb23117fc01"));
+    BOOST_CHECK(ws.GetItem(2) == hex_string_to_byte_vec("30440220647d2dc5b15f60bc37dc42618a370b2a1490293f9e5c8464f53ec4fe1dfe067302203598773895b4b16d37485cbe21b337f4e4b650739880098c592553add7dd435501"));
+    BOOST_CHECK(ws.GetItem(3) == hex_string_to_byte_vec("52210375e00eb72e29da82b89367947f29ef34afb75e8654f6ea368e0acdfd92976b7c2103a1b26313f430c4b15bb1fdce663207659d8cac749a0e53d70eff01874496feff2103c96d495bfdd5ba4145e3e046fee45e84a8a48ad05bd8dbb395c011a32cf9f88053ae"));
+    auto items = ws.Items();
+    BOOST_CHECK_EQUAL(items.size(), 4);
+    for (size_t i = 0; i < items.size(); ++i) {
+        BOOST_CHECK(items[i] == ws.GetItem(i));
+    }
+    WitnessStack owned_ws_0{ws_0};
+    WitnessStack owned_ws{ws};
+    CheckHandle(owned_ws_0, owned_ws);
+    BOOST_CHECK(segwit_input.GetScriptSig().empty());
 }
 
 BOOST_AUTO_TEST_CASE(btck_precomputed_txdata) {
@@ -615,30 +699,57 @@ BOOST_AUTO_TEST_CASE(btck_script_verify_tests)
         /*taproot=*/true);
 }
 
-BOOST_AUTO_TEST_CASE(logging_tests)
+//! Counts delivered entries per message, and its own destruction, which the kernel triggers through
+//! the user_data_destroy_callback when the connection is destroyed.
+class CountingLog
 {
-    btck_LoggingOptions logging_options = {
-        .log_timestamps = true,
-        .log_time_micros = true,
-        .log_threadnames = false,
-        .log_sourcelocations = false,
-        .always_print_category_levels = true,
-    };
+    std::map<std::string, int>& m_messages;
+    int& m_destroyed;
 
-    logging_set_options(logging_options);
-    logging_set_level_category(LogCategory::BENCH, LogLevel::TRACE_LEVEL);
-    logging_disable_category(LogCategory::BENCH);
-    logging_enable_category(LogCategory::VALIDATION);
-    logging_disable_category(LogCategory::VALIDATION);
+public:
+    CountingLog(std::map<std::string, int>& messages, int& destroyed)
+        : m_messages{messages}, m_destroyed{destroyed} {}
+    ~CountingLog() { ++m_destroyed; }
 
-    // Check that connecting, connecting another, and then disconnecting and connecting a logger again works.
+    void LogMessage(const LogEntry& entry) { ++m_messages[std::string{entry.Message()}]; }
+};
+
+//! This test is focused on the public kernel logging interface, to the extent it is testable.
+BOOST_AUTO_TEST_CASE(logging_connection_tests)
+{
+    std::map<std::string, int> messages;
+    int destroyed{0};
+    logging_set_min_level(LogLevel::INFO_LEVEL);
+
     {
-        logging_set_level_category(LogCategory::KERNEL, LogLevel::TRACE_LEVEL);
-        logging_enable_category(LogCategory::KERNEL);
-        Logger logger{std::make_unique<TestLog>()};
-        Logger logger_2{std::make_unique<TestLog>()};
+        // At the default minimum level (INFO), the DEBUG entries are not delivered.
+        Logger logger{std::make_unique<CountingLog>(messages, destroyed)};
     }
-    Logger logger{std::make_unique<TestLog>()};
+    BOOST_CHECK(messages.empty());
+    BOOST_CHECK_EQUAL(destroyed, 1);
+    destroyed = 0;
+
+    logging_set_min_level(LogLevel::DEBUG_LEVEL);
+    {
+        // Each connection logs "Logger connected." after registering, and the entry reaches every
+        // connection that exists at that moment: 1 + 2.
+        Logger logger{std::make_unique<CountingLog>(messages, destroyed)};
+        Logger logger_2{std::make_unique<CountingLog>(messages, destroyed)};
+        BOOST_CHECK_EQUAL(messages["Logger connected."], 3);
+        BOOST_CHECK_EQUAL(destroyed, 0);
+    }
+    // "Logger disconnecting." is logged before unregistering, so it still reaches the connection
+    // being destroyed: 2 + 1. Each connection's user_data is destroyed exactly once.
+    BOOST_CHECK_EQUAL(messages["Logger disconnecting."], 3);
+    BOOST_CHECK_EQUAL(destroyed, 2);
+    logging_set_min_level(LogLevel::INFO_LEVEL);
+}
+
+BOOST_AUTO_TEST_CASE(btck_chainparams_tests)
+{
+    ChainParams params_signet{ChainType::SIGNET};
+    ChainParams params_signet_challenge{hex_string_to_byte_vec("51")};
+    CheckHandle(params_signet, params_signet_challenge);
 }
 
 BOOST_AUTO_TEST_CASE(btck_context_tests)
@@ -669,13 +780,11 @@ BOOST_AUTO_TEST_CASE(btck_block_header_tests)
 {
     // Block header format: version(4) + prev_hash(32) + merkle_root(32) + timestamp(4) + bits(4) + nonce(4) = 80 bytes
     BlockHeader header_0{hex_string_to_byte_vec("00e07a26beaaeee2e71d7eb19279545edbaf15de0999983626ec00000000000000000000579cf78b65229bfb93f4a11463af2eaa5ad91780f27f5d147a423bea5f7e4cdf2a47e268b4dd01173a9662ee")};
+    auto merkle_root_0{header_0.MerkleRoot()};
     BOOST_CHECK_EQUAL(byte_span_to_hex_string_reversed(header_0.Hash().ToBytes()), "00000000000000000000325c7e14a4ee3b4fcb2343089a839287308a0ddbee4f");
+    BOOST_CHECK_EQUAL(byte_span_to_hex_string_reversed(merkle_root_0), "df4c7e5fea3b427a145d7ff28017d95aaa2eaf6314a1f493fb9b22658bf79c57");
     BlockHeader header_1{hex_string_to_byte_vec("00c00020e7cb7b4de21d26d55bd384017b8bb9333ac3b2b55bed00000000000000000000d91b4484f801b99f03d36b9d26cfa83420b67f81da12d7e6c1e7f364e743c5ba9946e268b4dd011799c8533d")};
     CheckHandle(header_0, header_1);
-
-    // Test error handling for invalid data
-    BOOST_CHECK_THROW(BlockHeader{hex_string_to_byte_vec("00")}, std::runtime_error);
-    BOOST_CHECK_THROW(BlockHeader{hex_string_to_byte_vec("")}, std::runtime_error);
 
     // Test all header field accessors using mainnet block 1
     auto mainnet_block_1_header = hex_string_to_byte_vec("010000006fe28c0ab6f1b372c1a6a246ae63f74f931e8365e15a089c68d6190000000000982051fd1e4ba744bbbe680e1fee14677ba1a3c3540bf7b1cdb606e857233e0e61bc6649ffff001d01e36299");
@@ -687,6 +796,8 @@ BOOST_AUTO_TEST_CASE(btck_block_header_tests)
     BOOST_CHECK_EQUAL(byte_span_to_hex_string_reversed(header.Hash().ToBytes()), "00000000839a8e6886ab5951d76f411475428afc90947ee320161bbf18eb6048");
     auto prev_hash = header.PrevHash();
     BOOST_CHECK_EQUAL(byte_span_to_hex_string_reversed(prev_hash.ToBytes()), "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f");
+    auto merkle_root = header.MerkleRoot();
+    BOOST_CHECK_EQUAL(byte_span_to_hex_string_reversed(merkle_root), "0e3e2357e806b6cdb1f70b54c3a3a17b6714ee1f0e68bebb44a74b1efd512098");
 
     // Test round-trip serialization of block header
     auto header_roundtrip{BlockHeader{header.ToBytes()}};
@@ -714,6 +825,12 @@ BOOST_AUTO_TEST_CASE(btck_block)
     CheckHandle(block, block_100);
     Block block_tx{hex_string_to_byte_vec(REGTEST_BLOCK_DATA[205])};
     CheckRange(block_tx.Transactions(), block_tx.CountTransactions());
+    auto transactions{block_tx.Transactions()};
+    auto transactions_copy{transactions};
+    BOOST_CHECK(transactions.begin() == transactions_copy.begin());
+    BOOST_CHECK(transactions.begin() == block_tx.Transactions().begin());
+    auto transaction_it{transactions.begin()};
+    BOOST_CHECK((*transaction_it).Txid() == block_tx.GetTransaction(0).Txid());
     auto invalid_data = hex_string_to_byte_vec("012300");
     BOOST_CHECK_THROW(Block{invalid_data}, std::runtime_error);
     auto empty_data = hex_string_to_byte_vec("");
@@ -770,6 +887,9 @@ BOOST_AUTO_TEST_CASE(btck_chainman_tests)
 
     ChainstateManagerOptions chainman_opts{context, PathToString(test_directory.m_directory), PathToString(test_directory.m_directory / "blocks")};
     chainman_opts.SetWorkerThreads(4);
+    BOOST_CHECK(!chainman_opts.SetDatabaseCacheBytes(4_MiB - 1));
+    if constexpr (sizeof(void*) == 4) BOOST_CHECK(!chainman_opts.SetDatabaseCacheBytes(2_GiB));
+    BOOST_CHECK(chainman_opts.SetDatabaseCacheBytes(4_MiB));
     BOOST_CHECK(!chainman_opts.SetWipeDbs(/*wipe_block_tree=*/true, /*wipe_chainstate=*/false));
     BOOST_CHECK(chainman_opts.SetWipeDbs(/*wipe_block_tree=*/true, /*wipe_chainstate=*/true));
     BOOST_CHECK(chainman_opts.SetWipeDbs(/*wipe_block_tree=*/false, /*wipe_chainstate=*/true));
@@ -1047,6 +1167,11 @@ BOOST_AUTO_TEST_CASE(btck_block_tree_entry_tests)
     auto prev{entry_1.GetPrevious()};
     BOOST_CHECK(prev.has_value());
     BOOST_CHECK(prev.value() == entry_0);
+
+    // Test GetAncestor
+    BOOST_CHECK(entry_2.GetAncestor(2) == entry_2);
+    BOOST_CHECK(entry_2.GetAncestor(1) == entry_1);
+    BOOST_CHECK(entry_2.GetAncestor(0) == entry_0);
 }
 
 BOOST_AUTO_TEST_CASE(btck_chainman_in_memory_tests)
@@ -1087,10 +1212,9 @@ BOOST_AUTO_TEST_CASE(btck_chainman_regtest_tests)
         for (const auto& data : REGTEST_BLOCK_DATA) {
             Block block{hex_string_to_byte_vec(data)};
             BlockHeader header = block.GetHeader();
-            BlockValidationState state{};
-            BOOST_CHECK(state.GetBlockValidationResult() == BlockValidationResult::UNSET);
-            BOOST_CHECK(chainman->ProcessBlockHeader(header, state));
+            BlockValidationState state = chainman->ProcessBlockHeader(header);
             BOOST_CHECK(state.GetValidationMode() == ValidationMode::VALID);
+            BOOST_CHECK(state.GetBlockValidationResult() == BlockValidationResult::UNSET);
             BlockTreeEntry entry{*chainman->GetBlockTreeEntry(header.Hash())};
             BOOST_CHECK(!chainman->GetChain().Contains(entry));
             BlockTreeEntry best_entry{chainman->GetBestEntry()};
@@ -1205,15 +1329,15 @@ BOOST_AUTO_TEST_CASE(btck_chainman_regtest_tests)
     // Validate coin properties
     TransactionOutputView output = coin.GetOutput();
     uint32_t coin_height = coin.GetConfirmationHeight();
-    BOOST_CHECK_EQUAL(coin_height, 205);
-    BOOST_CHECK_EQUAL(output.Amount(), 100000000);
+    BOOST_CHECK_EQUAL(coin_height, 143);
+    BOOST_CHECK_EQUAL(output.Amount(), 3949990974);
 
     // Test script pubkey serialization
     auto script_pubkey = output.GetScriptPubkey();
     auto script_pubkey_bytes{script_pubkey.ToBytes()};
-    BOOST_CHECK_EQUAL(script_pubkey_bytes.size(), 22);
+    BOOST_CHECK_EQUAL(script_pubkey_bytes.size(), 34);
     auto round_trip_script_pubkey{ScriptPubkey(script_pubkey_bytes)};
-    BOOST_CHECK_EQUAL(round_trip_script_pubkey.ToBytes().size(), 22);
+    BOOST_CHECK_EQUAL(round_trip_script_pubkey.ToBytes().size(), 34);
 
     for (const auto tx_spent_outputs : block_spent_outputs.TxsSpentOutputs()) {
         for (const auto coins : tx_spent_outputs.Coins()) {
@@ -1250,4 +1374,177 @@ BOOST_AUTO_TEST_CASE(btck_chainman_regtest_tests)
     BOOST_CHECK(!chainman->ReadBlock(tip_2).has_value());
     fs::remove(test_directory.m_directory / "blocks" / "rev00000.dat");
     BOOST_CHECK_THROW(chainman->ReadBlockSpentOutputs(tip), std::runtime_error);
+}
+
+// -----------------------------------------------------------------------------
+// CheckTransaction tests
+//
+// Transaction hex below is copied from src/test/data/tx_invalid.json (entries
+// marked "BADTX") and tx_valid.json. CheckTransaction performs only basic context-free
+// consensus checks and can only produce two outcomes:
+//   - VALID  (ValidationMode::VALID, TxValidationResult::UNSET)
+//   - INVALID (ValidationMode::INVALID, TxValidationResult::CONSENSUS)
+// Other TxValidationResult values are set by higher-level validation and are
+// not reachable through btck_transaction_check.
+// -----------------------------------------------------------------------------
+BOOST_AUTO_TEST_CASE(btck_transaction_check_tests)
+{
+    using namespace btck;
+
+    constexpr std::string_view valid_tx_hex{
+        "01000000010001000000000000000000000000000000000000000000000000000000000000"
+        "000000006a473044022067288ea50aa799543a536ff9306f8e1cba05b9c6b10951175b92"
+        "4f96732555ed022026d7b5265f38d21541519e4a1e55044d5b9e17e15cdbaf29ae3792e9"
+        "9e883e7a012103ba8c8b86dea131c22ab967e6dd99bdae8eff7a1f75a2c35f1f944109e3"
+        "fe5e22ffffffff010000000000000000015100000000"};
+    constexpr std::string_view no_outputs_tx_hex{
+        "01000000010001000000000000000000000000000000000000000000000000000000000000"
+        "000000006d483045022100f16703104aab4e4088317c862daec83440242411b039d14280e0"
+        "3dd33b487ab802201318a7be236672c5c56083eb7a5a195bc57a40af7923ff8545016cd3b5"
+        "71e2a601232103c40e5d339df3f30bf753e7e04450ae4ef76c9e45587d1d993bdc4cd06f06"
+        "51c7acffffffff0000000000"};
+
+    auto expect_valid = [](std::string_view hex) {
+        Transaction tx{hex_string_to_byte_vec(hex)};
+        TxValidationState st;
+        BOOST_CHECK(CheckTransaction(tx, st));
+        BOOST_CHECK(st.GetValidationMode() == ValidationMode::VALID);
+        BOOST_CHECK(st.GetTxValidationResult() == TxValidationResult::UNSET);
+    };
+
+    auto expect_invalid = [](std::string_view hex) {
+        Transaction tx{hex_string_to_byte_vec(hex)};
+        TxValidationState st;
+        BOOST_CHECK(!CheckTransaction(tx, st));
+        BOOST_CHECK(st.GetValidationMode() == ValidationMode::INVALID);
+        BOOST_CHECK(st.GetTxValidationResult() == TxValidationResult::CONSENSUS);
+    };
+
+    // Valid: simple 1-in 1-out transaction (from tx_valid.json)
+    expect_valid(valid_tx_hex);
+
+    // Valid coinbase with scriptSig size 2 (from tx_valid.json)
+    expect_valid(
+        "01000000010000000000000000000000000000000000000000000000000000000000000000"
+        "ffffffff025151ffffffff010000000000000000015100000000");
+
+    // No outputs (BADTX from tx_invalid.json)
+    expect_invalid(no_outputs_tx_hex);
+
+    {
+        Transaction valid_tx{hex_string_to_byte_vec(valid_tx_hex)};
+        Transaction invalid_tx{hex_string_to_byte_vec(no_outputs_tx_hex)};
+        TxValidationState state;
+
+        BOOST_CHECK(btck_transaction_check(valid_tx.get(), state.get()) == 1);
+        BOOST_CHECK(state.GetValidationMode() == ValidationMode::VALID);
+        BOOST_CHECK(state.GetTxValidationResult() == TxValidationResult::UNSET);
+
+        BOOST_CHECK(btck_transaction_check(invalid_tx.get(), state.get()) == 0);
+        BOOST_CHECK(state.GetValidationMode() == ValidationMode::INVALID);
+        BOOST_CHECK(state.GetTxValidationResult() == TxValidationResult::CONSENSUS);
+    }
+
+    // Negative output (BADTX)
+    expect_invalid(
+        "01000000010001000000000000000000000000000000000000000000000000000000000000"
+        "000000006d4830450220063222cbb128731fc09de0d7323746539166544d6c1df84d867cce"
+        "a84bcc8903022100bf568e8552844de664cd41648a031554327aa8844af34b4f27397c65b9"
+        "2c04de0123210243ec37dee0e2e053a9c976f43147e79bc7d9dc606ea51010af1ac80db6b0"
+        "69e1acffffffff01ffffffffffffffff015100000000");
+
+    // MAX_MONEY + 1 output (BADTX)
+    expect_invalid(
+        "01000000010001000000000000000000000000000000000000000000000000000000000000"
+        "000000006e493046022100e1eadba00d9296c743cb6ecc703fd9ddc9b3cd12906176a226ae"
+        "4c18d6b00796022100a71aef7d2874deff681ba6080f1b278bac7bb99c61b08a85f4311970"
+        "ffe7f63f012321030c0588dc44d92bdcbf8e72093466766fdc265ead8db64517b0c542275b"
+        "70fffbacffffffff010140075af0750700015100000000");
+
+    // MAX_MONEY output + 1 output: sum exceeds MAX_MONEY (BADTX)
+    expect_invalid(
+        "01000000010001000000000000000000000000000000000000000000000000000000000000"
+        "000000006d483045022027deccc14aa6668e78a8c9da3484fbcd4f9dcc9bb7d1b85146314b"
+        "21b9ae4d86022100d0b43dece8cfb07348de0ca8bc5b86276fa88f7f2138381128b7c36ab2"
+        "e42264012321029bb13463ddd5d2cc05da6e84e37536cb9525703cfd8f43afdb414988987a"
+        "92f6acffffffff020040075af075070001510001000000000000015100000000");
+
+    // Duplicate inputs (BADTX)
+    expect_invalid(
+        "01000000020001000000000000000000000000000000000000000000000000000000000000"
+        "000000006c47304402204bb1197053d0d7799bf1b30cd503c44b58d6240cccbdc85b6fe76d"
+        "087980208f02204beeed78200178ffc6c74237bb74b3f276bbb4098b5605d814304fe128bf"
+        "1431012321039e8815e15952a7c3fada1905f8cf55419837133bd7756c0ef14fc8dfe50c0d"
+        "eaacffffffff0001000000000000000000000000000000000000000000000000000000000000"
+        "000000006c47304402202306489afef52a6f62e90bf750bbcdf40c06f5c6b138286e6b6b8617"
+        "6bb9341802200dba98486ea68380f47ebb19a7df173b99e6bc9c681d6ccf3bde31465d1f16"
+        "b3012321039e8815e15952a7c3fada1905f8cf55419837133bd7756c0ef14fc8dfe50c0dea"
+        "acffffffff010000000000000000015100000000");
+
+    // Coinbase with scriptSig size 1: too small (BADTX)
+    expect_invalid(
+        "01000000010000000000000000000000000000000000000000000000000000000000000000"
+        "ffffffff0151ffffffff010000000000000000015100000000");
+
+    // Coinbase with scriptSig size 101: too large (BADTX)
+    expect_invalid(
+        "01000000010000000000000000000000000000000000000000000000000000000000000000"
+        "ffffffff6551515151515151515151515151515151515151515151515151515151515151515151"
+        "515151515151515151515151515151515151515151515151515151515151515151515151515151"
+        "51515151515151515151515151515151515151515151515151515151ffffffff01000000000000"
+        "0000015100000000");
+
+    // Null prevout in non-coinbase: two inputs, one is null (BADTX)
+    expect_invalid(
+        "01000000020000000000000000000000000000000000000000000000000000000000000000"
+        "ffffffff00ffffffff000100000000000000000000000000000000000000000000000000000000"
+        "00000000000000ffffffff010000000000000000015100000000");
+}
+
+class KernelMockTime
+{
+public:
+    explicit KernelMockTime(std::chrono::seconds timestamp) { set(timestamp); }
+    ~KernelMockTime()
+    {
+        set_mock_time(std::chrono::seconds{0});
+    }
+
+    KernelMockTime(const KernelMockTime&) = delete;
+    KernelMockTime& operator=(const KernelMockTime&) = delete;
+
+    void set(std::chrono::seconds timestamp) { set_mock_time(timestamp); }
+};
+
+BOOST_AUTO_TEST_CASE(btck_set_mock_time_tests)
+{
+    // Out-of-range timestamps throw
+    BOOST_CHECK_EXCEPTION(set_mock_time(std::chrono::seconds{-1}), std::runtime_error, HasReason("timestamp out of range"));
+    constexpr std::chrono::seconds max_time{std::numeric_limits<uint32_t>::max()};
+    BOOST_CHECK_EXCEPTION(set_mock_time(max_time + std::chrono::seconds{1}), std::runtime_error, HasReason("timestamp out of range"));
+
+    // Confirm the mock time actually takes effect by exercising the header future-time check
+    auto test_directory{TestDirectory{"set_mock_time_test_bitcoin_kernel"}};
+    auto notifications{std::make_shared<TestKernelNotifications>()};
+    auto context{create_context(notifications, ChainType::REGTEST)};
+    auto chainman{create_chainman(
+        test_directory, /*reindex=*/false, /*wipe_chainstate=*/false,
+        /*block_tree_db_in_memory=*/true, /*chainstate_db_in_memory=*/true, context)};
+
+    Block block{hex_string_to_byte_vec(REGTEST_BLOCK_DATA[0])};
+    BlockHeader header{block.GetHeader()};
+    const std::chrono::seconds block_time{header.Timestamp()};
+
+    // With the time set 3h before the header, the kernel must see the header as >2h in the future and reject it
+    KernelMockTime mock_time{block_time - std::chrono::hours{3}};
+    BlockValidationState future_state{chainman->ProcessBlockHeader(header)};
+    BOOST_CHECK(future_state.GetValidationMode() == ValidationMode::INVALID);
+    BOOST_CHECK(future_state.GetBlockValidationResult() == BlockValidationResult::TIME_FUTURE);
+
+    // At the upper bound the header is far in the past and must be accepted; this also
+    // confirms the future-time check's "now + 2h" computation doesn't overflow when now is at its max.
+    mock_time.set(max_time);
+    BlockValidationState ok_state{chainman->ProcessBlockHeader(header)};
+    BOOST_CHECK(ok_state.GetValidationMode() == ValidationMode::VALID);
+    BOOST_CHECK(ok_state.GetBlockValidationResult() == BlockValidationResult::UNSET);
 }

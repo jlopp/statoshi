@@ -50,6 +50,11 @@ elif [ "$CI_OS_NAME" != "macos" ]; then
   ${CI_RETRY_EXE} apt-get install --no-install-recommends --no-upgrade -y $PACKAGES $CI_BASE_PACKAGES
 fi
 
+if [[ ${HOST:-} == x86_64-w64-mingw32* ]]; then
+  # Install Nix packages.
+  NIX_BUILD_SHELL=bash nix-shell "${BASE_ROOT_DIR}/contrib/devtools/shell-win64-cross.nix" --run true
+fi
+
 if [ -n "${APT_LLVM_V}" ]; then
   update-alternatives --install /usr/bin/clang++ clang++ "/usr/bin/clang++-${APT_LLVM_V}" 100
   update-alternatives --install /usr/bin/clang clang "/usr/bin/clang-${APT_LLVM_V}" 100
@@ -62,10 +67,13 @@ if [ -n "$PIP_PACKAGES" ]; then
 fi
 
 if [[ -n "${USE_INSTRUMENTED_LIBCPP}" ]]; then
-  ${CI_RETRY_EXE} git clone --depth=1 https://github.com/llvm/llvm-project -b "llvmorg-22.1.3" /llvm-project
+  ${CI_RETRY_EXE} git clone --depth=1 https://github.com/llvm/llvm-project -b "llvmorg-23.1.2" /llvm-project
 
+# LLVM is configured with LIBCXXABI_USE_LLVM_UNWINDER=OFF,
+# because libunwind doesn't handle exceptions under MSAN.
+# https://github.com/llvm/llvm-project/issues/84348
   cmake -G Ninja -B /cxx_build/ \
-    -DLLVM_ENABLE_RUNTIMES="libcxx;libcxxabi;libunwind" \
+    -DLLVM_ENABLE_RUNTIMES="libcxx;libcxxabi" \
     -DCMAKE_BUILD_TYPE=Release \
     -DLLVM_USE_SANITIZER="${USE_INSTRUMENTED_LIBCPP}" \
     -DCMAKE_C_COMPILER=clang \
@@ -75,6 +83,7 @@ if [[ -n "${USE_INSTRUMENTED_LIBCPP}" ]]; then
     -DLIBCXXABI_USE_LLVM_UNWINDER=OFF \
     -DLIBCXX_ABI_DEFINES="_LIBCPP_ABI_BOUNDED_ITERATORS;_LIBCPP_ABI_BOUNDED_ITERATORS_IN_STD_ARRAY;_LIBCPP_ABI_BOUNDED_ITERATORS_IN_STRING;_LIBCPP_ABI_BOUNDED_ITERATORS_IN_VECTOR;_LIBCPP_ABI_BOUNDED_UNIQUE_PTR" \
     -DLIBCXX_HARDENING_MODE=debug \
+    -DLIBCXX_INCLUDE_TESTS=OFF \
     -S /llvm-project/runtimes
 
   ninja -C /cxx_build/ "$MAKEJOBS"
@@ -84,9 +93,19 @@ if [[ -n "${USE_INSTRUMENTED_LIBCPP}" ]]; then
   rm -rf /llvm-project
 fi
 
+if [[ ${BARE_METAL_RISCV} == "true" ]]; then
+    ${CI_RETRY_EXE} git clone --depth=1 https://github.com/riscv-collab/riscv-gnu-toolchain -b 2026.08.25 /riscv/gcc
+    ( cd /riscv/gcc
+      ./configure --prefix=/opt/riscv-ilp32 --with-arch=rv32gc --with-abi=ilp32 --disable-gdb
+      make "$MAKEJOBS" )
+    rm -rf /riscv/gcc
+fi
+
 if [[ "${RUN_IWYU}" == true ]]; then
   ${CI_RETRY_EXE} git clone --depth=1 https://github.com/include-what-you-use/include-what-you-use -b clang_"${IWYU_LLVM_V}" /include-what-you-use
-  (cd /include-what-you-use && patch -p1 < /ci_container_base/ci/test/01_iwyu.patch)
+  pushd /include-what-you-use
+  patch -p1 < "${BASE_ROOT_DIR}/ci/test/01_iwyu.patch"
+  popd
   cmake -B /iwyu-build/ -G 'Unix Makefiles' -DCMAKE_PREFIX_PATH=/usr/lib/llvm-"${IWYU_LLVM_V}" -S /include-what-you-use
   make -C /iwyu-build/ install "$MAKEJOBS"
 fi
@@ -101,10 +120,21 @@ if [ -n "$XCODE_VERSION" ] && [ ! -d "${DEPENDS_DIR}/SDKs/${OSX_SDK_BASENAME}" ]
   if [ ! -f "$OSX_SDK_PATH" ]; then
     ${CI_RETRY_EXE} curl --location --fail "${SDK_URL}/${OSX_SDK_FILENAME}" -o "$OSX_SDK_PATH"
   fi
+  sha256sum -c <<<"${OSX_SDK_SHA256} ${OSX_SDK_PATH}"
   tar -C "${DEPENDS_DIR}/SDKs" -xf "$OSX_SDK_PATH"
 fi
 
-FREEBSD_SDK_BASENAME="freebsd-${HOST}-${FREEBSD_VERSION}"
+if [ -n "$NETBSD_VERSION" ] && [ ! -d "${DEPENDS_DIR}/SDKs/${NETBSD_SDK_BASENAME}" ]; then
+  mkdir -p "${DEPENDS_DIR}/SDKs/${NETBSD_SDK_BASENAME}"
+  while read -r NETBSD_SDK_SHA512 NETBSD_SDK_FILENAME; do
+    NETBSD_SDK_PATH="${DEPENDS_DIR}/sdk-sources/${NETBSD_SDK_FILENAME}"
+    if [ ! -f "$NETBSD_SDK_PATH" ]; then
+      ${CI_RETRY_EXE} curl --location --fail "https://cdn.netbsd.org/pub/NetBSD/NetBSD-${NETBSD_VERSION}/amd64/binary/sets/${NETBSD_SDK_FILENAME}" -o "$NETBSD_SDK_PATH"
+    fi
+    sha512sum -c <<<"${NETBSD_SDK_SHA512}  ${NETBSD_SDK_PATH}"
+    tar -C "${DEPENDS_DIR}/SDKs/${NETBSD_SDK_BASENAME}" -xf "$NETBSD_SDK_PATH"
+  done < <(printf '%b\n' "${NETBSD_SDK_SHA512SUMS}")
+fi
 
 if [ -n "$FREEBSD_VERSION" ] && [ ! -d "${DEPENDS_DIR}/SDKs/${FREEBSD_SDK_BASENAME}" ]; then
   FREEBSD_SDK_FILENAME="base-${FREEBSD_VERSION}.txz"
@@ -112,8 +142,29 @@ if [ -n "$FREEBSD_VERSION" ] && [ ! -d "${DEPENDS_DIR}/SDKs/${FREEBSD_SDK_BASENA
   if [ ! -f "$FREEBSD_SDK_PATH" ]; then
     ${CI_RETRY_EXE} curl --location --fail "https://download.freebsd.org/releases/amd64/${FREEBSD_VERSION}-RELEASE/base.txz" -o "$FREEBSD_SDK_PATH"
   fi
+  sha256sum -c <<<"${FREEBSD_SDK_SHA256} ${FREEBSD_SDK_PATH}"
   mkdir -p "${DEPENDS_DIR}/SDKs/${FREEBSD_SDK_BASENAME}"
   tar -C "${DEPENDS_DIR}/SDKs/${FREEBSD_SDK_BASENAME}" -xf "$FREEBSD_SDK_PATH"
+fi
+
+if [ -n "$OPENBSD_VERSION" ] && [ ! -d "${DEPENDS_DIR}/SDKs/${OPENBSD_SDK_BASENAME}" ]; then
+  mkdir -p "${DEPENDS_DIR}/SDKs/${OPENBSD_SDK_BASENAME}"
+  while read -r OPENBSD_SDK_SHA256 OPENBSD_SDK_FILENAME; do
+    OPENBSD_SDK_PATH="${DEPENDS_DIR}/sdk-sources/${OPENBSD_SDK_FILENAME}"
+    if [ ! -f "$OPENBSD_SDK_PATH" ]; then
+      ${CI_RETRY_EXE} curl --location --fail "https://cdn.openbsd.org/pub/OpenBSD/${OPENBSD_VERSION}/amd64/${OPENBSD_SDK_FILENAME}" -o "$OPENBSD_SDK_PATH"
+    fi
+    sha256sum -c <<<"${OPENBSD_SDK_SHA256}  ${OPENBSD_SDK_PATH}"
+    tar -C "${DEPENDS_DIR}/SDKs/${OPENBSD_SDK_BASENAME}" -xf "$OPENBSD_SDK_PATH"
+  done < <(printf '%b\n' "${OPENBSD_SDK_SHA256SUMS}")
+  (
+    # The SDK has versioned shared libs, but no unversioned libfoo.so symlink,
+    # which breaks linking the kernel with lld. Create the symlinks.
+    cd "${DEPENDS_DIR}/SDKs/${OPENBSD_SDK_BASENAME}/usr/lib"
+    ln -sf libc++abi.so.*.*  libc++abi.so
+    ln -sf libc++.so.*.*     libc++.so
+    ln -sf libpthread.so.*.* libpthread.so
+  )
 fi
 
 echo -n "done" > "${CFG_DONE}"

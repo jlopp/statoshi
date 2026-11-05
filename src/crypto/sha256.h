@@ -5,8 +5,8 @@
 #ifndef BITCOIN_CRYPTO_SHA256_H
 #define BITCOIN_CRYPTO_SHA256_H
 
+#include <cstddef>
 #include <cstdint>
-#include <cstdlib>
 #include <string>
 
 /** A hasher class for SHA-256. */
@@ -18,7 +18,7 @@ private:
     uint64_t bytes{0};
 
 public:
-    static const size_t OUTPUT_SIZE = 32;
+    static constexpr size_t OUTPUT_SIZE{32};
 
     CSHA256();
     CSHA256& Write(const unsigned char* data, size_t len);

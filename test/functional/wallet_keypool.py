@@ -7,6 +7,8 @@
 from decimal import Decimal
 
 from test_framework.test_framework import BitcoinTestFramework
+from test_framework.descriptors import descsum_create
+from test_framework.extendedkey import ExtendedPrivateKey
 from test_framework.util import (
     assert_equal,
     assert_not_equal,
@@ -23,6 +25,28 @@ class KeyPoolTest(BitcoinTestFramework):
 
     def run_test(self):
         nodes = self.nodes
+
+        # A refill to INT32_MAX only overflows the range end once a descriptor has advanced
+        # past index 0, because at next_index 0 the sum is exactly INT32_MAX. Advance every
+        # descriptor by one first so that the addition in TopUpWithDB is 1 + INT32_MAX.
+        nodes[0].createwallet(wallet_name="keypool_overflow")
+        overflow_wallet = nodes[0].get_wallet_rpc("keypool_overflow")
+        for address_type in ["legacy", "p2sh-segwit", "bech32", "bech32m"]:
+            overflow_wallet.getnewaddress(address_type=address_type)
+            overflow_wallet.getrawchangeaddress(address_type=address_type)
+        descriptors_before = overflow_wallet.listdescriptors()["descriptors"]
+        assert_equal(sorted({desc["next_index"] for desc in descriptors_before}), [1])
+
+        # The refill cannot be satisfied, so it is reported as an error and the range is left
+        # as it was. Without the bound this addition is undefined behavior, detected by UBSan.
+        info_before = overflow_wallet.getwalletinfo()
+        assert_raises_rpc_error(-4, "Error refreshing keypool.", overflow_wallet.keypoolrefill, 2**31 - 1)
+        info_after = overflow_wallet.getwalletinfo()
+        assert_equal(info_after["keypoolsize"], info_before["keypoolsize"])
+        assert_equal(info_after["keypoolsize_hd_internal"], info_before["keypoolsize_hd_internal"])
+        assert_equal(overflow_wallet.listdescriptors()["descriptors"], descriptors_before)
+        overflow_wallet.unloadwallet()
+
         addr_before_encrypting = nodes[0].getnewaddress()
         addr_before_encrypting_data = nodes[0].getaddressinfo(addr_before_encrypting)
 
@@ -32,39 +56,39 @@ class KeyPoolTest(BitcoinTestFramework):
         nodes[0].walletpassphrase('test', 10)
         nodes[0].importdescriptors([
             {
-                "desc": "wpkh(tprv8ZgxMBicQKsPd7Uf69XL1XwhmjHopUGep8GuEiJDZmbQz6o58LninorQAfcKZWARbtRtfnLcJ5MQ2AtHcQJCCRUcMRvmDUjyEmNUWwx8UbK/0h/*h)#y4dfsj7n",
+                "desc": descsum_create(f"wpkh({ExtendedPrivateKey.generate().to_string()}/0h/*h)"),
                 "timestamp": "now",
                 "range": [0,0],
                 "active": True
             },
             {
-                "desc": "pkh(tprv8ZgxMBicQKsPd7Uf69XL1XwhmjHopUGep8GuEiJDZmbQz6o58LninorQAfcKZWARbtRtfnLcJ5MQ2AtHcQJCCRUcMRvmDUjyEmNUWwx8UbK/1h/*h)#a0nyvl0k",
+                "desc": descsum_create(f"pkh({ExtendedPrivateKey.generate().to_string()}/1h/*h)"),
                 "timestamp": "now",
                 "range": [0,0],
                 "active": True
             },
             {
-                "desc": "sh(wpkh(tprv8ZgxMBicQKsPd7Uf69XL1XwhmjHopUGep8GuEiJDZmbQz6o58LninorQAfcKZWARbtRtfnLcJ5MQ2AtHcQJCCRUcMRvmDUjyEmNUWwx8UbK/2h/*h))#lmeu2axg",
+                "desc": descsum_create(f"sh(wpkh({ExtendedPrivateKey.generate().to_string()}/2h/*h))"),
                 "timestamp": "now",
                 "range": [0,0],
                 "active": True
             },
             {
-                "desc": "wpkh(tprv8ZgxMBicQKsPd7Uf69XL1XwhmjHopUGep8GuEiJDZmbQz6o58LninorQAfcKZWARbtRtfnLcJ5MQ2AtHcQJCCRUcMRvmDUjyEmNUWwx8UbK/3h/*h)#jkl636gm",
+                "desc": descsum_create(f"wpkh({ExtendedPrivateKey.generate().to_string()}/3h/*h)"),
                 "timestamp": "now",
                 "range": [0,0],
                 "active": True,
                 "internal": True
             },
             {
-                "desc": "pkh(tprv8ZgxMBicQKsPd7Uf69XL1XwhmjHopUGep8GuEiJDZmbQz6o58LninorQAfcKZWARbtRtfnLcJ5MQ2AtHcQJCCRUcMRvmDUjyEmNUWwx8UbK/4h/*h)#l3crwaus",
+                "desc": descsum_create(f"pkh({ExtendedPrivateKey.generate().to_string()}/4h/*h)"),
                 "timestamp": "now",
                 "range": [0,0],
                 "active": True,
                 "internal": True
             },
             {
-                "desc": "sh(wpkh(tprv8ZgxMBicQKsPd7Uf69XL1XwhmjHopUGep8GuEiJDZmbQz6o58LninorQAfcKZWARbtRtfnLcJ5MQ2AtHcQJCCRUcMRvmDUjyEmNUWwx8UbK/5h/*h))#qg8wa75f",
+                "desc": descsum_create(f"sh(wpkh({ExtendedPrivateKey.generate().to_string()}/5h/*h))"),
                 "timestamp": "now",
                 "range": [0,0],
                 "active": True,

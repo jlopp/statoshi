@@ -104,7 +104,7 @@ static void pubnonce_summing_to_inf(secp256k1_musig_pubnonce *pubnonce) {
         secp256k1_ge_neg(&ge[1], &ge[1]);
     }
 
-    secp256k1_musig_sum_pubnonces(CTX, summed_pubnonces, pubnonce_ptr, 2);
+    CHECK(secp256k1_musig_sum_pubnonces(CTX, summed_pubnonces, pubnonce_ptr, 2) == 1);
     CHECK(secp256k1_gej_is_infinity(&summed_pubnonces[0]));
     CHECK(secp256k1_gej_is_infinity(&summed_pubnonces[1]));
 }
@@ -372,9 +372,9 @@ static void musig_api_tests(void) {
     {
         /* Check that the aggnonce encodes two points at infinity */
         secp256k1_ge aggnonce_pt[2];
-        secp256k1_musig_aggnonce_load(CTX, aggnonce_pt, &aggnonce);
+        CHECK(secp256k1_musig_aggnonce_load(CTX, aggnonce_pt, &aggnonce) == 1);
         for (i = 0; i < 2; i++) {
-            secp256k1_ge_is_infinity(&aggnonce_pt[i]);
+            CHECK(secp256k1_ge_is_infinity(&aggnonce_pt[i]) == 1);
         }
     }
     CHECK(secp256k1_musig_nonce_agg(CTX, &aggnonce, pubnonce_ptr, 2) == 1);
@@ -526,7 +526,7 @@ static void musig_nonce_test(void) {
     int i, j;
     secp256k1_scalar k[6][2];
 
-    const secp256k1_hash_ctx *hash_ctx = secp256k1_get_hash_context(CTX);
+    const secp256k1_hash_ctx *hash_ctx = &CTX->hash_ctx;
     testrand_bytes_test(session_secrand, sizeof(session_secrand));
     testrand_bytes_test(sk, sizeof(sk));
     testrand_bytes_test(pk, sizeof(pk));
@@ -575,7 +575,7 @@ static void musig_nonce_test(void) {
  * state. */
 static void sha256_tag_test(void) {
     secp256k1_sha256 sha;
-    const secp256k1_hash_ctx *hash_ctx = secp256k1_get_hash_context(CTX);
+    const secp256k1_hash_ctx *hash_ctx = &CTX->hash_ctx;
     {
         /* "KeyAgg list" */
         static const unsigned char tag[] = {'K', 'e', 'y', 'A', 'g', 'g', ' ', 'l', 'i', 's', 't'};
@@ -862,7 +862,7 @@ static void musig_test_vectors_nonceagg(void) {
         }
         CHECK(secp256k1_musig_nonce_agg(CTX, &aggnonce, pubnonce_ptr, 2));
         CHECK(secp256k1_musig_aggnonce_serialize(CTX, aggnonce66, &aggnonce));
-        CHECK(secp256k1_memcmp_var(aggnonce66, c->expected, 33) == 0);
+        CHECK(secp256k1_memcmp_var(aggnonce66, c->expected, sizeof(aggnonce66)) == 0);
     }
     for (i = 0; i < ARRAY_SIZE(vector->error_case); i++) {
         const struct musig_nonce_agg_test_case *c = &vector->error_case[i];

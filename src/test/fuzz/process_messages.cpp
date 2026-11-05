@@ -2,57 +2,62 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include <addrman.h>
 #include <banman.h>
-#include <consensus/consensus.h>
+#include <kernel/chainparams.h>
 #include <net.h>
 #include <net_processing.h>
-#include <node/warnings.h>
+#include <primitives/block.h>
+#include <primitives/transaction.h>
 #include <protocol.h>
-#include <script/script.h>
 #include <sync.h>
 #include <test/fuzz/FuzzedDataProvider.h>
 #include <test/fuzz/fuzz.h>
 #include <test/fuzz/util.h>
 #include <test/fuzz/util/net.h>
-#include <test/util/mining.h>
+#include <test/fuzz/util/reachability.h>
 #include <test/util/net.h>
+#include <test/util/random.h>
 #include <test/util/setup_common.h>
 #include <test/util/time.h>
 #include <test/util/validation.h>
+#include <uint256.h>
+#include <util/check.h>
 #include <util/time.h>
+#include <validation.h>
 #include <validationinterface.h>
 
+#include <functional>
 #include <ios>
+#include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
 namespace {
 TestingSetup* g_setup;
+constexpr ReachabilityGoal PROCESS_MESSAGES_CHANGES_MEMPOOL{"process_messages changes the mempool"};
+constexpr ReachabilityGoal PROCESS_MESSAGES_CHANGES_BLOCK_INDEX{"process_messages changes the block index"};
 
-void ResetChainman(TestingSetup& setup)
-{
-    SetMockTime(setup.m_node.chainman->GetParams().GenesisBlock().Time());
-    setup.m_node.chainman.reset();
-    setup.m_make_chainman();
-    setup.LoadVerifyActivateChainstate();
-    node::BlockAssembler::Options options;
-    options.include_dummy_extranonce = true;
-    for (int i = 0; i < 2 * COINBASE_MATURITY; i++) {
-        MineBlock(setup.m_node, options);
-    }
-}
 } // namespace
+
+extern void MakeRandDeterministicDANGEROUS(const uint256& seed) noexcept;
 
 void initialize_process_messages()
 {
+    RegisterReachabilityGoal(PROCESS_MESSAGES_CHANGES_MEMPOOL);
+    RegisterReachabilityGoal(PROCESS_MESSAGES_CHANGES_BLOCK_INDEX);
+    FakeNodeClock init_clock{}; // Uses the existing mock time
     static const auto testing_setup{
         MakeNoLogFileContext<TestingSetup>(
             /*chain_type=*/ChainType::REGTEST,
             {}),
     };
     g_setup = testing_setup.get();
-    ResetChainman(*g_setup);
+    // Replace validation_signals before creating chainman and mempool so they use it.
+    g_setup->m_node.validation_signals = std::make_unique<ValidationSignals>(std::make_unique<ImmediateBackgroundTaskRunner>());
+    ResetChainmanAndMempool(*g_setup, init_clock, {.init_block_filter_basic = true});
 }
 
 FUZZ_TARGET(process_messages, .init = initialize_process_messages)
@@ -64,8 +69,10 @@ FUZZ_TARGET(process_messages, .init = initialize_process_messages)
     auto& connman{static_cast<ConnmanTestMsg&>(*node.connman)};
     connman.Reset();
     auto& chainman{static_cast<TestChainstateManager&>(*node.chainman)};
-    const auto block_index_size{WITH_LOCK(chainman.GetMutex(), return chainman.BlockIndex().size())};
-    NodeClockContext clock_ctx{1610000000s}; // any time to successfully reset ibd
+    const auto initial_block_index_size{WITH_LOCK(chainman.GetMutex(), return chainman.BlockIndex().size())};
+    const auto initial_sequence{WITH_LOCK(node.mempool->cs, return node.mempool->GetSequence())};
+    FakeNodeClock node_clock{1610000000s}; // 2021-01-07, arbitrary
+    FakeSteadyClock steady_clock;
     chainman.ResetIbd();
     chainman.DisableNextWrite();
 
@@ -91,7 +98,7 @@ FUZZ_TARGET(process_messages, .init = initialize_process_messages)
     std::vector<CNode*> peers;
     const auto num_peers_to_add = fuzzed_data_provider.ConsumeIntegralInRange(1, 3);
     for (int i = 0; i < num_peers_to_add; ++i) {
-        peers.push_back(ConsumeNodeAsUniquePtr(fuzzed_data_provider, i).release());
+        peers.push_back(ConsumeNodeAsUniquePtr(fuzzed_data_provider, steady_clock, i).release());
         CNode& p2p_node = *peers.back();
 
         FillNode(fuzzed_data_provider, connman, p2p_node);
@@ -99,11 +106,16 @@ FUZZ_TARGET(process_messages, .init = initialize_process_messages)
         connman.AddTestNode(p2p_node);
     }
 
-    LIMITED_WHILE(fuzzed_data_provider.ConsumeBool(), 30)
-    {
+    // Toggle IBD from within the loop, so that some messages may be processed
+    // under IBD and the rest after leaving it. JumpOutOfIbd() latches, so guard
+    // it to call at most once.
+    bool jump_out_of_ibd{false};
+    LIMITED_WHILE (fuzzed_data_provider.ConsumeBool(), 30) {
+        if (!jump_out_of_ibd) jump_out_of_ibd = fuzzed_data_provider.ConsumeBool();
+        if (jump_out_of_ibd && chainman.IsInitialBlockDownload()) chainman.JumpOutOfIbd();
         const std::string random_message_type{fuzzed_data_provider.ConsumeBytesAsString(CMessageHeader::MESSAGE_TYPE_SIZE).c_str()};
 
-        clock_ctx.set(ConsumeTime(fuzzed_data_provider));
+        node_clock.set(ConsumeTime(fuzzed_data_provider));
 
         CSerializedNetMsg net_msg;
         net_msg.m_type = random_message_type;
@@ -128,8 +140,13 @@ FUZZ_TARGET(process_messages, .init = initialize_process_messages)
     node.validation_signals->SyncWithValidationInterfaceQueue();
     node.validation_signals->UnregisterValidationInterface(node.peerman.get());
     node.connman->StopNodes();
-    if (block_index_size != WITH_LOCK(chainman.GetMutex(), return chainman.BlockIndex().size())) {
-        // Reuse the global chainman, but reset it when it is dirty
-        ResetChainman(*g_setup);
+    const auto end_sequence{WITH_LOCK(node.mempool->cs, return node.mempool->GetSequence())};
+    const auto end_block_index_size{WITH_LOCK(chainman.GetMutex(), return chainman.BlockIndex().size())};
+    ObserveReachabilityGoal(initial_sequence != end_sequence, PROCESS_MESSAGES_CHANGES_MEMPOOL);
+    ObserveReachabilityGoal(initial_block_index_size != end_block_index_size, PROCESS_MESSAGES_CHANGES_BLOCK_INDEX);
+    if (initial_block_index_size != end_block_index_size || initial_sequence != end_sequence) {
+        // Reuse the global chainman and mempool, but reset them when dirty.
+        MakeRandDeterministicDANGEROUS(uint256::ZERO);
+        ResetChainmanAndMempool(*g_setup, node_clock, {.init_block_filter_basic = true});
     }
 }

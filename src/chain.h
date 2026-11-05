@@ -26,7 +26,7 @@
  * Maximum amount of time that a block timestamp is allowed to exceed the
  * current time before the block will be accepted.
  */
-static constexpr int64_t MAX_FUTURE_BLOCK_TIME = 2 * 60 * 60;
+inline constexpr int64_t MAX_FUTURE_BLOCK_TIME = 2 * 60 * 60;
 
 /**
  * Timestamp window used as a grace period by code that compares external
@@ -34,10 +34,10 @@ static constexpr int64_t MAX_FUTURE_BLOCK_TIME = 2 * 60 * 60;
  * to block timestamps. This should be set at least as high as
  * MAX_FUTURE_BLOCK_TIME.
  */
-static constexpr int64_t TIMESTAMP_WINDOW = MAX_FUTURE_BLOCK_TIME;
+inline constexpr int64_t TIMESTAMP_WINDOW = MAX_FUTURE_BLOCK_TIME;
 //! Init values for CBlockIndex nSequenceId when loaded from disk
-static constexpr int32_t SEQ_ID_BEST_CHAIN_FROM_DISK = 0;
-static constexpr int32_t SEQ_ID_INIT_FROM_DISK = 1;
+inline constexpr int32_t SEQ_ID_BEST_CHAIN_FROM_DISK = 0;
+inline constexpr int32_t SEQ_ID_INIT_FROM_DISK = 1;
 
 enum BlockStatus : uint32_t {
     //! Unused.
@@ -109,10 +109,10 @@ public:
     int nFile GUARDED_BY(::cs_main){0};
 
     //! Byte offset within blk?????.dat where this block's data is stored
-    unsigned int nDataPos GUARDED_BY(::cs_main){0};
+    uint64_t nDataPos GUARDED_BY(::cs_main){0};
 
     //! Byte offset within rev?????.dat where this block's undo data is stored
-    unsigned int nUndoPos GUARDED_BY(::cs_main){0};
+    uint64_t nUndoPos GUARDED_BY(::cs_main){0};
 
     //! (memory only) Total amount of work (expected number of hashes) in the chain up to and including this block
     arith_uint256 nChainWork{};
@@ -407,16 +407,16 @@ public:
     }
 
     /** Efficiently check whether a block is present in this chain. */
-    bool Contains(const CBlockIndex* pindex) const
+    bool Contains(const CBlockIndex& index) const
     {
-        return (*this)[pindex->nHeight] == pindex;
+        return (*this)[index.nHeight] == &index;
     }
 
     /** Find the successor of a block in this chain, or nullptr if the given index is not found or is the tip. */
-    CBlockIndex* Next(const CBlockIndex* pindex) const
+    CBlockIndex* Next(const CBlockIndex& index) const
     {
-        if (Contains(pindex))
-            return (*this)[pindex->nHeight + 1];
+        if (Contains(index))
+            return (*this)[index.nHeight + 1];
         else
             return nullptr;
     }
@@ -440,7 +440,7 @@ public:
     void SetTip(CBlockIndex& block);
 
     /** Find the last common block between this chain and a block index entry. */
-    const CBlockIndex* FindFork(const CBlockIndex* pindex) const;
+    const CBlockIndex* FindFork(const CBlockIndex& index) const;
 
     /** Find the earliest block with timestamp equal or greater than the given time and height equal or greater than the given height. */
     CBlockIndex* FindEarliestAtLeast(int64_t nTime, int height) const;

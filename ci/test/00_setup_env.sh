@@ -6,7 +6,10 @@
 
 export LC_ALL=C.UTF-8
 
-set -o errexit -o pipefail -o xtrace
+set -o errexit -o nounset -o pipefail -o xtrace
+
+CONTAINER_NAME="ci_$(basename "${FILE_ENV/00_setup_env_/}" .sh)"
+export CONTAINER_NAME
 
 # The source root dir, usually from git, usually read-only.
 # The ci system copies this folder.
@@ -14,21 +17,22 @@ BASE_READ_ONLY_DIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )"/../../ >/dev/null 2>
 export BASE_READ_ONLY_DIR
 # The destination root dir inside the container.
 # This folder will also hold any SDKs.
-# This folder only exists on the ci guest and will be a copy of BASE_READ_ONLY_DIR
+# This folder only exists on the ci guest and will be a copy of BASE_READ_ONLY_DIR.
+# This value is embedded in the CI image at build time; changing it requires
+# rebuilding the image.
 export BASE_ROOT_DIR="${BASE_ROOT_DIR:-/ci_container_base}"
 # The depends dir.
 # This folder exists only on the ci guest, and on the ci host as a volume.
 export DEPENDS_DIR=${DEPENDS_DIR:-$BASE_ROOT_DIR/depends}
 # A folder for the ci system to put temporary files (build result, datadirs for tests, ...)
+# The name contains a space and a non-ASCII symbol to confirm the build and
+# tests handle word-splitting and UTF8 correctly.
 # This folder only exists on the ci guest.
-export BASE_SCRATCH_DIR=${BASE_SCRATCH_DIR:-$BASE_ROOT_DIR/ci/scratch}
+export BASE_SCRATCH_DIR=${BASE_SCRATCH_DIR:-$BASE_ROOT_DIR/ci/scratch_ ₿🧪_}
 
 echo "Setting specific values in env"
-if [ -n "${FILE_ENV}" ]; then
-  set -o errexit;
-  # shellcheck disable=SC1090
-  source "${FILE_ENV}"
-fi
+# shellcheck disable=SC1090
+source "${FILE_ENV}"
 
 echo "Fallback to default values in env (if not yet set)"
 # The number of parallel jobs to pass down to make and test_runner.py
@@ -60,7 +64,7 @@ export BASE_OUTDIR=${BASE_OUTDIR:-$BASE_SCRATCH_DIR/out}
 # This folder exists only on the ci guest, and on the ci host as a volume.
 export PREVIOUS_RELEASES_DIR=${PREVIOUS_RELEASES_DIR:-$BASE_ROOT_DIR/prev_releases}
 export CI_BASE_PACKAGES=${CI_BASE_PACKAGES:-build-essential pkgconf curl ca-certificates ccache python3-dev rsync git procps bison e2fsprogs cmake ninja-build}
-export GOAL=${GOAL:-install}
+export BUILD_TARGETS=${BUILD_TARGETS:-"all install"}
 export DIR_QA_ASSETS=${DIR_QA_ASSETS:-${BASE_SCRATCH_DIR}/qa-assets}
 export CI_RETRY_EXE=${CI_RETRY_EXE:-"retry"}
 

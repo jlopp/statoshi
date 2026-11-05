@@ -7,15 +7,23 @@
 #include <consensus/amount.h>
 #include <kernel/cs_main.h>
 #include <net_processing.h>
+#include <primitives/block.h>
 #include <primitives/transaction.h>
+#include <random.h>
 #include <script/script.h>
 #include <sync.h>
 #include <test/util/setup_common.h>
 #include <test/util/txmempool.h>
 #include <txmempool.h>
+#include <uint256.h>
 #include <util/check.h>
 
+#include <algorithm>
+#include <array>
+#include <cstddef>
 #include <memory>
+#include <span>
+#include <utility>
 #include <vector>
 
 
@@ -80,9 +88,7 @@ static void BlockEncodingBench(benchmark::Bench& bench, size_t n_pool, size_t n_
         tx.vin.resize(1);
         tx.vin[0].scriptSig = CScript() << sigspam;
         tx.vin[0].scriptWitness.stack.push_back({1});
-        tx.vout.resize(1);
-        tx.vout[0].scriptPubKey = CScript() << OP_1 << OP_EQUAL;
-        tx.vout[0].nValue = i;
+        tx.vout = {CTxOut{CAmount(i), CScript() << OP_1 << OP_EQUAL}};
         refs.push_back(MakeTransactionRef(tx));
     }
 

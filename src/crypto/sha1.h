@@ -5,8 +5,8 @@
 #ifndef BITCOIN_CRYPTO_SHA1_H
 #define BITCOIN_CRYPTO_SHA1_H
 
+#include <cstddef>
 #include <cstdint>
-#include <cstdlib>
 
 /** A hasher class for SHA1. */
 class CSHA1
@@ -17,7 +17,7 @@ private:
     uint64_t bytes{0};
 
 public:
-    static const size_t OUTPUT_SIZE = 20;
+    static constexpr size_t OUTPUT_SIZE = 20;
 
     CSHA1();
     CSHA1& Write(const unsigned char* data, size_t len);

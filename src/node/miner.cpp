@@ -7,29 +7,43 @@
 
 #include <chain.h>
 #include <chainparams.h>
-#include <coins.h>
 #include <common/args.h>
 #include <consensus/amount.h>
 #include <consensus/consensus.h>
 #include <consensus/merkle.h>
+#include <consensus/params.h>
 #include <consensus/tx_verify.h>
 #include <consensus/validation.h>
-#include <deploymentstatus.h>
-#include <logging.h>
-#include <node/context.h>
-#include <node/kernel_notifications.h>
+#include <node/blockstorage.h>
+#include <node/mining_args.h>
+#include <node/mining_types.h>
 #include <policy/feerate.h>
 #include <policy/policy.h>
 #include <pow.h>
+#include <primitives/block.h>
 #include <primitives/transaction.h>
-#include <util/moneystr.h>
-#include <util/signalinterrupt.h>
+#include <script/script.h>
+#include <sync.h>
+#include <tinyformat.h>
+#include <txgraph.h>
+#include <txmempool.h>
+#include <uint256.h>
+#include <util/check.h>
+#include <util/feefrac.h>
+#include <util/log.h>
+#include <util/result.h>
 #include <util/time.h>
+#include <util/translation.h>
 #include <validation.h>
+#include <versionbits.h>
 
 #include <algorithm>
+#include <cstddef>
+#include <functional>
+#include <span>
+#include <stdexcept>
+#include <string>
 #include <utility>
-#include <numeric>
 
 namespace node {
 
@@ -42,6 +56,13 @@ int64_t GetMinimumTime(const CBlockIndex* pindexPrev, const int64_t difficulty_a
     // activation safer.
     if (height % difficulty_adjustment_interval == 0) {
         min_time = std::max<int64_t>(min_time, pindexPrev->GetBlockTime() - MAX_TIMEWARP);
+    }
+    // Account for the BIP54 Murch-Zawy rule on all networks: the last block of
+    // a difficulty adjustment period may not be earlier than its first block.
+    if (height % difficulty_adjustment_interval == difficulty_adjustment_interval - 1) {
+        const int first_height{height - static_cast<int>(difficulty_adjustment_interval) + 1};
+        const CBlockIndex* first_block{Assert(pindexPrev->GetAncestor(first_height))};
+        min_time = std::max<int64_t>(min_time, first_block->GetBlockTime());
     }
     return min_time;
 }
@@ -76,36 +97,19 @@ void RegenerateCommitments(CBlock& block, ChainstateManager& chainman)
     block.hashMerkleRoot = BlockMerkleRoot(block);
 }
 
-static BlockAssembler::Options ClampOptions(BlockAssembler::Options options)
-{
-    // Apply DEFAULT_BLOCK_RESERVED_WEIGHT when the caller left it unset.
-    options.block_reserved_weight = std::clamp<size_t>(options.block_reserved_weight.value_or(DEFAULT_BLOCK_RESERVED_WEIGHT), MINIMUM_BLOCK_RESERVED_WEIGHT, MAX_BLOCK_WEIGHT);
-    options.coinbase_output_max_additional_sigops = std::clamp<size_t>(options.coinbase_output_max_additional_sigops, 0, MAX_BLOCK_SIGOPS_COST);
-    // Limit weight to between block_reserved_weight and MAX_BLOCK_WEIGHT for sanity:
-    // block_reserved_weight can safely exceed -blockmaxweight, but the rest of the block template will be empty.
-    options.nBlockMaxWeight = std::clamp<size_t>(options.nBlockMaxWeight, *options.block_reserved_weight, MAX_BLOCK_WEIGHT);
-    return options;
-}
-
-BlockAssembler::BlockAssembler(Chainstate& chainstate, const CTxMemPool* mempool, const Options& options)
+BlockAssembler::BlockAssembler(Chainstate& chainstate,
+                               const CTxMemPool* mempool,
+                               BlockCreateOptions options)
     : chainparams{chainstate.m_chainman.GetParams()},
       m_mempool{options.use_mempool ? mempool : nullptr},
       m_chainstate{chainstate},
-      m_options{ClampOptions(options)}
+      m_options{[&] {
+          if (auto result{CheckMiningOptions(options, /*use_argnames=*/false)}; !result) {
+              throw std::runtime_error(util::ErrorString(result).original);
+          }
+          return FlattenMiningOptions(std::move(options));
+      }()}
 {
-}
-
-void ApplyArgsManOptions(const ArgsManager& args, BlockAssembler::Options& options)
-{
-    // Block resource limits
-    options.nBlockMaxWeight = args.GetIntArg("-blockmaxweight", options.nBlockMaxWeight);
-    if (const auto blockmintxfee{args.GetArg("-blockmintxfee")}) {
-        if (const auto parsed{ParseMoney(*blockmintxfee)}) options.blockMinFeeRate = CFeeRate{*parsed};
-    }
-    options.print_modified_fee = args.GetBoolArg("-printpriority", options.print_modified_fee);
-    if (!options.block_reserved_weight) {
-        options.block_reserved_weight = args.GetIntArg("-blockreservedweight");
-    }
 }
 
 void BlockAssembler::resetBlock()
@@ -184,14 +188,18 @@ std::unique_ptr<CBlockTemplate> BlockAssembler::CreateNewBlock()
     // increasing its length would reduce the space they can use and may break
     // existing clients.
     coinbaseTx.vin[0].scriptSig = CScript() << nHeight;
-    if (m_options.include_dummy_extranonce) {
+    // Set script_sig_prefix here, so IPC mining clients are not affected by
+    // the optional scriptSig padding below. They provide their own extraNonce,
+    // and in a typical setup a pool name or realistic extraNonce already makes
+    // the scriptSig long enough.
+    coinbase_tx.script_sig_prefix = coinbaseTx.vin[0].scriptSig;
+    if (nHeight <= 16) {
         // For blocks at heights <= 16, the BIP34-encoded height alone is only
         // one byte. Consensus requires coinbase scriptSigs to be at least two
-        // bytes long (bad-cb-length), so tests and regtest include a dummy
-        // extraNonce (OP_0)
+        // bytes long (bad-cb-length), so an OP_0 is always appended at those
+        // heights.
         coinbaseTx.vin[0].scriptSig << OP_0;
     }
-    coinbase_tx.script_sig_prefix = coinbaseTx.vin[0].scriptSig;
     Assert(nHeight > 0);
     coinbaseTx.nLockTime = static_cast<uint32_t>(nHeight - 1);
     coinbase_tx.lock_time = coinbaseTx.nLockTime;
@@ -212,7 +220,7 @@ std::unique_ptr<CBlockTemplate> BlockAssembler::CreateNewBlock()
         coinbase_tx.required_outputs.push_back(final_coinbase->vout[witness_index]);
     }
 
-    LogInfo("CreateNewBlock(): block weight: %u txs: %u fees: %ld sigops %d\n", GetBlockWeight(*pblock), nBlockTx, nFees, nBlockSigOpsCost);
+    LogDebug(BCLog::MINING, "CreateNewBlock(): block weight: %u txs: %u fees: %ld sigops %d\n", GetBlockWeight(*pblock), nBlockTx, nFees, nBlockSigOpsCost);
 
     // Fill in header
     pblock->hashPrevBlock  = pindexPrev->GetBlockHash();
@@ -221,7 +229,6 @@ std::unique_ptr<CBlockTemplate> BlockAssembler::CreateNewBlock()
     pblock->nNonce         = 0;
 
     if (m_options.test_block_validity) {
-        // if nHeight <= 16, and include_dummy_extranonce=false this will fail due to bad-cb-length.
         if (BlockValidationState state{TestBlockValidity(m_chainstate, *pblock, /*check_pow=*/false, /*check_merkle_root=*/false)}; !state.IsValid()) {
             throw std::runtime_error(strprintf("TestBlockValidity failed: %s", state.ToString()));
         }
@@ -236,9 +243,11 @@ std::unique_ptr<CBlockTemplate> BlockAssembler::CreateNewBlock()
     return std::move(pblocktemplate);
 }
 
-bool BlockAssembler::TestChunkBlockLimits(FeePerWeight chunk_feerate, int64_t chunk_sigops_cost) const
+bool BlockAssembler::TestChunkBlockLimits(int64_t chunk_weight, int64_t chunk_sigops_cost) const
 {
-    if (nBlockWeight + chunk_feerate.size >= m_options.nBlockMaxWeight) {
+    // block_max_weight has been flattened before block assembly limit checks.
+    Assert(m_options.block_max_weight);
+    if (nBlockWeight + chunk_weight >= m_options.block_max_weight) {
         return false;
     }
     if (nBlockSigOpsCost + chunk_sigops_cost >= MAX_BLOCK_SIGOPS_COST) {
@@ -269,7 +278,7 @@ void BlockAssembler::AddToBlock(const CTxMemPoolEntry& entry)
     nBlockSigOpsCost += entry.GetSigOpCost();
     nFees += entry.GetFee();
 
-    if (m_options.print_modified_fee) {
+    if (*m_options.print_modified_fee) {
         LogInfo("fee rate %s txid %s\n",
                   CFeeRate(entry.GetModifiedFee(), entry.GetTxSize()).ToString(),
                   entry.GetTx().GetHash().ToString());
@@ -295,24 +304,28 @@ void BlockAssembler::addChunks()
 
     while (selected_transactions.size() > 0) {
         // Check to see if min fee rate is still respected.
-        if (chunk_feerate_vsize << m_options.blockMinFeeRate.GetFeePerVSize()) {
+        if (ByRatio{chunk_feerate_vsize} < ByRatio{m_options.block_min_fee_rate->GetFeePerVSize()}) {
             // Everything else we might consider has a lower feerate
             return;
         }
 
         int64_t chunk_sig_ops = 0;
+        int64_t chunk_weight = 0;
         for (const auto& tx : selected_transactions) {
             chunk_sig_ops += tx.get().GetSigOpCost();
+            chunk_weight += tx.get().GetTxWeight();
         }
 
         // Check to see if this chunk will fit.
-        if (!TestChunkBlockLimits(chunk_feerate, chunk_sig_ops) || !TestChunkTransactions(selected_transactions)) {
+        if (!TestChunkBlockLimits(chunk_weight, chunk_sig_ops) || !TestChunkTransactions(selected_transactions)) {
             // This chunk won't fit, so we skip it and will try the next best one.
             m_mempool->SkipBuilderChunk();
             ++nConsecutiveFailed;
 
+            // block_max_weight has been flattened before block assembly limit checks.
+            Assert(m_options.block_max_weight);
             if (nConsecutiveFailed > MAX_CONSECUTIVE_FAILURES && nBlockWeight +
-                    BLOCK_FULL_ENOUGH_WEIGHT_DELTA > m_options.nBlockMaxWeight) {
+                    BLOCK_FULL_ENOUGH_WEIGHT_DELTA > *m_options.block_max_weight) {
                 // Give up if we're close to full and haven't succeeded in a while
                 return;
             }
@@ -349,179 +362,6 @@ void AddMerkleRootAndCoinbase(CBlock& block, CTransactionRef coinbase, uint32_t 
     block.m_checked_witness_commitment = false;
     block.m_checked_merkle_root = false;
     block.fChecked = false;
-}
-
-void InterruptWait(KernelNotifications& kernel_notifications, bool& interrupt_wait)
-{
-    LOCK(kernel_notifications.m_tip_block_mutex);
-    interrupt_wait = true;
-    kernel_notifications.m_tip_block_cv.notify_all();
-}
-
-std::unique_ptr<CBlockTemplate> WaitAndCreateNewBlock(ChainstateManager& chainman,
-                                                      KernelNotifications& kernel_notifications,
-                                                      CTxMemPool* mempool,
-                                                      const std::unique_ptr<CBlockTemplate>& block_template,
-                                                      const BlockWaitOptions& options,
-                                                      const BlockAssembler::Options& assemble_options,
-                                                      bool& interrupt_wait)
-{
-    // Delay calculating the current template fees, just in case a new block
-    // comes in before the next tick.
-    CAmount current_fees = -1;
-
-    // Alternate waiting for a new tip and checking if fees have risen.
-    // The latter check is expensive so we only run it once per second.
-    auto now{NodeClock::now()};
-    const auto deadline = now + options.timeout;
-    const MillisecondsDouble tick{1000};
-    const bool allow_min_difficulty{chainman.GetParams().GetConsensus().fPowAllowMinDifficultyBlocks};
-
-    do {
-        bool tip_changed{false};
-        {
-            WAIT_LOCK(kernel_notifications.m_tip_block_mutex, lock);
-            // Note that wait_until() checks the predicate before waiting
-            kernel_notifications.m_tip_block_cv.wait_until(lock, std::min(now + tick, deadline), [&]() EXCLUSIVE_LOCKS_REQUIRED(kernel_notifications.m_tip_block_mutex) {
-                AssertLockHeld(kernel_notifications.m_tip_block_mutex);
-                const auto tip_block{kernel_notifications.TipBlock()};
-                // We assume tip_block is set, because this is an instance
-                // method on BlockTemplate and no template could have been
-                // generated before a tip exists.
-                tip_changed = Assume(tip_block) && tip_block != block_template->block.hashPrevBlock;
-                return tip_changed || chainman.m_interrupt || interrupt_wait;
-            });
-            if (interrupt_wait) {
-                interrupt_wait = false;
-                return nullptr;
-            }
-        }
-
-        if (chainman.m_interrupt) return nullptr;
-        // At this point the tip changed, a full tick went by or we reached
-        // the deadline.
-
-        // Must release m_tip_block_mutex before locking cs_main, to avoid deadlocks.
-        LOCK(::cs_main);
-
-        // On test networks return a minimum difficulty block after 20 minutes
-        if (!tip_changed && allow_min_difficulty) {
-            const NodeClock::time_point tip_time{std::chrono::seconds{chainman.ActiveChain().Tip()->GetBlockTime()}};
-            if (now > tip_time + 20min) {
-                tip_changed = true;
-            }
-        }
-
-        /**
-         * We determine if fees increased compared to the previous template by generating
-         * a fresh template. There may be more efficient ways to determine how much
-         * (approximate) fees for the next block increased, perhaps more so after
-         * Cluster Mempool.
-         *
-         * We'll also create a new template if the tip changed during this iteration.
-         */
-        if (options.fee_threshold < MAX_MONEY || tip_changed) {
-            auto new_tmpl{BlockAssembler{
-                chainman.ActiveChainstate(),
-                mempool,
-                assemble_options}
-                              .CreateNewBlock()};
-
-            // If the tip changed, return the new template regardless of its fees.
-            if (tip_changed) return new_tmpl;
-
-            // Calculate the original template total fees if we haven't already
-            if (current_fees == -1) {
-                current_fees = std::accumulate(block_template->vTxFees.begin(), block_template->vTxFees.end(), CAmount{0});
-            }
-
-            // Check if fees increased enough to return the new template
-            const CAmount new_fees = std::accumulate(new_tmpl->vTxFees.begin(), new_tmpl->vTxFees.end(), CAmount{0});
-            Assume(options.fee_threshold != MAX_MONEY);
-            if (new_fees >= current_fees + options.fee_threshold) return new_tmpl;
-        }
-
-        now = NodeClock::now();
-    } while (now < deadline);
-
-    return nullptr;
-}
-
-std::optional<BlockRef> GetTip(ChainstateManager& chainman)
-{
-    LOCK(::cs_main);
-    CBlockIndex* tip{chainman.ActiveChain().Tip()};
-    if (!tip) return {};
-    return BlockRef{tip->GetBlockHash(), tip->nHeight};
-}
-
-bool CooldownIfHeadersAhead(ChainstateManager& chainman, KernelNotifications& kernel_notifications, const BlockRef& last_tip, bool& interrupt_mining)
-{
-    uint256 last_tip_hash{last_tip.hash};
-
-    while (const std::optional<int> remaining = chainman.BlocksAheadOfTip()) {
-        const int cooldown_seconds = std::clamp(*remaining, 3, 20);
-        const auto cooldown_deadline{MockableSteadyClock::now() + std::chrono::seconds{cooldown_seconds}};
-
-        {
-            WAIT_LOCK(kernel_notifications.m_tip_block_mutex, lock);
-            kernel_notifications.m_tip_block_cv.wait_until(lock, cooldown_deadline, [&]() EXCLUSIVE_LOCKS_REQUIRED(kernel_notifications.m_tip_block_mutex) {
-                const auto tip_block = kernel_notifications.TipBlock();
-                return chainman.m_interrupt || interrupt_mining || (tip_block && *tip_block != last_tip_hash);
-            });
-            if (chainman.m_interrupt || interrupt_mining) {
-                interrupt_mining = false;
-                return false;
-            }
-
-            // If the tip changed during the wait, extend the deadline
-            const auto tip_block = kernel_notifications.TipBlock();
-            if (tip_block && *tip_block != last_tip_hash) {
-                last_tip_hash = *tip_block;
-                continue;
-            }
-        }
-
-        // No tip change and the cooldown window has expired.
-        if (MockableSteadyClock::now() >= cooldown_deadline) break;
-    }
-
-    return true;
-}
-
-std::optional<BlockRef> WaitTipChanged(ChainstateManager& chainman, KernelNotifications& kernel_notifications, const uint256& current_tip, MillisecondsDouble& timeout, bool& interrupt)
-{
-    Assume(timeout >= 0ms); // No internal callers should use a negative timeout
-    if (timeout < 0ms) timeout = 0ms;
-    if (timeout > std::chrono::years{100}) timeout = std::chrono::years{100}; // Upper bound to avoid UB in std::chrono
-    auto deadline{std::chrono::steady_clock::now() + timeout};
-    {
-        WAIT_LOCK(kernel_notifications.m_tip_block_mutex, lock);
-        // For callers convenience, wait longer than the provided timeout
-        // during startup for the tip to be non-null. That way this function
-        // always returns valid tip information when possible and only
-        // returns null when shutting down, not when timing out.
-        kernel_notifications.m_tip_block_cv.wait(lock, [&]() EXCLUSIVE_LOCKS_REQUIRED(kernel_notifications.m_tip_block_mutex) {
-            return kernel_notifications.TipBlock() || chainman.m_interrupt || interrupt;
-        });
-        if (chainman.m_interrupt || interrupt) {
-            interrupt = false;
-            return {};
-        }
-        // At this point TipBlock is set, so continue to wait until it is
-        // different then `current_tip` provided by caller.
-        kernel_notifications.m_tip_block_cv.wait_until(lock, deadline, [&]() EXCLUSIVE_LOCKS_REQUIRED(kernel_notifications.m_tip_block_mutex) {
-            return Assume(kernel_notifications.TipBlock()) != current_tip || chainman.m_interrupt || interrupt;
-        });
-        if (chainman.m_interrupt || interrupt) {
-            interrupt = false;
-            return {};
-        }
-    }
-
-    // Must release m_tip_block_mutex before getTip() locks cs_main, to
-    // avoid deadlocks.
-    return GetTip(chainman);
 }
 
 } // namespace node

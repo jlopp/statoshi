@@ -11,6 +11,7 @@
 #include <consensus/validation.h>
 #include <crypto/hex_base.h>
 #include <key_io.h>
+#include <prevector.h>
 #include <primitives/block.h>
 #include <primitives/transaction.h>
 #include <script/descriptor.h>
@@ -337,9 +338,13 @@ const std::map<unsigned char, std::string> mapSigHashTypes = {
     {static_cast<unsigned char>(SIGHASH_SINGLE|SIGHASH_ANYONECANPAY), std::string("SINGLE|ANYONECANPAY")},
 };
 
-std::string SighashToStr(unsigned char sighash_type)
+std::string SighashToStr(int32_t sighash_type)
 {
-    const auto& it = mapSigHashTypes.find(sighash_type);
+    // Signatures encode the sighash type in a single byte, but the PSBT field
+    // for it is a 32 bit unsigned integer in BIP 174 (signed in PSBTInput)
+    if (sighash_type < 0 || sighash_type > 0xff) return "";
+    const uint8_t sighash_byte(sighash_type);
+    const auto& it = mapSigHashTypes.find(sighash_byte);
     if (it == mapSigHashTypes.end()) return "";
     return it->second;
 }
@@ -359,7 +364,7 @@ std::string ScriptToAsmStr(const CScript& script, const bool fAttemptSighashDeco
     CScript::const_iterator pc = script.begin();
     while (pc < script.end()) {
         if (!str.empty()) {
-            str += " ";
+            str += ' ';
         }
         if (!script.GetOp(pc, opcode, vch)) {
             str += "[error]";

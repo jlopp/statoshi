@@ -219,8 +219,8 @@ WalletModel::SendCoinsReturn WalletModel::prepareTransaction(WalletModelTransact
 
         // Reject absurdly high fee. (This can never happen because the
         // wallet never creates transactions with fee greater than
-        // m_default_max_tx_fee. This merely a belt-and-suspenders check).
-        if (nFeeRequired > m_wallet->getDefaultMaxTxFee()) {
+        // m_max_tx_fee. This is merely a belt-and-suspenders check).
+        if (nFeeRequired > m_wallet->getMaxTxFee()) {
             return AbsurdFee;
         }
     } catch (const std::runtime_error& err) {
@@ -238,15 +238,16 @@ void WalletModel::sendCoins(WalletModelTransaction& transaction)
     QByteArray transaction_array; /* store serialized transaction */
 
     {
-        std::vector<std::pair<std::string, std::string>> vOrderForm;
+        std::vector<std::string> messages;
         for (const SendCoinsRecipient &rcp : transaction.getRecipients())
         {
-            if (!rcp.message.isEmpty()) // Message from normal bitcoin:URI (bitcoin:123...?message=example)
-                vOrderForm.emplace_back("Message", rcp.message.toStdString());
+            if (!rcp.message.isEmpty()) { // Message from normal bitcoin:URI (bitcoin:123...?message=example)
+                messages.emplace_back(rcp.message.toStdString());
+            }
         }
 
         auto& newTx = transaction.getWtx();
-        wallet().commitTransaction(newTx, /*value_map=*/{}, std::move(vOrderForm));
+        wallet().commitTransaction(newTx, messages);
 
         DataStream ssTx;
         ssTx << TX_WITH_WITNESS(*newTx);
@@ -327,21 +328,7 @@ bool WalletModel::setWalletEncrypted(const SecureString& passphrase)
     return m_wallet->encryptWallet(passphrase);
 }
 
-bool WalletModel::setWalletLocked(bool locked, const SecureString &passPhrase)
-{
-    if(locked)
-    {
-        // Lock
-        return m_wallet->lock();
-    }
-    else
-    {
-        // Unlock
-        return m_wallet->unlock(passPhrase);
-    }
-}
-
-bool WalletModel::changePassphrase(const SecureString &oldPass, const SecureString &newPass)
+util::Expected<void, wallet::WalletError> WalletModel::changePassphrase(const SecureString& oldPass, const SecureString& newPass)
 {
     m_wallet->lock(); // Make sure wallet is locked before attempting pass change
     return m_wallet->changeWalletPassphrase(oldPass, newPass);
@@ -457,14 +444,13 @@ WalletModel::UnlockContext::~UnlockContext()
 {
     if(valid && relock)
     {
-        wallet->setWalletLocked(true);
+        wallet->wallet().lock();
     }
 }
 
 bool WalletModel::bumpFee(Txid hash, Txid& new_hash)
 {
     CCoinControl coin_control;
-    coin_control.m_signal_bip125_rbf = true;
     std::vector<bilingual_str> errors;
     CAmount old_fee;
     CAmount new_fee;
@@ -517,7 +503,7 @@ bool WalletModel::bumpFee(Txid hash, Txid& new_hash)
         // "Create Unsigned" clicked
         PartiallySignedTransaction psbtx(mtx);
         bool complete = false;
-        const auto err{wallet().fillPSBT(std::nullopt, /*sign=*/false, /*bip32derivs=*/true, nullptr, psbtx, complete)};
+        const auto err{wallet().fillPSBT({.sign = false, .bip32_derivs = true}, nullptr, psbtx, complete)};
         if (err || complete) {
             QMessageBox::critical(nullptr, tr("Fee bump error"), tr("Can't draft transaction."));
             return false;

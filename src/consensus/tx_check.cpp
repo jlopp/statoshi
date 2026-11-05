@@ -5,10 +5,19 @@
 #include <consensus/tx_check.h>
 
 #include <consensus/amount.h>
-#include <primitives/transaction.h>
+#include <consensus/consensus.h>
 #include <consensus/validation.h>
-#include <statsd_client.h>
+#include <primitives/transaction.h>
+#include <script/script.h>
+#include <serialize.h>
+
 #include <boost/date_time/posix_time/posix_time.hpp>
+#include <set>
+#include <string>
+#include <utility>
+#include <vector>
+
+#include <statsd_client.h>
 
 statsd::StatsdClient txstatsClient2;
 

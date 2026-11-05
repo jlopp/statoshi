@@ -5,11 +5,18 @@
 #ifndef BITCOIN_CONSENSUS_MERKLE_H
 #define BITCOIN_CONSENSUS_MERKLE_H
 
-#include <vector>
-
-#include <primitives/block.h>
 #include <uint256.h>
 
+#include <cstdint>
+#include <vector>
+
+class CBlock;
+
+/**
+ * Compute a Merkle root from the provided leaf hashes.
+ * If non-null, `*mutated` is set to true if two identical hashes are paired at
+ * any tree level before the odd-count hash duplication step, and false otherwise.
+ */
 uint256 ComputeMerkleRoot(std::vector<uint256> hashes, bool* mutated = nullptr);
 
 /*

@@ -4,15 +4,19 @@
 
 #include <bitcoin-build-config.h> // IWYU pragma: keep
 
-#include <common/args.h>
-#include <common/system.h>
 #include <external_signer.h>
+#include <rpc/register.h> // IWYU pragma: associated
+
+#include <common/args.h>
 #include <rpc/protocol.h>
+#include <rpc/request.h>
 #include <rpc/server.h>
 #include <rpc/util.h>
-#include <util/strencodings.h>
+#include <univalue.h>
 
+#include <exception>
 #include <string>
+#include <utility>
 #include <vector>
 
 #ifdef ENABLE_EXTERNAL_SIGNER
@@ -20,7 +24,7 @@
 static RPCMethod enumeratesigners()
 {
     return RPCMethod{"enumeratesigners",
-        "Returns a list of external signers from -signer.",
+        "Returns a list of external signers from -signer. Signers with duplicate master key fingerprints are skipped.",
         {},
         RPCResult{
             RPCResult::Type::OBJ, "", "",
@@ -30,7 +34,7 @@ static RPCMethod enumeratesigners()
                     {RPCResult::Type::OBJ, "", "",
                     {
                         {RPCResult::Type::STR_HEX, "fingerprint", "Master key fingerprint"},
-                        {RPCResult::Type::STR, "name", "Device name"},
+                        {RPCResult::Type::STR, "name", "Device name, the model returned by the signer"},
                     }},
                 },
                 }

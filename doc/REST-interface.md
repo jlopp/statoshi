@@ -12,17 +12,24 @@ REST Interface consistency guarantees
 The [same guarantees as for the RPC Interface](/doc/JSON-RPC-interface.md#rpc-consistency-guarantees)
 apply.
 
-Limitations
------------
+Default HTTP caching
+--------------------
 
-There is a known issue in the REST interface that can cause a node to crash if
-too many http connections are being opened at the same time because the system runs
-out of available file descriptors. To prevent this from happening you might
-want to increase the number of maximum allowed file descriptors in your system
-and try to prevent opening too many connections to your rest interface at the
-same time if this is under your control. It is hard to give general advice
-since this depends on your system but if you make several hundred requests at
-once you are definitely at risk of encountering this issue.
+REST responses include `Cache-Control` headers by default:
+
+* `public, immutable, max-age=86400` for `/block` and `/block/notxdetails`
+  binary and hex responses, `/blockpart`, `/blockfilter` and `/spenttxouts` in
+  all formats, and `/deploymentinfo/<BLOCKHASH>.json`. The TTL is deliberately
+  short so caches do not hold older response shapes across software upgrades.
+* `no-store` for `/block` and `/block/notxdetails` JSON, `/tx`, `/headers`,
+  `/blockfilterheaders`, `/blockhashbyheight`, `/chaininfo`, `/mempool`,
+  `/getutxos`, `/deploymentinfo.json`, and all error responses. These responses
+  can change with active chain or node state and do not currently provide cache
+  validators such as `ETag` or `Last-Modified`.
+
+If you front `bitcoind` with a reverse proxy or CDN such as Caddy or nginx with
+the headers-more module, you can override these defaults there. Keep overrides
+scoped to responses you know are safe to cache more aggressively.
 
 Supported API
 -------------
@@ -90,6 +97,7 @@ Responds with 404 if block not found.
 Given a block hash: returns a collection of spent transaction output lists,
 one per transaction in the block.
 Responds with 404 if the block doesn't exist or its undo data is not available.
+The JSON format matches the prevout objects of the `getblock` RPC with verbosity 3.
 
 #### Chaininfos
 `GET /rest/chaininfo.json`

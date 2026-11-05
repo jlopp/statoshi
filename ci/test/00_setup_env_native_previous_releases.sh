@@ -6,23 +6,22 @@
 
 export LC_ALL=C.UTF-8
 
-export CONTAINER_NAME=ci_native_previous_releases
 export CI_IMAGE_NAME_TAG="mirror.gcr.io/ubuntu:22.04"
 # Use minimum supported python3.10 and gcc-12, see doc/dependencies.md
-export PACKAGES="gcc-12 g++-12 python3-zmq"
+export PACKAGES="gcc-12 g++-12 python3-zmq libleveldb-dev python3-pip"
 export DEP_OPTS="CC=gcc-12 CXX=g++-12"
+export PIP_PACKAGES="plyvel"
 export TEST_RUNNER_EXTRA="--previous-releases --coverage --extended --exclude feature_dbcrash"  # Run extended tests so that coverage does not fail, but exclude the very slow dbcrash
-export GOAL="install"
 export CI_LIMIT_STACK_SIZE=1
-export DOWNLOAD_PREVIOUS_RELEASES="true"
-# Use -Werror as the CMake version does not support CMAKE_COMPILE_WARNING_AS_ERROR
-export BITCOIN_CONFIG="\
+export DOWNLOAD_PREVIOUS_RELEASES=true
+printf -v BITCOIN_CONFIG "%q " \
  --preset=dev-mode \
  -DREDUCE_EXPORTS=ON \
  -DCMAKE_BUILD_TYPE=Debug \
- -DCMAKE_C_FLAGS='-funsigned-char -Werror' \
- -DCMAKE_C_FLAGS_DEBUG='-g2 -O2' \
- -DCMAKE_CXX_FLAGS='-funsigned-char -Werror' \
- -DCMAKE_CXX_FLAGS_DEBUG='-g2 -O2' \
- -DAPPEND_CPPFLAGS='-DBOOST_MULTI_INDEX_ENABLE_SAFE_MODE' \
-"
+ `# Use -Werror as the CMake version does not support CMAKE_COMPILE_WARNING_AS_ERROR` \
+ -DCMAKE_C_FLAGS="-funsigned-char -Werror" \
+ -DCMAKE_C_FLAGS_DEBUG="-g2 -O2" \
+ -DCMAKE_CXX_FLAGS="-funsigned-char -Werror" \
+ -DCMAKE_CXX_FLAGS_DEBUG="-g2 -O2" \
+ -DAPPEND_CPPFLAGS=-DBOOST_MULTI_INDEX_ENABLE_SAFE_MODE
+export BITCOIN_CONFIG

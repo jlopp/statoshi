@@ -19,8 +19,6 @@ concurrency:
 
 env:
   CI_FAILFAST_TEST_LEAVE_DANGLING: 1  # GHA does not care about dangling processes and setting this variable avoids killing the CI script itself on error
-  CIRRUS_CACHE_HOST: http://127.0.0.1:12321/ # When using Cirrus Runners this host can be used by the docker `gha` build cache type.
-  REPO_USE_CIRRUS_RUNNERS: 'bitcoin/bitcoin' # Use cirrus runners and cache for this repo, instead of falling back to the slow GHA runners
 
 defaults:
   run:
@@ -29,12 +27,16 @@ defaults:
     shell: bash
 
 jobs:
-  runners:
-    name: '[meta] determine runners'
-    runs-on: ubuntu-slim
-    outputs:
-      provider: ${{ steps.runners.outputs.provider }}
+  test-each-commit:
+    name: 'test ancestor commits'
+    runs-on: ${{ github.repository == 'bitcoin/bitcoin' && 'warp-ubuntu-latest-x64-8x' || 'ubuntu-latest' }}
+    env:
+      TEST_RUNNER_PORT_MIN: "14000"  # Use a larger port range to avoid colliding with other CI services.
+    if: github.event_name == 'pull_request' && github.event.pull_request.commits != 1
+    timeout-minutes: 360  # Use maximum time, see https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#jobsjob_idtimeout-minutes.
     steps:
+      - name: Determine fetch depth
+        run: echo "FETCH_DEPTH=$((${{ github.event.pull_request.commits }} + 2))" >> "$GITHUB_ENV"
       - &ANNOTATION_PR_NUMBER
         name: Annotate with pull request number
         # This annotation is machine-readable and can be used to assign a check
@@ -45,28 +47,6 @@ jobs:
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             echo "::notice title=debug_pull_request_number_str::${{ github.event.number }}"
           fi
-      - id: runners
-        run: |
-          if [[ "${REPO_USE_CIRRUS_RUNNERS}" == "${{ github.repository }}" ]]; then
-            echo "provider=cirrus" >> "$GITHUB_OUTPUT"
-            echo "::notice title=Runner Selection::Using Cirrus Runners"
-          else
-            echo "provider=gha" >> "$GITHUB_OUTPUT"
-            echo "::notice title=Runner Selection::Using GitHub-hosted runners"
-          fi
-
-  test-each-commit:
-    name: 'test ancestor commits'
-    needs: runners
-    runs-on: ${{ needs.runners.outputs.provider == 'cirrus' && 'ghcr.io/cirruslabs/ubuntu-runner-amd64:24.04-md' || 'ubuntu-24.04' }}
-    env:
-      TEST_RUNNER_PORT_MIN: "14000"  # Use a larger port, to avoid colliding with CIRRUS_CACHE_HOST port 12321.
-    if: github.event_name == 'pull_request' && github.event.pull_request.commits != 1
-    timeout-minutes: 360  # Use maximum time, see https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#jobsjob_idtimeout-minutes.
-    steps:
-      - name: Determine fetch depth
-        run: echo "FETCH_DEPTH=$((${{ github.event.pull_request.commits }} + 2))" >> "$GITHUB_ENV"
-      - *ANNOTATION_PR_NUMBER
       - uses: actions/checkout@v6
         with:
           ref: ${{ github.event.pull_request.head.sha }}
@@ -116,7 +96,7 @@ jobs:
           git config user.name "CI"
       - run: |
           sudo apt-get update
-          sudo apt-get install clang mold ccache build-essential cmake ninja-build pkgconf python3-zmq libevent-dev libboost-dev libsqlite3-dev systemtap-sdt-dev libzmq3-dev qt6-base-dev qt6-tools-dev qt6-l10n-tools libqrencode-dev capnproto libcapnp-dev -y
+          sudo apt-get install clang mold ccache build-essential cmake ninja-build pkgconf python3-zmq libboost-dev libsqlite3-dev systemtap-sdt-dev libzmq3-dev qt6-base-dev qt6-tools-dev qt6-l10n-tools libqrencode-dev capnproto libcapnp-dev -y
           sudo pip3 install --break-system-packages pycapnp
       - name: Compile and run tests
         run: |
@@ -166,11 +146,9 @@ jobs:
 
       - name: Clang version
         run: |
-          # Use the latest Xcode supported by the version of macOS denoted in
-          # doc/release-notes-empty-template.md and providing at least the
-          # minimum clang version denoted in doc/dependencies.md.
-          # See: https://developer.apple.com/documentation/xcode-release-notes/xcode-16_2-release-notes
-          sudo xcode-select --switch /Applications/Xcode_16.2.app
+          # Use the minimum Xcode version denoted in doc/dependencies.md.
+          # See: https://developer.apple.com/documentation/xcode-release-notes/xcode-26_3-release-notes
+          sudo xcode-select --switch /Applications/Xcode_26.3.app
           clang --version
 
       - name: Install Homebrew packages
@@ -179,7 +157,7 @@ jobs:
         run: |
           # A workaround for "The `brew link` step did not complete successfully" error.
           brew install --quiet python@3 || brew link --overwrite python@3
-          brew install --quiet coreutils ninja pkgconf ccache boost libevent zeromq qt@6 qrencode capnp
+          brew install --quiet coreutils ninja pkgconf ccache boost zeromq qt@6 qrencode capnp
 
       - name: Set Ccache directory
         run: echo "CCACHE_DIR=${RUNNER_TEMP}/ccache_dir" >> "$GITHUB_ENV"
@@ -285,9 +263,10 @@ jobs:
         # Only save cache from the 'standard' job, as it includes the necessary downloads for other jobs in the matrix. If the matrix is modified, this may need amending.
         if: github.event_name != 'pull_request' && github.ref_name == github.event.repository.default_branch && steps.vcpkg-binary-cache.outputs.cache-hit != 'true' && steps.vcpkg-downloads-cache.outputs.cache-hit != 'true' && matrix.job-type == 'standard'
         with:
+          # Cache the tools once as archives, but not redundantly in extracted form.
           path: |
             ~/AppData/Local/vcpkg/downloads/*
-            !~/AppData/Local/vcpkg/downloads/tools  # Cache the tools once as archives, but not redundantly in extracted form.
+            !~/AppData/Local/vcpkg/downloads/tools
           key: ${{ steps.vcpkg-downloads-cache.outputs.cache-primary-key }}
 
       - name: Build
@@ -323,25 +302,13 @@ jobs:
         run: echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
   windows-cross:
-    name: 'Windows-cross to x86_64, ${{ matrix.crt }}'
-    needs: [runners, record-frozen-commit]
-    runs-on: ${{ needs.runners.outputs.provider == 'cirrus' && 'ghcr.io/cirruslabs/ubuntu-runner-amd64:24.04-sm' || 'ubuntu-24.04' }}
+    name: 'Windows-cross to x86_64'
+    needs: record-frozen-commit
+    runs-on: ${{ github.repository == 'bitcoin/bitcoin' && 'warp-ubuntu-latest-x64-4x' || 'ubuntu-latest' }}
     if: ${{ vars.SKIP_BRANCH_PUSH != 'true' || github.event_name == 'pull_request' }}
 
-    strategy:
-      fail-fast: false
-      matrix:
-        crt: [msvcrt, ucrt]
-        include:
-          - crt: msvcrt
-            file-env: './ci/test/00_setup_env_win64_msvcrt.sh'
-            artifact-name: 'x86_64-w64-mingw32-executables'
-          - crt: ucrt
-            file-env: './ci/test/00_setup_env_win64.sh'
-            artifact-name: 'x86_64-w64-mingw32ucrt-executables'
-
     env:
-      FILE_ENV: ${{ matrix.file-env }}
+      FILE_ENV: './ci/test/00_setup_env_win64.sh'
       DANGER_CI_ON_HOST_FOLDERS: 1
 
     steps:
@@ -357,23 +324,27 @@ jobs:
 
       - name: Restore caches
         id: restore-cache
-        uses: ./.github/actions/restore-caches
+        uses: ./.github/actions/cache/restore
+        with:
+          provider: ${{ github.repository == 'bitcoin/bitcoin' && 'warp' || 'gha' }}
 
       - name: Configure Docker
         uses: ./.github/actions/configure-docker
         with:
-          cache-provider: ${{ needs.runners.outputs.provider }}
+          provider: ${{ github.repository == 'bitcoin/bitcoin' && 'warp' || 'gha' }}
 
       - name: CI script
         run: ./ci/test_run_all.sh
 
       - name: Save caches
-        uses: ./.github/actions/save-caches
+        uses: ./.github/actions/cache/save
+        with:
+          provider: ${{ github.repository == 'bitcoin/bitcoin' && 'warp' || 'gha' }}
 
       - name: Upload built executables
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ matrix.artifact-name }}-${{ github.run_id }}
+          name: x86_64-w64-mingw32ucrt-executables-${{ github.run_id }}
           path: |
             ${{ env.BASE_BUILD_DIR }}/bin/*.dll
             ${{ env.BASE_BUILD_DIR }}/bin/*.exe
@@ -382,19 +353,9 @@ jobs:
             ${{ env.BASE_BUILD_DIR }}/test/config.ini
 
   windows-native-test:
-    name: 'Windows, ${{ matrix.crt }}, test cross-built'
+    name: 'Windows, test cross-built'
     runs-on: windows-2022
     needs: [windows-cross, record-frozen-commit]
-
-    strategy:
-      fail-fast: false
-      matrix:
-        crt: [msvcrt, ucrt]
-        include:
-          - crt: msvcrt
-            artifact-name: 'x86_64-w64-mingw32-executables'
-          - crt: ucrt
-            artifact-name: 'x86_64-w64-mingw32ucrt-executables'
 
     env:
       PYTHONUTF8: 1
@@ -411,12 +372,15 @@ jobs:
       - name: Download built executables
         uses: actions/download-artifact@v8
         with:
-          name: ${{ matrix.artifact-name }}-${{ github.run_id }}
+          name: x86_64-w64-mingw32ucrt-executables-${{ github.run_id }}
 
       - name: Run bitcoind.exe
         run: py -3 .github/ci-windows-cross.py print_version
 
       - *IMPORT_VS_ENV
+
+      - name: Check imported DLLs
+        run: py -3 .github/ci-windows-cross.py check_imports
 
       - name: Check executable manifests
         run: py -3 .github/ci-windows-cross.py check_manifests
@@ -435,109 +399,130 @@ jobs:
 
   ci-matrix:
     name: ${{ matrix.name }}
-    needs: runners
-    runs-on: ${{ needs.runners.outputs.provider == 'cirrus' && matrix.cirrus-runner || matrix.fallback-runner }}
+    runs-on: ${{ github.repository == 'bitcoin/bitcoin' && matrix.warp-runner || matrix.fallback-runner }}
     if: ${{ vars.SKIP_BRANCH_PUSH != 'true' || github.event_name == 'pull_request' }}
     timeout-minutes: ${{ matrix.timeout-minutes }}
 
     env:
       DANGER_CI_ON_HOST_FOLDERS: 1
       FILE_ENV: ${{ matrix.file-env }}
+      RUN_UNIT_TESTS: ${{ matrix.run_unit_tests }}
+      RUN_FUNCTIONAL_TESTS: ${{ matrix.run_functional_tests }}
 
     strategy:
       fail-fast: false
       matrix:
         include:
           - name: 'iwyu'
-            cirrus-runner: 'ghcr.io/cirruslabs/ubuntu-runner-amd64:24.04-md'
-            fallback-runner: 'ubuntu-24.04'
+            warp-runner: 'warp-ubuntu-latest-x64-8x'
+            fallback-runner: 'ubuntu-latest'
             timeout-minutes: 120
             file-env: './ci/test/00_setup_env_native_iwyu.sh'
 
           - name: '32 bit ARM'
-            cirrus-runner: 'ubuntu-24.04-arm' # Cirrus' Arm runners are Apple (with virtual Linux aarch64), which doesn't support 32-bit mode
+            warp-runner: 'ubuntu-24.04-arm' # Warp's Arm runners don't support 32-bit mode currently
             fallback-runner: 'ubuntu-24.04-arm'
             timeout-minutes: 120
             file-env: './ci/test/00_setup_env_arm.sh'
             provider: 'gha'
+            run_unit_tests: false
+            run_functional_tests: false
 
           - name: 'ASan + LSan + UBSan + integer'
-            cirrus-runner: 'ghcr.io/cirruslabs/ubuntu-runner-amd64:24.04-md' # has to match container in ci/test/00_setup_env_native_asan.sh for tracing tools
+            warp-runner: 'warp-ubuntu-2404-x64-8x' # has to match container in ci/test/00_setup_env_native_asan.sh for tracing tools
             fallback-runner: 'ubuntu-24.04'
             timeout-minutes: 120
             file-env: './ci/test/00_setup_env_native_asan.sh'
 
           - name: 'macOS-cross to arm64'
-            cirrus-runner: 'ghcr.io/cirruslabs/ubuntu-runner-amd64:24.04-sm'
-            fallback-runner: 'ubuntu-24.04'
+            warp-runner: 'warp-ubuntu-latest-x64-4x'
+            fallback-runner: 'ubuntu-latest'
             timeout-minutes: 120
             file-env: './ci/test/00_setup_env_mac_cross.sh'
 
           - name: 'macOS-cross to x86_64'
-            cirrus-runner: 'ghcr.io/cirruslabs/ubuntu-runner-amd64:24.04-sm'
-            fallback-runner: 'ubuntu-24.04'
+            warp-runner: 'warp-ubuntu-latest-x64-4x'
+            fallback-runner: 'ubuntu-latest'
             timeout-minutes: 120
             file-env: './ci/test/00_setup_env_mac_cross_intel.sh'
 
+          - name: 'NetBSD Cross'
+            warp-runner: 'warp-ubuntu-latest-x64-8x'
+            fallback-runner: 'ubuntu-latest'
+            timeout-minutes: 120
+            file-env: './ci/test/00_setup_env_netbsd_cross.sh'
+
           - name: 'FreeBSD Cross'
-            cirrus-runner: 'ghcr.io/cirruslabs/ubuntu-runner-amd64:24.04-md'
-            fallback-runner: 'ubuntu-24.04'
+            warp-runner: 'warp-ubuntu-latest-x64-8x'
+            fallback-runner: 'ubuntu-latest'
             timeout-minutes: 120
             file-env: './ci/test/00_setup_env_freebsd_cross.sh'
 
+          - name: 'OpenBSD Cross'
+            warp-runner: 'warp-ubuntu-latest-x64-8x'
+            fallback-runner: 'ubuntu-latest'
+            timeout-minutes: 120
+            file-env: './ci/test/00_setup_env_openbsd_cross.sh'
+
           - name: 'No wallet'
-            cirrus-runner: 'ghcr.io/cirruslabs/ubuntu-runner-amd64:24.04-sm'
-            fallback-runner: 'ubuntu-24.04'
+            warp-runner: 'warp-ubuntu-latest-x64-4x'
+            fallback-runner: 'ubuntu-latest'
             timeout-minutes: 120
             file-env: './ci/test/00_setup_env_native_nowallet.sh'
 
           - name: 'i686, no IPC'
-            cirrus-runner: 'ghcr.io/cirruslabs/ubuntu-runner-amd64:24.04-md'
-            fallback-runner: 'ubuntu-24.04'
+            warp-runner: 'warp-ubuntu-latest-x64-8x'
+            fallback-runner: 'ubuntu-latest'
             timeout-minutes: 120
             file-env: './ci/test/00_setup_env_i686_no_ipc.sh'
 
           - name: 'fuzzer,address,undefined,integer'
-            cirrus-runner: 'ghcr.io/cirruslabs/ubuntu-runner-amd64:24.04-lg'
-            fallback-runner: 'ubuntu-24.04'
+            warp-runner: 'warp-ubuntu-latest-x64-16x'
+            fallback-runner: 'ubuntu-latest'
             timeout-minutes: 240
             file-env: './ci/test/00_setup_env_native_fuzz.sh'
 
           - name: 'previous releases'
-            cirrus-runner: 'ghcr.io/cirruslabs/ubuntu-runner-amd64:24.04-md'
-            fallback-runner: 'ubuntu-24.04'
+            warp-runner: 'warp-ubuntu-latest-x64-8x'
+            fallback-runner: 'ubuntu-latest'
             timeout-minutes: 120
             file-env: './ci/test/00_setup_env_native_previous_releases.sh'
 
           - name: 'Alpine (musl)'
-            cirrus-runner: 'ghcr.io/cirruslabs/ubuntu-runner-amd64:24.04-md'
-            fallback-runner: 'ubuntu-24.04'
+            warp-runner: 'warp-ubuntu-latest-x64-8x'
+            fallback-runner: 'ubuntu-latest'
             timeout-minutes: 120
             file-env: './ci/test/00_setup_env_native_alpine_musl.sh'
 
           - name: 'tidy'
-            cirrus-runner: 'ghcr.io/cirruslabs/ubuntu-runner-amd64:24.04-md'
-            fallback-runner: 'ubuntu-24.04'
+            warp-runner: 'warp-ubuntu-latest-x64-8x'
+            fallback-runner: 'ubuntu-latest'
             timeout-minutes: 120
             file-env: './ci/test/00_setup_env_native_tidy.sh'
 
           - name: 'TSan'
-            cirrus-runner: 'ghcr.io/cirruslabs/ubuntu-runner-amd64:24.04-md'
-            fallback-runner: 'ubuntu-24.04'
+            warp-runner: 'warp-ubuntu-latest-x64-8x'
+            fallback-runner: 'ubuntu-latest'
             timeout-minutes: 120
             file-env: './ci/test/00_setup_env_native_tsan.sh'
 
           - name: 'MSan, fuzz'
-            cirrus-runner: 'ghcr.io/cirruslabs/ubuntu-runner-amd64:24.04-md'
-            fallback-runner: 'ubuntu-24.04'
-            timeout-minutes: 150
+            warp-runner: 'warp-ubuntu-latest-x64-8x'
+            fallback-runner: 'ubuntu-latest'
+            timeout-minutes: 180
             file-env: './ci/test/00_setup_env_native_fuzz_with_msan.sh'
 
           - name: 'MSan'
-            cirrus-runner: 'ghcr.io/cirruslabs/ubuntu-runner-amd64:24.04-lg'
-            fallback-runner: 'ubuntu-24.04'
+            warp-runner: 'warp-ubuntu-latest-x64-16x'
+            fallback-runner: 'ubuntu-latest'
             timeout-minutes: 120
             file-env: './ci/test/00_setup_env_native_msan.sh'
+
+          - name: 'riscv32 bare metal, static libbitcoin_consensus'
+            warp-runner: 'warp-ubuntu-latest-x64-8x'
+            fallback-runner: 'ubuntu-latest'
+            timeout-minutes: 120
+            file-env: './ci/test/00_setup_env_riscv_bare_cross.sh'
 
     steps:
       - *ANNOTATION_PR_NUMBER
@@ -549,15 +534,17 @@ jobs:
 
       - name: Restore caches
         id: restore-cache
-        uses: ./.github/actions/restore-caches
+        uses: ./.github/actions/cache/restore
+        with:
+          provider: ${{ matrix.provider || (github.repository == 'bitcoin/bitcoin' && 'warp' || 'gha') }}
 
       - name: Configure Docker
         uses: ./.github/actions/configure-docker
         with:
-          cache-provider: ${{ matrix.provider || needs.runners.outputs.provider }}
+          provider: ${{ matrix.provider || (github.repository == 'bitcoin/bitcoin' && 'warp' || 'gha') }}
 
       - name: Clear unnecessary files
-        if: ${{ needs.runners.outputs.provider == 'gha' && true || false }} # Only needed on GHA runners
+        if: ${{ github.repository != 'bitcoin/bitcoin' || matrix.provider == 'gha' }} # Only needed on GHA runners
         uses: ./.github/actions/clear-files
 
       - name: Enable bpfcc script
@@ -567,7 +554,7 @@ jobs:
         run: sed -i "s|\${INSTALL_BCC_TRACING_TOOLS}|true|g" ./ci/test/00_setup_env_native_asan.sh
 
       - name: Set mmap_rnd_bits
-        if: ${{ env.CONTAINER_NAME == 'ci_native_tsan' || env.CONTAINER_NAME == 'ci_native_msan' || env.CONTAINER_NAME == 'ci_native_fuzz_msan' }}
+        if: ${{ env.CONTAINER_NAME == 'ci_native_tsan' || env.CONTAINER_NAME == 'ci_native_msan' || env.CONTAINER_NAME == 'ci_native_fuzz_with_msan' }}
         # Prevents crashes due to high ASLR entropy
         run: sudo sysctl -w vm.mmap_rnd_bits=28
 
@@ -575,12 +562,13 @@ jobs:
         run: ./ci/test_run_all.sh
 
       - name: Save caches
-        uses: ./.github/actions/save-caches
+        uses: ./.github/actions/cache/save
+        with:
+          provider: ${{ matrix.provider || (github.repository == 'bitcoin/bitcoin' && 'warp' || 'gha') }}
 
   lint:
     name: 'lint'
-    needs: runners
-    runs-on: ${{ needs.runners.outputs.provider == 'cirrus' && 'ghcr.io/cirruslabs/ubuntu-runner-amd64:24.04-xs' || 'ubuntu-24.04' }}
+    runs-on: ${{ github.repository == 'bitcoin/bitcoin' && 'warp-ubuntu-latest-x64-2x' || 'ubuntu-latest' }}
     if: ${{ vars.SKIP_BRANCH_PUSH != 'true' || github.event_name == 'pull_request' }}
     timeout-minutes: 20
     env:
@@ -597,7 +585,7 @@ jobs:
       - name: Configure Docker
         uses: ./.github/actions/configure-docker
         with:
-          cache-provider: ${{ needs.runners.outputs.provider }}
+          provider: ${{ github.repository == 'bitcoin/bitcoin' && 'warp' || 'gha' }}
 
       - name: CI script
         run: |

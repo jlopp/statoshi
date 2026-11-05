@@ -3,11 +3,17 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#include <script/keyorigin.h>
-#include <script/interpreter.h>
 #include <script/signingprovider.h>
 
-#include <logging.h>
+#include <musig.h>
+#include <script/interpreter.h>
+#include <script/keyorigin.h>
+#include <util/check.h>
+#include <util/log.h>
+
+#include <algorithm>
+#include <cstddef>
+#include <variant>
 
 const SigningProvider& DUMMY_SIGNING_PROVIDER = SigningProvider();
 
@@ -225,7 +231,7 @@ bool FillableSigningProvider::GetKey(const CKeyID &address, CKey &keyOut) const
 bool FillableSigningProvider::AddCScript(const CScript& redeemScript)
 {
     if (redeemScript.size() > MAX_SCRIPT_ELEMENT_SIZE) {
-        LogError("FillableSigningProvider::AddCScript(): redeemScripts > %i bytes are invalid\n", MAX_SCRIPT_ELEMENT_SIZE);
+        LogInfo("FillableSigningProvider::AddCScript(): redeemScripts > %i bytes are invalid", MAX_SCRIPT_ELEMENT_SIZE); // TODO: remove, callers should take care of checking input / reporting errors
         return false;
     }
 
@@ -238,16 +244,6 @@ bool FillableSigningProvider::HaveCScript(const CScriptID& hash) const
 {
     LOCK(cs_KeyStore);
     return mapScripts.contains(hash);
-}
-
-std::set<CScriptID> FillableSigningProvider::GetCScripts() const
-{
-    LOCK(cs_KeyStore);
-    std::set<CScriptID> set_script;
-    for (const auto& mi : mapScripts) {
-        set_script.insert(mi.first);
-    }
-    return set_script;
 }
 
 bool FillableSigningProvider::GetCScript(const CScriptID &hash, CScript& redeemScriptOut) const

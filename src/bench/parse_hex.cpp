@@ -4,12 +4,12 @@
 
 #include <bench/bench.h>
 #include <random.h>
+#include <util/check.h>
 #include <util/strencodings.h>
 
-#include <cassert>
 #include <cstddef>
 #include <optional>
-#include <vector>
+#include <string>
 
 std::string generateHexString(size_t length) {
     const auto hex_digits = "0123456789ABCDEF";

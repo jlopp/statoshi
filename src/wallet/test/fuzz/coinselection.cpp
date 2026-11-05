@@ -50,8 +50,7 @@ static void GroupCoins(FuzzedDataProvider& fuzzed_data_provider, const std::vect
 static CAmount CreateCoins(FuzzedDataProvider& fuzzed_data_provider, std::vector<COutput>& utxo_pool, CoinSelectionParams& coin_params, int& next_locktime)
 {
     CAmount total_balance{0};
-    LIMITED_WHILE(fuzzed_data_provider.ConsumeBool(), 10000)
-    {
+    LIMITED_WHILE (fuzzed_data_provider.ConsumeBool(), 10000) {
         const int n_input{fuzzed_data_provider.ConsumeIntegralInRange<int>(0, 10)};
         const int n_input_bytes{fuzzed_data_provider.ConsumeIntegralInRange<int>(41, 10000)};
         const CAmount amount{fuzzed_data_provider.ConsumeIntegralInRange<CAmount>(1, MAX_MONEY)};
@@ -93,7 +92,6 @@ FUZZ_TARGET(coin_grinder)
     coin_params.m_effective_feerate = CFeeRate{ConsumeMoney(fuzzed_data_provider, /*max=*/COIN)};
     coin_params.change_output_size = fuzzed_data_provider.ConsumeIntegralInRange<int>(10, 1000);
     coin_params.change_spend_size = fuzzed_data_provider.ConsumeIntegralInRange<int>(10, 1000);
-    coin_params.m_cost_of_change= coin_params.m_effective_feerate.GetFee(coin_params.change_output_size) + coin_params.m_long_term_feerate.GetFee(coin_params.change_spend_size);
     coin_params.m_change_fee = coin_params.m_effective_feerate.GetFee(coin_params.change_output_size);
     // For other results to be comparable to SRD, we must align the change_target with SRD’s hardcoded behavior
     coin_params.m_min_change_target = CHANGE_LOWER + coin_params.m_change_fee;
@@ -102,8 +100,7 @@ FUZZ_TARGET(coin_grinder)
     CAmount total_balance{0};
     CAmount max_spendable{0};
     int next_locktime{0};
-    LIMITED_WHILE(fuzzed_data_provider.ConsumeBool(), 10000)
-    {
+    LIMITED_WHILE (fuzzed_data_provider.ConsumeBool(), 10000) {
         const int n_input{fuzzed_data_provider.ConsumeIntegralInRange<int>(0, 10)};
         const int n_input_bytes{fuzzed_data_provider.ConsumeIntegralInRange<int>(41, 10000)};
         const CAmount amount{fuzzed_data_provider.ConsumeIntegralInRange<CAmount>(1, MAX_MONEY)};
@@ -152,8 +149,7 @@ FUZZ_TARGET(coin_grinder_is_optimal)
     int next_locktime{0};
     static constexpr unsigned max_output_groups{16};
     std::vector<OutputGroup> group_pos;
-    LIMITED_WHILE(fuzzed_data_provider.ConsumeBool(), max_output_groups)
-    {
+    LIMITED_WHILE (fuzzed_data_provider.ConsumeBool(), max_output_groups) {
         // With maximum m_effective_feerate and n_input_bytes = 1'000'000, input_fee <= MAX_MONEY.
         const int n_input_bytes{fuzzed_data_provider.ConsumeIntegralInRange<int>(1, 1'000'000)};
         // Only make UTXOs with positive effective value
@@ -250,8 +246,7 @@ FUZZ_TARGET(bnb_finds_min_waste)
     // Choose 1–16 of 16 provides ample fuzzing space.
     static constexpr unsigned max_output_groups{16};
     std::vector<OutputGroup> group_pos;
-    LIMITED_WHILE(fuzzed_data_provider.ConsumeBool(), max_output_groups)
-    {
+    LIMITED_WHILE (fuzzed_data_provider.ConsumeBool(), max_output_groups) {
         // With maximum m_effective_feerate 10'000 s/vB and n_input_bytes = 20'000 B, input_fee <= MAX_MONEY.
         const int n_input_bytes{fuzzed_data_provider.ConsumeIntegralInRange<int>(1, 20'000)};
         const CAmount input_fee = coin_params.m_effective_feerate.GetFee(n_input_bytes);

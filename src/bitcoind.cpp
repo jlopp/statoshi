@@ -16,6 +16,7 @@
 #include <interfaces/chain.h>
 #include <interfaces/init.h>
 #include <kernel/context.h>
+#include <logging.h>
 #include <node/context.h>
 #include <node/interface_ui.h>
 #include <node/warnings.h>
@@ -139,10 +140,10 @@ static bool ProcessInitCommands(interfaces::Init& init, ArgsManager& args)
     if (HelpRequested(args) || args.GetBoolArg("-version", false)) {
         std::string strUsage = CLIENT_NAME " daemon version " + FormatFullVersion();
         if (const char* exe_name{init.exeName()}) {
-            strUsage += " ";
+            strUsage += ' ';
             strUsage += exe_name;
         }
-        strUsage += "\n";
+        strUsage += '\n';
 
         if (args.GetBoolArg("-version", false)) {
             strUsage += FormatParagraph(LicenseInfo());
@@ -258,6 +259,7 @@ static bool AppInit(NodeContext& node)
     return fRet;
 }
 
+/// \anchor main
 MAIN_FUNCTION
 {
     NodeContext node;

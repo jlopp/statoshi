@@ -45,7 +45,7 @@ bool TestLockPointValidity(CChain& active_chain, const LockPoints& lp)
     if (lp.maxInputBlock) {
         // Check whether active_chain is an extension of the block at which the LockPoints
         // calculation was valid.  If not LockPoints are no longer valid
-        if (!active_chain.Contains(lp.maxInputBlock)) {
+        if (!active_chain.Contains(*lp.maxInputBlock)) {
             return false;
         }
     }
@@ -402,7 +402,7 @@ void CTxMemPool::removeConflicts(const CTransaction &tx)
     }
 }
 
-void CTxMemPool::removeForBlock(const std::vector<CTransactionRef>& vtx, unsigned int nBlockHeight)
+std::vector<RemovedMempoolTransactionInfo> CTxMemPool::removeForBlock(const std::vector<CTransactionRef>& vtx)
 {
     // Remove confirmed txs and conflicts when a new block is connected, updating the fee logic
     AssertLockHeld(cs);
@@ -420,14 +420,12 @@ void CTxMemPool::removeForBlock(const std::vector<CTransactionRef>& vtx, unsigne
             ClearPrioritisation(tx->GetHash());
         }
     }
-    if (m_opts.signals) {
-        m_opts.signals->MempoolTransactionsRemovedForBlock(txs_removed_for_block, nBlockHeight);
-    }
     lastRollingFeeUpdate = GetTime();
     blockSinceLastRollingFeeBump = true;
     if (!m_txgraph->DoWork(/*max_cost=*/POST_CHANGE_COST)) {
         LogDebug(BCLog::MEMPOOL, "Mempool in non-optimal ordering after block.");
     }
+    return txs_removed_for_block;
 }
 
 void CTxMemPool::check(const CCoinsViewCache& active_coins_tip, int64_t spendheight) const
@@ -458,7 +456,7 @@ void CTxMemPool::check(const CCoinsViewCache& active_coins_tip, int64_t spendhei
     assert(diagram.size() <= score_with_topo.size() + 1);
     assert(diagram.size() >= 1);
 
-    std::optional<Wtxid> last_wtxid = std::nullopt;
+    std::optional<txiter> last_iter = std::nullopt;
     auto diagram_iter = diagram.cbegin();
 
     for (const auto& it : score_with_topo) {
@@ -480,11 +478,10 @@ void CTxMemPool::check(const CCoinsViewCache& active_coins_tip, int64_t spendhei
         innerUsage += it->DynamicMemoryUsage();
         const CTransaction& tx = it->GetTx();
 
-        // CompareMiningScoreWithTopology should agree with GetSortedScoreWithTopology()
-        if (last_wtxid) {
-            assert(CompareMiningScoreWithTopology(*last_wtxid, tx.GetWitnessHash()));
+        if (last_iter) {
+            assert(m_txgraph->CompareMainOrder(**last_iter, *it) < 0);
         }
-        last_wtxid = tx.GetWitnessHash();
+        last_iter = it;
 
         std::set<CTxMemPoolEntry::CTxMemPoolEntryRef, CompareIteratorByHash> setParentCheck;
         std::set<CTxMemPoolEntry::CTxMemPoolEntryRef, CompareIteratorByHash> setParentsStored;
@@ -553,20 +550,62 @@ void CTxMemPool::check(const CCoinsViewCache& active_coins_tip, int64_t spendhei
     assert(innerUsage == cachedInnerUsage);
 }
 
-bool CTxMemPool::CompareMiningScoreWithTopology(const Wtxid& hasha, const Wtxid& hashb) const
+std::vector<CTxMemPool::txiter> CTxMemPool::ExtractBestByMiningScoreWithTopology(std::vector<Wtxid>& wtxids, size_t n_to_sort) const
 {
-    /* Return `true` if hasha should be considered sooner than hashb, namely when:
-     *     a is not in the mempool but b is, or
-     *     both are in the mempool but a is sorted before b in the total mempool ordering
-     *     (which takes dependencies and (chunk) feerates into account).
+    /* This function takes a vector of `wtxids`, and returns the
+     * best mempool entries corresponding to those `wtxids` (by mining
+     * score/topology). It updates the input `wtxids` so that multiple
+     * calls with the same vector will drain that vector to empty.
+     *
+     * It operates under the following constraints:
+     *   - wtxids that do not correspond to a mempool entry are dropped
+     *   - the return vector contains no duplicates, either with itself
+     *     or with the updated `wtxids` input.
+     *   - the return vector will have `n_to_sort` entries (or `wtxids`
+           will become empty).
+     *   - the `wtxids` vector will be reduced by at least `n_to_sort`
+     *     entries (or will become empty).
      */
-    LOCK(cs);
-    auto j{GetIter(hashb)};
-    if (!j.has_value()) return false;
-    auto i{GetIter(hasha)};
-    if (!i.has_value()) return true;
 
-    return m_txgraph->CompareMainOrder(*i.value(), *j.value()) < 0;
+    auto cmp = [&](const auto& a, const auto& b) EXCLUSIVE_LOCKS_REQUIRED(cs) noexcept { return m_txgraph->CompareMainOrder(*a, *b) < 0; };
+
+    std::vector<txiter> res;
+
+    n_to_sort = std::min(wtxids.size(), n_to_sort);
+    if (n_to_sort > 0) {
+        res.reserve(wtxids.size());
+        std::sort(wtxids.begin(), wtxids.end());
+        for (auto it = wtxids.begin(); it != wtxids.end(); ++it) {
+            // skip duplicates
+            auto itnext = it + 1;
+            if (itnext != wtxids.end() && *it == *itnext) continue;
+
+            if (auto i{GetIter(*it)}; i.has_value()) {
+                res.push_back(i.value());
+            }
+        }
+        wtxids.clear();
+
+        if (!res.empty()) {
+            auto begin = res.begin();
+            auto end = res.end();
+            auto middle = end;
+            if (n_to_sort >= res.size()) {
+                // use regular sort when sorting everything
+                std::sort(begin, end, cmp);
+            } else {
+                middle = begin + n_to_sort;
+                std::partial_sort(begin, middle, end, cmp);
+            }
+            auto it = middle;
+            while (it != end) {
+                wtxids.push_back((*it)->GetTx().GetWitnessHash());
+                ++it;
+            }
+            res.erase(middle, end);
+        }
+    }
+    return res;
 }
 
 std::vector<CTxMemPool::indexed_transaction_set::const_iterator> CTxMemPool::GetSortedScoreWithTopology() const
@@ -625,6 +664,15 @@ CTransactionRef CTxMemPool::get(const Txid& hash) const
     if (i == mapTx.end())
         return nullptr;
     return i->GetSharedTx();
+}
+
+CTransactionRef CTxMemPool::get(const Wtxid& hash) const
+{
+    LOCK(cs);
+    const auto& wtxid_map{mapTx.get<index_by_wtxid>()};
+    const auto it{wtxid_map.find(hash)};
+    if (it == wtxid_map.end()) return nullptr;
+    return it->GetSharedTx();
 }
 
 void CTxMemPool::PrioritiseTransaction(const Txid& hash, const CAmount& nFeeDelta)
@@ -778,7 +826,7 @@ void CCoinsViewMemPool::Reset()
 size_t CTxMemPool::DynamicMemoryUsage() const {
     LOCK(cs);
     // Estimate the overhead of mapTx to be 9 pointers (3 pointers per index) + an allocation, as no exact formula for boost::multi_index_contained is implemented.
-    return memusage::MallocUsage(sizeof(CTxMemPoolEntry) + 9 * sizeof(void*)) * mapTx.size() + memusage::DynamicUsage(mapNextTx) + memusage::DynamicUsage(mapDeltas) + memusage::DynamicUsage(txns_randomized) + m_txgraph->GetMainMemoryUsage() + cachedInnerUsage;
+    return memusage::MallocUsage(sizeof(CTxMemPoolEntry) + 9 * sizeof(void*)) * mapTx.size() + memusage::DynamicUsage(mapNextTx) + memusage::DynamicUsage(mapDeltas) + memusage::DynamicUsage(txns_randomized) + memusage::DynamicUsage(m_unbroadcast_txids) + m_txgraph->GetMainMemoryUsage() + cachedInnerUsage;
 }
 
 void CTxMemPool::RemoveUnbroadcastTx(const Txid& txid, const bool unchecked) {

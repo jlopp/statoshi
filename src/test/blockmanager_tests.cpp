@@ -42,6 +42,7 @@ BOOST_AUTO_TEST_CASE(blockmanager_find_block_pos)
     };
     BlockManager blockman{*Assert(m_node.shutdown_signal), blockman_opts};
     // simulate adding a genesis block normally
+    LOCK(::cs_main);
     BOOST_CHECK_EQUAL(blockman.WriteBlock(params->GenesisBlock(), 0).nPos, STORAGE_HEADER_BYTES);
     // simulate what happens during reindex
     // simulate a well-formed genesis block being found at offset 8 in the blk00000.dat file
@@ -257,6 +258,7 @@ BOOST_AUTO_TEST_CASE(blockmanager_flush_block_file)
     constexpr int TEST_BLOCK_SIZE{81};
 
     // Blockstore is empty
+    LOCK(::cs_main);
     BOOST_CHECK_EQUAL(blockman.CalculateCurrentUsage(), 0);
 
     // Write the first block to a new location.
@@ -320,6 +322,30 @@ BOOST_FIXTURE_TEST_CASE(prune_lock_update_and_delete, TestingSetup)
 
     // Deleting a non-existent lock returns false
     BOOST_CHECK(!blockman.DeletePruneLock("nonexistent"));
+}
+
+BOOST_FIXTURE_TEST_CASE(blockmanager_add_to_block_index_best_header, TestingSetup)
+{
+    LOCK(::cs_main);
+    auto& blockman{m_node.chainman->m_blockman};
+    const CBlockIndex* genesis{m_node.chainman->ActiveTip()};
+
+    CBlockHeader header;
+    header.hashPrevBlock = genesis->GetBlockHash();
+    header.nTime = genesis->nTime + 1;
+    header.nBits = genesis->nBits;
+
+    CBlockIndex* best_header{nullptr};
+    header.nNonce = 1;
+    CBlockIndex* first{blockman.AddToBlockIndex(header, best_header)};
+    BOOST_CHECK_EQUAL(best_header, first);
+
+    // A sibling with equal chain work must not replace the first-seen header
+    header.nNonce = 2;
+    CBlockIndex* second{blockman.AddToBlockIndex(header, best_header)};
+    BOOST_CHECK(second != first);
+    BOOST_CHECK(second->nChainWork == first->nChainWork);
+    BOOST_CHECK_EQUAL(best_header, first);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

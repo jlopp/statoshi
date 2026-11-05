@@ -12,12 +12,17 @@
 #include <span.h>
 #include <uint256.h>
 
+#include <array>
+#include <cassert>
 #include <cstring>
 #include <optional>
+#include <span>
 #include <vector>
 
-const unsigned int BIP32_EXTKEY_SIZE = 74;
-const unsigned int BIP32_EXTKEY_WITH_VERSION_SIZE = 78;
+inline constexpr unsigned int BIP32_EXTKEY_SIZE = 74;
+inline constexpr unsigned int BIP32_EXTKEY_WITH_VERSION_SIZE = 78;
+
+using KeyFingerprint = std::array<unsigned char, 4>;
 
 /** A reference to a CKey: the Hash160 of its serialized public key */
 class CKeyID : public uint160
@@ -25,9 +30,13 @@ class CKeyID : public uint160
 public:
     CKeyID() : uint160() {}
     explicit CKeyID(const uint160& in) : uint160(in) {}
+    KeyFingerprint fingerprint() const
+    {
+        KeyFingerprint ret;
+        std::copy_n(begin(), ret.size(), ret.begin());
+        return ret;
+    }
 };
-
-typedef uint256 ChainCode;
 
 /** An encapsulated public key. */
 class CPubKey
@@ -336,7 +345,7 @@ public:
 struct CExtPubKey {
     unsigned char version[4];
     unsigned char nDepth;
-    unsigned char vchFingerprint[4];
+    KeyFingerprint fingerprint;
     unsigned int nChild;
     ChainCode chaincode;
     CPubKey pubkey;
@@ -344,7 +353,7 @@ struct CExtPubKey {
     friend bool operator==(const CExtPubKey &a, const CExtPubKey &b)
     {
         return a.nDepth == b.nDepth &&
-            memcmp(a.vchFingerprint, b.vchFingerprint, sizeof(vchFingerprint)) == 0 &&
+            a.fingerprint == b.fingerprint &&
             a.nChild == b.nChild &&
             a.chaincode == b.chaincode &&
             a.pubkey == b.pubkey;
@@ -360,10 +369,26 @@ struct CExtPubKey {
         return a.chaincode < b.chaincode;
     }
 
-    void Encode(unsigned char code[BIP32_EXTKEY_SIZE]) const;
-    void Decode(const unsigned char code[BIP32_EXTKEY_SIZE]);
-    void EncodeWithVersion(unsigned char code[BIP32_EXTKEY_WITH_VERSION_SIZE]) const;
-    void DecodeWithVersion(const unsigned char code[BIP32_EXTKEY_WITH_VERSION_SIZE]);
+    KeyFingerprint id_key_fingerprint() const
+    {
+        return pubkey.GetID().fingerprint();
+    }
+
+    //! BIP32 serialization without the version bytes (BIP32_EXTKEY_SIZE bytes)
+    template <typename Stream>
+    void Serialize(Stream& s) const
+    {
+        assert(pubkey.size() == CPubKey::COMPRESSED_SIZE);
+        s << nDepth << fingerprint << Using<BigEndianFormatter<4>>(nChild) << chaincode << std::span{pubkey.data(), CPubKey::COMPRESSED_SIZE};
+    }
+    template <typename Stream>
+    void Unserialize(Stream& s)
+    {
+        std::array<unsigned char, CPubKey::COMPRESSED_SIZE> ser_pubkey;
+        s >> nDepth >> fingerprint >> Using<BigEndianFormatter<4>>(nChild) >> chaincode >> ser_pubkey;
+        pubkey.Set(ser_pubkey.begin(), ser_pubkey.end());
+        if ((nDepth == 0 && (nChild != 0 || fingerprint != KeyFingerprint{})) || !pubkey.IsFullyValid()) pubkey = CPubKey();
+    }
     [[nodiscard]] bool Derive(CExtPubKey& out, unsigned int nChild, uint256* bip32_tweak_out = nullptr) const;
 };
 

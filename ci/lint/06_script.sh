@@ -4,7 +4,7 @@
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-export LC_ALL=C
+export LC_ALL=C.UTF-8
 
 set -o errexit -o pipefail -o xtrace
 
@@ -12,7 +12,7 @@ set -o errexit -o pipefail -o xtrace
 # of the mounted bitcoin src dir.
 git config --global --add safe.directory /bitcoin
 
-export PATH="/python_build/bin:${PATH}"
+export PATH="/python_env/bin:${PATH}"
 
 if [ -n "${LINT_CI_IS_PR}" ]; then
   export COMMIT_RANGE="HEAD~..HEAD"

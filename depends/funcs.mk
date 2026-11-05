@@ -47,7 +47,11 @@ endef
 define fetch_local_dir_sha256
     if ! [ -f $($(1)_source) ] || [ -n "$$(find $($(1)_local_dir) -newer $($(1)_source) | head -n1)" ]; then \
         mkdir -p $(dir $($(1)_source)) && \
-        $(build_TAR) -c -f $($(1)_source) -C $($(1)_local_dir) . && \
+        ( \
+          cd $($(1)_local_dir) && \
+          find . -print0 | TZ=UTC xargs -0r $(build_TOUCH) && \
+          find . | LC_ALL=C sort | $(build_TAR) --no-recursion -c -f $($(1)_source) -T - \
+        ) && \
         rm -f $($(1)_fetched); \
     fi && \
     if ! [ -f $($(1)_fetched) ] || [ -n "$$(find $($(1)_source) -newer $($(1)_fetched))" ]; then \
@@ -60,7 +64,7 @@ endef
 
 define int_get_build_recipe_hash
 $(eval $(1)_patches_path?=$(PATCHES_PATH)/$(1))
-$(eval $(1)_all_file_checksums:=$(shell $(build_SHA256SUM) $(meta_depends) packages/$(1).mk $(addprefix $($(1)_patches_path)/,$($(1)_patches)) | cut -d" " -f1))
+$(eval $(1)_all_file_checksums:=$(shell $(build_SHA256SUM) $(meta_depends) packages/$(1).mk $$(grep "^include " packages/$(1).mk | cut -d' ' -f2 | xargs) $(addprefix $($(1)_patches_path)/,$($(1)_patches)) | cut -d" " -f1))
 # If $(1)_local_dir is set, create a tarball of the local directory contents to
 # use as the source of the package, and include a hash of the tarball in the
 # package id, so if directory contents change, the package and packages
@@ -222,7 +226,7 @@ $(1)_cmake=env CC="$$($(1)_cc)" \
                -DCMAKE_AR=`which $$($(1)_ar)` \
                -DCMAKE_NM=`which $$($(1)_nm)` \
                -DCMAKE_RANLIB=`which $$($(1)_ranlib)` \
-               -DCMAKE_INSTALL_LIBDIR=lib/ \
+               -DCMAKE_INSTALL_LIBDIR=lib \
                -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
                -DCMAKE_VERBOSE_MAKEFILE:BOOL=$(V) \
                -DCMAKE_EXPORT_NO_PACKAGE_REGISTRY:BOOL=TRUE \

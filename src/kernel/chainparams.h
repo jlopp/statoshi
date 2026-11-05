@@ -99,9 +99,9 @@ public:
     /** If this chain allows time to be mocked */
     bool IsMockableChain() const { return m_is_mockable_chain; }
     uint64_t PruneAfterHeight() const { return nPruneAfterHeight; }
-    /** Minimum free space (in GB) needed for data directory */
+    /** Minimum free space (in GiB) needed for data directory */
     uint64_t AssumedBlockchainSize() const { return m_assumed_blockchain_size; }
-    /** Minimum free space (in GB) needed for data directory when pruned; Does not include prune target*/
+    /** Minimum free space (in GiB) needed for data directory when pruned; Does not include prune target*/
     uint64_t AssumedChainStateSize() const { return m_assumed_chain_state_size; }
     /** Whether it is possible to mine blocks on demand (no retargeting) */
     bool MineBlocksOnDemand() const { return consensus.fPowNoRetargeting; }
@@ -113,6 +113,7 @@ public:
     const std::vector<std::string>& DNSSeeds() const { return vSeeds; }
     const std::vector<unsigned char>& Base58Prefix(Base58Type type) const { return base58Prefixes[type]; }
     const std::string& Bech32HRP() const { return bech32_hrp; }
+    const std::string& SilentPaymentsHRP() const { return silent_payments_hrp; }
     const std::vector<uint8_t>& FixedSeeds() const { return vFixedSeeds; }
     const HeadersSyncParams& HeadersSync() const { return m_headers_sync_params; }
 
@@ -128,14 +129,6 @@ public:
     const ChainTxData& TxData() const { return chainTxData; }
 
     /**
-     * SigNetOptions holds configurations for creating a signet CChainParams.
-     */
-    struct SigNetOptions {
-        std::optional<std::vector<uint8_t>> challenge{};
-        std::optional<std::vector<std::string>> seeds{};
-    };
-
-    /**
      * VersionBitsParameters holds activation parameters
      */
     struct VersionBitsParameters {
@@ -144,21 +137,47 @@ public:
         int min_activation_height;
     };
 
+    struct DeploymentOptions {
+        std::unordered_map<Consensus::DeploymentPos, VersionBitsParameters> version_bits_parameters{};
+        std::unordered_map<Consensus::BuriedDeployment, int> activation_heights{};
+    };
+
+    /**
+     * SigNetOptions holds configurations for creating a signet CChainParams.
+     */
+    struct SigNetOptions {
+        DeploymentOptions dep_opts{};
+        std::optional<std::vector<uint8_t>> challenge{};
+        std::optional<std::vector<std::string>> seeds{};
+    };
+
     /**
      * RegTestOptions holds configurations for creating a regtest CChainParams.
      */
     struct RegTestOptions {
-        std::unordered_map<Consensus::DeploymentPos, VersionBitsParameters> version_bits_parameters{};
-        std::unordered_map<Consensus::BuriedDeployment, int> activation_heights{};
+        DeploymentOptions dep_opts{};
         bool fastprune{false};
         bool enforce_bip94{false};
     };
 
+    struct MainNetOptions {
+        DeploymentOptions dep_opts{};
+    };
+
+    struct TestNetOptions {
+        DeploymentOptions dep_opts{};
+    };
+
     static std::unique_ptr<const CChainParams> RegTest(const RegTestOptions& options);
+    static std::unique_ptr<const CChainParams> RegTest() { const RegTestOptions opts{}; return RegTest(opts); }
     static std::unique_ptr<const CChainParams> SigNet(const SigNetOptions& options);
-    static std::unique_ptr<const CChainParams> Main();
-    static std::unique_ptr<const CChainParams> TestNet();
-    static std::unique_ptr<const CChainParams> TestNet4();
+    static std::unique_ptr<const CChainParams> SigNet() { const SigNetOptions opts{}; return SigNet(opts); }
+    static std::unique_ptr<const CChainParams> Main(const MainNetOptions& options);
+    static std::unique_ptr<const CChainParams> Main() { const MainNetOptions opts{}; return Main(opts); }
+    static std::unique_ptr<const CChainParams> TestNet(const TestNetOptions& options);
+    static std::unique_ptr<const CChainParams> TestNet() { const TestNetOptions opts{}; return TestNet(opts); }
+    static std::unique_ptr<const CChainParams> TestNet4(const TestNetOptions& options);
+    static std::unique_ptr<const CChainParams> TestNet4() { const TestNetOptions opts{}; return TestNet4(opts); }
 
 protected:
     CChainParams() = default;
@@ -172,6 +191,7 @@ protected:
     std::vector<std::string> vSeeds;
     std::vector<unsigned char> base58Prefixes[MAX_BASE58_TYPES];
     std::string bech32_hrp;
+    std::string silent_payments_hrp;
     ChainType m_chain_type;
     CBlock genesis;
     std::vector<uint8_t> vFixedSeeds;
@@ -180,6 +200,8 @@ protected:
     std::vector<AssumeutxoData> m_assumeutxo_data;
     ChainTxData chainTxData;
     HeadersSyncParams m_headers_sync_params;
+
+    void ApplyDeploymentOptions(const DeploymentOptions& opts);
 };
 
 std::optional<ChainType> GetNetworkForMagic(const MessageStartChars& pchMessageStart);

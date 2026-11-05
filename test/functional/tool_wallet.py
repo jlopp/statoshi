@@ -221,6 +221,9 @@ class ToolWalletTest(BitcoinTestFramework):
         assert_equal(shasum_before, shasum_after)
         self.log.debug('Wallet file shasum unchanged\n')
 
+        self.log.info('Calling wallet tool create on a wallet that already exists, testing error')
+        self.assert_raises_tool_error('Database already exists.', '-wallet=foo', 'create')
+
     def test_getwalletinfo_on_different_wallet(self):
         self.log.info('Starting node with arg -wallet=foo')
         self.start_node(0, ['-nowallet', '-wallet=foo'])
@@ -421,6 +424,7 @@ class ToolWalletTest(BitcoinTestFramework):
         assert not (self.nodes[0].wallets_path / "legacy").exists()
         self.assert_raises_tool_error("Invalid parameter -descriptors", "-wallet=legacy", "-descriptors=false", "create")
         assert not (self.nodes[0].wallets_path / "legacy").exists()
+        self.assert_raises_tool_error("The -dumpfile option cannot be used with the 'create' command.", "-wallet=legacy", "-dumpfile=wallet.dump", "create")
 
     def test_no_create_unnamed(self):
         self.log.info("Test that unnamed (default) wallets cannot be created")

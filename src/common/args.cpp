@@ -7,7 +7,6 @@
 
 #include <chainparamsbase.h>
 #include <common/settings.h>
-#include <logging.h>
 #include <sync.h>
 #include <tinyformat.h>
 #include <univalue.h>
@@ -15,6 +14,7 @@
 #include <util/check.h>
 #include <util/fs.h>
 #include <util/fs_helpers.h>
+#include <util/log.h>
 #include <util/strencodings.h>
 #include <util/string.h>
 
@@ -23,10 +23,9 @@
 #endif
 
 #include <algorithm>
-#include <cassert>
-#include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <list>
 #include <map>
 #include <optional>
 #include <stdexcept>
@@ -164,7 +163,7 @@ std::list<SectionInfo> ArgsManager::GetUnrecognizedSections() const
 
     LOCK(cs_args);
     std::list<SectionInfo> unrecognized = m_config_sections;
-    unrecognized.remove_if([](const SectionInfo& appeared){ return available_sections.contains(appeared.m_name); });
+    std::erase_if(unrecognized, [](const SectionInfo& appeared) { return available_sections.contains(appeared.m_name); });
     return unrecognized;
 }
 
@@ -284,7 +283,7 @@ fs::path ArgsManager::GetPathArg_(std::string arg, const fs::path& default_value
     AssertLockHeld(cs_args);
     const auto value = GetSetting_(arg);
     if (value.isFalse()) return {};
-    std::string path_str = SettingToString(value, "");
+    std::string path_str = SettingToString(value).value_or("");
     if (path_str.empty()) return default_value;
     fs::path result = fs::PathFromString(path_str).lexically_normal();
     // Remove trailing slash, if present.
@@ -385,6 +384,40 @@ std::optional<const ArgsManager::Command> ArgsManager::GetCommand() const
         ret.args.push_back(*(it++));
     }
     return ret;
+}
+
+bool ArgsManager::CheckCommandOptions(const std::string& command, std::vector<std::string>* errors) const
+{
+    LOCK(cs_args);
+
+    auto command_options = m_available_args.find(OptionsCategory::COMMAND_OPTIONS);
+    if (command_options == m_available_args.end()) {
+        // There are no command-specific options at all, so everything is fine
+        return true;
+    }
+
+    const auto command_args = m_command_args.find(command);
+    auto is_valid_opt = [&](const auto& opt) EXCLUSIVE_LOCKS_REQUIRED(cs_args) -> bool {
+        if (command_args == m_command_args.end()) {
+            // Caller may not have checked that command actually exists
+            // before calling this function.  In that case, treat it as
+            // having no valid command-specific options.
+            return false;
+        } else {
+            return command_args->second.contains(opt);
+        }
+    };
+
+    bool ok = true;
+    for (const auto& [arg, _] : command_options->second) {
+        if (!GetSetting_(arg).isNull() && !is_valid_opt(arg)) {
+            ok = false;
+            if (errors != nullptr) {
+                errors->emplace_back(strprintf("The %s option cannot be used with the '%s' command.", arg, command));
+            }
+        }
+    }
+    return ok;
 }
 
 std::vector<std::string> ArgsManager::GetArgs(const std::string& strArg) const
@@ -502,11 +535,6 @@ std::optional<std::string> SettingToString(const common::SettingsValue& value)
     return value.get_str();
 }
 
-std::string SettingToString(const common::SettingsValue& value, const std::string& strDefault)
-{
-    return SettingToString(value).value_or(strDefault);
-}
-
 template <std::integral Int>
 Int ArgsManager::GetArg(const std::string& strArg, Int nDefault) const
 {
@@ -530,12 +558,6 @@ std::optional<Int> SettingTo(const common::SettingsValue& value)
     return LocaleIndependentAtoi<Int>(value.get_str());
 }
 
-template <std::integral Int>
-Int SettingTo(const common::SettingsValue& value, Int nDefault)
-{
-    return SettingTo<Int>(value).value_or(nDefault);
-}
-
 bool ArgsManager::GetBoolArg(const std::string& strArg, bool fDefault) const
 {
     return GetBoolArg(strArg).value_or(fDefault);
@@ -554,15 +576,9 @@ std::optional<bool> SettingToBool(const common::SettingsValue& value)
     return InterpretBool(value.get_str());
 }
 
-bool SettingToBool(const common::SettingsValue& value, bool fDefault)
-{
-    return SettingToBool(value).value_or(fDefault);
-}
-
 #define INSTANTIATE_INT_TYPE(Type)                                                    \
     template Type ArgsManager::GetArg<Type>(const std::string&, Type) const;          \
     template std::optional<Type> ArgsManager::GetArg<Type>(const std::string&) const; \
-    template Type SettingTo<Type>(const common::SettingsValue&, Type);                \
     template std::optional<Type> SettingTo<Type>(const common::SettingsValue&)
 
 INSTANTIATE_INT_TYPE(int8_t);
@@ -598,7 +614,7 @@ void ArgsManager::ForceSetArg(const std::string& strArg, const std::string& strV
     m_settings.forced_settings[SettingName(strArg)] = strValue;
 }
 
-void ArgsManager::AddCommand(const std::string& cmd, const std::string& help)
+void ArgsManager::AddCommand(const std::string& cmd, const std::string& help, std::set<std::string> options)
 {
     Assert(cmd.find('=') == std::string::npos);
     Assert(cmd.at(0) != '-');
@@ -607,6 +623,18 @@ void ArgsManager::AddCommand(const std::string& cmd, const std::string& help)
     m_accept_any_command = false; // latch to false
     std::map<std::string, Arg>& arg_map = m_available_args[OptionsCategory::COMMANDS];
     auto ret = arg_map.emplace(cmd, Arg{"", help, ArgsManager::COMMAND});
+    if (!options.empty()) {
+        auto& cmdopts = m_available_args[OptionsCategory::COMMAND_OPTIONS];
+        bool command_has_all_options_defined = true;
+        for (const auto& opt : options) {
+            if (!cmdopts.contains(opt)) {
+                command_has_all_options_defined = false;
+            }
+        }
+        Assert(command_has_all_options_defined);
+
+        m_command_args.try_emplace(cmd, std::move(options));
+    }
     Assert(ret.second); // Fail on duplicate commands
 }
 
@@ -622,6 +650,14 @@ void ArgsManager::AddArg(const std::string& name, const std::string& help, unsig
     std::string arg_name = name.substr(0, eq_index);
 
     LOCK(cs_args);
+
+    // Allow duplicates involving HIDDEN — it is used as a placeholder for args
+    // unavailable in this binary but tolerated for shared config files (see #13441).
+    for (const auto& arg_map : m_available_args) {
+        if (arg_map.first == OptionsCategory::HIDDEN || cat == OptionsCategory::HIDDEN) continue;
+        Assert(!arg_map.second.contains(arg_name));
+    }
+
     std::map<std::string, Arg>& arg_map = m_available_args[cat];
     auto ret = arg_map.emplace(arg_name, Arg{name.substr(eq_index, name.size() - eq_index), help, flags});
     assert(ret.second); // Make sure an insertion actually happened
@@ -643,6 +679,7 @@ void ArgsManager::ClearArgs()
     LOCK(cs_args);
     m_settings = {};
     m_available_args.clear();
+    m_command_args.clear();
     m_network_only_args.clear();
     m_config_sections.clear();
 }
@@ -670,8 +707,20 @@ std::string ArgsManager::GetHelpMessage() const
 
     std::string usage;
     LOCK(cs_args);
-    for (const auto& arg_map : m_available_args) {
-        switch(arg_map.first) {
+
+    const auto command_options = m_available_args.find(OptionsCategory::COMMAND_OPTIONS);
+    const auto for_matching_cmd_opts = [&](const std::set<std::string>& select, auto&& fn) EXCLUSIVE_LOCKS_REQUIRED(cs_args) {
+        if (select.empty()) return;
+        if (command_options == m_available_args.end()) return;
+        for (const auto& [name, info] : command_options->second) {
+            if (!show_debug && (info.m_flags & ArgsManager::DEBUG_ONLY)) continue;
+            if (!select.contains(name)) continue;
+            fn(name, info);
+        }
+    };
+
+    for (const auto& [category, category_args] : m_available_args) {
+        switch(category) {
             case OptionsCategory::OPTIONS:
                 usage += HelpMessageGroup("Options:");
                 break;
@@ -717,22 +766,27 @@ std::string ArgsManager::GetHelpMessage() const
             case OptionsCategory::CLI_COMMANDS:
                 usage += HelpMessageGroup("CLI Commands:");
                 break;
+            case OptionsCategory::COMMAND_OPTIONS:
             case OptionsCategory::HIDDEN:
                 break;
         } // no default case, so the compiler can warn about missing cases
 
-        // When we get to the hidden options, stop
-        if (arg_map.first == OptionsCategory::HIDDEN) break;
+        if (category == OptionsCategory::COMMAND_OPTIONS) continue;
 
-        for (const auto& arg : arg_map.second) {
-            if (show_debug || !(arg.second.m_flags & ArgsManager::DEBUG_ONLY)) {
-                std::string name;
-                if (arg.second.m_help_param.empty()) {
-                    name = arg.first;
-                } else {
-                    name = arg.first + arg.second.m_help_param;
+        // When we get to the hidden options, stop
+        if (category == OptionsCategory::HIDDEN) break;
+
+        for (const auto& [arg_name, arg_info] : category_args) {
+            if (show_debug || !(arg_info.m_flags & ArgsManager::DEBUG_ONLY)) {
+                usage += HelpMessageOpt(arg_name, arg_info.m_help_param, arg_info.m_help_text);
+
+                if (category == OptionsCategory::COMMANDS) {
+                    const auto cmd_args = m_command_args.find(arg_name);
+                    if (cmd_args == m_command_args.end()) continue;
+                    for_matching_cmd_opts(cmd_args->second, [&](const auto& cmdopt_name, const auto& cmdopt_info) {
+                        usage += HelpMessageOpt(cmdopt_name, cmdopt_info.m_help_param, cmdopt_info.m_help_text, /*subopt=*/true);
+                    });
                 }
-                usage += HelpMessageOpt(name, arg.second.m_help_text);
             }
         }
     }
@@ -750,19 +804,26 @@ void SetupHelpOptions(ArgsManager& args)
     args.AddHiddenArgs({"-h", "-?"});
 }
 
-static const int screenWidth = 79;
-static const int optIndent = 2;
-static const int msgIndent = 7;
-
 std::string HelpMessageGroup(const std::string &message) {
     return std::string(message) + std::string("\n\n");
 }
 
-std::string HelpMessageOpt(const std::string &option, const std::string &message) {
-    return std::string(optIndent,' ') + std::string(option) +
-           std::string("\n") + std::string(msgIndent,' ') +
-           FormatParagraph(message, screenWidth - msgIndent, msgIndent) +
-           std::string("\n\n");
+std::string HelpMessageOpt(std::string_view option, std::string_view help_param, std::string_view message, bool subopt)
+{
+    constexpr int screen_width = 79;
+    int opt_indent = 2;
+    int msg_indent = 7;
+
+    if (subopt) {
+        int bump = msg_indent - opt_indent;
+        opt_indent += bump; // opt_indent now at the old msg_indent level
+        msg_indent += bump; // indent by the same amount
+    }
+    int msg_width = screen_width - msg_indent;
+
+    return strprintf("%*s%s%s\n%*s%s\n\n",
+                     opt_indent, "", option, help_param,
+                     msg_indent, "", FormatParagraph(message, msg_width, msg_indent));
 }
 
 const std::vector<std::string> TEST_OPTIONS_DOC{

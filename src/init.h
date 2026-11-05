@@ -12,9 +12,9 @@
 extern statsd::StatsdClient statsClient;
 
 //! Default value for -daemon option
-static constexpr bool DEFAULT_DAEMON = false;
+inline constexpr bool DEFAULT_DAEMON = false;
 //! Default value for -daemonwait option
-static constexpr bool DEFAULT_DAEMONWAIT = false;
+inline constexpr bool DEFAULT_DAEMONWAIT = false;
 
 class ArgsManager;
 namespace interfaces {

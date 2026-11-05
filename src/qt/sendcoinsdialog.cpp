@@ -21,17 +21,18 @@
 #include <key_io.h>
 #include <node/interface_ui.h>
 #include <node/types.h>
-#include <policy/fees/block_policy_estimator.h>
 #include <txmempool.h>
 #include <validation.h>
 #include <wallet/coincontrol.h>
 #include <wallet/fees.h>
+#include <wallet/types.h>
 #include <wallet/wallet.h>
 
 #include <array>
 #include <chrono>
 #include <fstream>
 #include <memory>
+#include <optional>
 
 #include <QFontMetrics>
 #include <QScrollBar>
@@ -179,13 +180,6 @@ void SendCoinsDialog::setModel(WalletModel *_model)
         connect(ui->groupFee, &QButtonGroup::idClicked, this, &SendCoinsDialog::coinControlUpdateLabels);
 
         connect(ui->customFee, &BitcoinAmountField::valueChanged, this, &SendCoinsDialog::coinControlUpdateLabels);
-#if (QT_VERSION >= QT_VERSION_CHECK(6, 7, 0))
-        connect(ui->optInRBF, &QCheckBox::checkStateChanged, this, &SendCoinsDialog::updateSmartFeeLabel);
-        connect(ui->optInRBF, &QCheckBox::checkStateChanged, this, &SendCoinsDialog::coinControlUpdateLabels);
-#else
-        connect(ui->optInRBF, &QCheckBox::stateChanged, this, &SendCoinsDialog::updateSmartFeeLabel);
-        connect(ui->optInRBF, &QCheckBox::stateChanged, this, &SendCoinsDialog::coinControlUpdateLabels);
-#endif
         CAmount requiredFee = model->wallet().getRequiredFee(1000);
         ui->customFee->SetMinValue(requiredFee);
         if (ui->customFee->value() < requiredFee) {
@@ -194,9 +188,6 @@ void SendCoinsDialog::setModel(WalletModel *_model)
         ui->customFee->setSingleStep(requiredFee);
         updateFeeSectionControls();
         updateSmartFeeLabel();
-
-        // set default rbf checkbox state
-        ui->optInRBF->setCheckState(Qt::Checked);
 
         if (model->wallet().hasExternalSigner()) {
             //: "device" usually means a hardware wallet.
@@ -360,16 +351,11 @@ bool SendCoinsDialog::PrepareSendText(QString& question_string, QString& informa
         question_string.append("<span style='color:#aa0000; font-weight:bold;'>");
         question_string.append(BitcoinUnits::formatHtmlWithUnit(model->getOptionsModel()->getDisplayUnit(), txFee));
         question_string.append("</span><br />");
-
-        // append RBF message according to transaction's signalling
-        question_string.append("<span style='font-size:10pt; font-weight:normal;'>");
-        if (ui->optInRBF->isChecked()) {
-            question_string.append(tr("You can increase the fee later (signals Replace-By-Fee, BIP-125)."));
-        } else {
-            question_string.append(tr("Not signalling Replace-By-Fee, BIP-125."));
-        }
-        question_string.append("</span>");
     }
+
+    // append RBF message
+    question_string.append("<span style='font-size:10pt; font-weight:normal;'>");
+    question_string.append(tr("You can increase the fee later."));
 
     // add total amount in all subdivision units
     question_string.append("<hr />");
@@ -447,7 +433,7 @@ void SendCoinsDialog::presentPSBT(PartiallySignedTransaction& psbtx)
 bool SendCoinsDialog::signWithExternalSigner(PartiallySignedTransaction& psbtx, CMutableTransaction& mtx, bool& complete) {
     std::optional<PSBTError> err;
     try {
-        err = model->wallet().fillPSBT(std::nullopt, /*sign=*/true, /*bip32derivs=*/true, /*n_signed=*/nullptr, psbtx, complete);
+        err = model->wallet().fillPSBT({.sign = true, .bip32_derivs = true}, /*n_signed=*/nullptr, psbtx, complete);
     } catch (const std::runtime_error& e) {
         QMessageBox::critical(nullptr, tr("Sign failed"), e.what());
         return false;
@@ -504,7 +490,7 @@ void SendCoinsDialog::sendButtonClicked([[maybe_unused]] bool checked)
         PartiallySignedTransaction psbtx(mtx);
         bool complete = false;
         // Fill without signing
-        const auto err{model->wallet().fillPSBT(std::nullopt, /*sign=*/false, /*bip32derivs=*/true, /*n_signed=*/nullptr, psbtx, complete)};
+        const auto err{model->wallet().fillPSBT({.sign = false, .bip32_derivs = true}, /*n_signed=*/nullptr, psbtx, complete)};
         assert(!complete);
         assert(!err);
 
@@ -520,7 +506,7 @@ void SendCoinsDialog::sendButtonClicked([[maybe_unused]] bool checked)
             bool complete = false;
             // Always fill without signing first. This prevents an external signer
             // from being called prematurely and is not expensive.
-            const auto err{model->wallet().fillPSBT(std::nullopt, /*sign=*/false, /*bip32derivs=*/true, /*n_signed=*/nullptr, psbtx, complete)};
+            const auto err{model->wallet().fillPSBT({.sign = false, .bip32_derivs = true}, /*n_signed=*/nullptr, psbtx, complete)};
             assert(!complete);
             assert(!err);
             send_failure = !signWithExternalSigner(psbtx, mtx, complete);
@@ -747,7 +733,7 @@ void SendCoinsDialog::processSendCoinsReturn(const WalletModel::SendCoinsReturn 
         msgParams.second = CClientUIInterface::MSG_ERROR;
         break;
     case WalletModel::AbsurdFee:
-        msgParams.first = tr("A fee higher than %1 is considered an absurdly high fee.").arg(BitcoinUnits::formatWithUnit(model->getOptionsModel()->getDisplayUnit(), model->wallet().getDefaultMaxTxFee()));
+        msgParams.first = tr("A fee higher than %1 is considered an absurdly high fee.").arg(BitcoinUnits::formatWithUnit(model->getOptionsModel()->getDisplayUnit(), model->wallet().getMaxTxFee()));
         break;
     case WalletModel::OK:
         return;
@@ -834,7 +820,6 @@ void SendCoinsDialog::updateCoinControlState()
     // Avoid using global defaults when sending money from the GUI
     // Either custom fee will be used or if not selected, the confirmation target from dropdown box
     m_coin_control->m_confirm_target = getConfTargetForIndex(ui->confTargetSelector->currentIndex());
-    m_coin_control->m_signal_bip125_rbf = ui->optInRBF->isChecked();
 }
 
 void SendCoinsDialog::updateNumberOfBlocks(int count, const QDateTime& blockDate, double nVerificationProgress, SyncType synctype, SynchronizationState sync_state) {
@@ -853,7 +838,7 @@ void SendCoinsDialog::updateSmartFeeLabel()
         return;
     updateCoinControlState();
     m_coin_control->m_feerate.reset(); // Explicitly use only fee estimation rate for smart fee labels
-    int returned_target;
+    std::optional<int> returned_target;
     FeeReason reason;
     CFeeRate feeRate = CFeeRate(model->wallet().getMinimumFee(1000, *m_coin_control, &returned_target, &reason));
 
@@ -871,7 +856,10 @@ void SendCoinsDialog::updateSmartFeeLabel()
     else
     {
         ui->labelSmartFee2->hide();
-        ui->labelFeeEstimation->setText(tr("Estimated to begin confirmation within %n block(s).", "", returned_target));
+        ui->labelFeeEstimation->setText("");
+        if (returned_target) {
+            ui->labelFeeEstimation->setText(tr("Estimated to begin confirmation within %n block(s).", "", *returned_target));
+        }
         ui->fallbackFeeWarningLabel->setVisible(false);
     }
 

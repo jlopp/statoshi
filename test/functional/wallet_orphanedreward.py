@@ -11,6 +11,7 @@ class OrphanedBlockRewardTest(BitcoinTestFramework):
     def set_test_params(self):
         self.setup_clean_chain = True
         self.num_nodes = 2
+        self.noban_tx_relay = True  # faster tx relay
 
     def skip_test_if_missing_module(self):
         self.skip_if_no_wallet()
@@ -46,6 +47,7 @@ class OrphanedBlockRewardTest(BitcoinTestFramework):
           "trusted": 10,
           "untrusted_pending": 0,
           "immature": 0,
+          "nonmempool": 0,
         })
         # And the unconfirmed tx to be abandoned
         assert_equal(self.nodes[1].gettransaction(txid)["details"][0]["abandoned"], True)

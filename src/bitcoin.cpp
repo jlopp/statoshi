@@ -139,7 +139,7 @@ CommandLine ParseCommandLine(int argc, char* argv[])
             cmd.show_version = true;
         } else if (arg == "-h" || arg == "--help" || arg == "help") {
             cmd.show_help = true;
-        } else if (arg.starts_with("-")) {
+        } else if (arg.starts_with('-')) {
             throw std::runtime_error(strprintf("Unknown option: %s", arg));
         } else if (!arg.empty()) {
             cmd.command = arg;
@@ -169,7 +169,7 @@ bool UseMultiprocess(const CommandLine& cmd)
 
     // If any -ipc* options are set these need to be processed by a
     // multiprocess-capable binary.
-    return args.IsArgSet("-ipcbind") || args.IsArgSet("-ipcconnect") || args.IsArgSet("-ipcfd");
+    return args.IsArgSet("-ipcbind") || args.IsArgSet("-ipcconnect") || args.IsArgSet("-ipcchild");
 }
 
 //! Execute the specified bitcoind, bitcoin-qt or other command line in `args`

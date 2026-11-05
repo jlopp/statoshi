@@ -10,7 +10,6 @@
 #include <common/args.h>
 #include <compat/compat.h>
 #include <crypto/hmac_sha256.h>
-#include <logging.h>
 #include <net.h>
 #include <netaddress.h>
 #include <netbase.h>
@@ -18,6 +17,7 @@
 #include <tinyformat.h>
 #include <util/check.h>
 #include <util/fs.h>
+#include <util/log.h>
 #include <util/readwritefile.h>
 #include <util/strencodings.h>
 #include <util/string.h>
@@ -133,23 +133,23 @@ bool TorControlConnection::WaitForData(std::chrono::milliseconds timeout)
     if (!m_sock) return false;
 
     Sock::Event event{0};
-    if (!m_sock->Wait(timeout, Sock::RECV, &event)) {
+    if (!m_sock->Wait(timeout, Sock::RecvEvent, &event)) {
         return false;
     }
-    if (event & Sock::ERR) {
+    if (event & Sock::ErrorEvent) {
         LogDebug(BCLog::TOR, "Socket error detected");
         Disconnect();
         return false;
     }
 
-    return (event & Sock::RECV);
+    return (event & Sock::RecvEvent);
 }
 
 bool TorControlConnection::ReceiveAndProcess()
 {
     if (!m_sock) return false;
 
-    std::byte buf[4096];
+    char buf[4096];
     ssize_t nread = m_sock->Recv(buf, sizeof(buf), MSG_DONTWAIT);
 
     if (nread < 0) {
@@ -179,7 +179,6 @@ bool TorControlConnection::ReceiveAndProcess()
 bool TorControlConnection::ProcessBuffer()
 {
     util::LineReader reader(m_recv_buffer, MAX_LINE_LENGTH);
-    auto start = reader.it;
 
     while (auto line = reader.ReadLine()) {
         if (m_message.lines.size() == MAX_LINE_COUNT) {
@@ -191,7 +190,7 @@ bool TorControlConnection::ProcessBuffer()
         // Parse: <code><separator><data>
         // <status>(-|+| )<data>
         m_message.code = ToIntegral<int>(line->substr(0, 3)).value_or(0);
-        m_message.lines.push_back(line->substr(4));
+        m_message.lines.emplace_back(line->substr(4));
         char separator = (*line)[3]; // '-', '+', or ' '
 
         if (separator == ' ') {
@@ -210,7 +209,7 @@ bool TorControlConnection::ProcessBuffer()
         }
     }
 
-    m_recv_buffer.erase(m_recv_buffer.begin(), m_recv_buffer.begin() + std::distance(start, reader.it));
+    m_recv_buffer.erase(m_recv_buffer.begin(), m_recv_buffer.begin() + reader.Consumed());
     return true;
 }
 
@@ -392,42 +391,21 @@ void TorController::ThreadControl()
     LogDebug(BCLog::TOR, "Entering Tor control thread");
 
     while (!m_interrupt) {
-        // Try to connect if not connected already
-        if (!m_conn.IsConnected()) {
-            LogDebug(BCLog::TOR, "Attempting to connect to Tor control port %s", m_tor_control_center);
-
-            if (!m_conn.Connect(m_tor_control_center)) {
-                LogWarning("tor: Initiating connection to Tor control port %s failed", m_tor_control_center);
-                if (!m_reconnect) {
-                    break;
-                }
-                // Wait before retrying with exponential backoff
-                LogDebug(BCLog::TOR, "Retrying in %.1f seconds", m_reconnect_timeout.count());
-                if (!m_interrupt.sleep_for(std::chrono::duration_cast<std::chrono::milliseconds>(m_reconnect_timeout))) {
-                    break;
-                }
-                m_reconnect_timeout = std::min(m_reconnect_timeout * RECONNECT_TIMEOUT_EXP, RECONNECT_TIMEOUT_MAX);
-                continue;
-            }
-            // Successfully connected, reset timeout and trigger connected callback
-            m_reconnect_timeout = RECONNECT_TIMEOUT_START;
+        LogDebug(BCLog::TOR, "Attempting to connect to Tor control port %s", m_tor_control_center);
+        if (m_conn.Connect(m_tor_control_center)) {
             connected_cb(m_conn);
-        }
-        // Wait for data with a timeout
-        if (!m_conn.WaitForData(std::chrono::seconds(1))) {
-            // Check if still connected
-            if (!m_conn.IsConnected()) {
-                LogDebug(BCLog::TOR, "Lost connection to Tor control port");
-                disconnected_cb(m_conn);
-                continue;
+            while (!m_interrupt) {
+                if (!m_conn.WaitForData(std::chrono::seconds(1))) {
+                    if (m_conn.IsConnected()) continue;
+                    LogDebug(BCLog::TOR, "Lost connection to Tor control port");
+                    break;
+                }
+                if (!m_conn.ReceiveAndProcess()) break;
             }
-            // Just a timeout, continue waiting
-            continue;
+        } else {
+            LogWarning("tor: Initiating connection to Tor control port %s failed", m_tor_control_center);
         }
-        // Process incoming data
-        if (!m_conn.ReceiveAndProcess()) {
-            disconnected_cb(m_conn);
-        }
+        disconnected_cb(m_conn);
     }
     LogDebug(BCLog::TOR, "Exited Tor control thread");
 }
@@ -738,8 +716,12 @@ void TorController::disconnected_cb(TorControlConnection& _conn)
     if (!m_reconnect)
         return;
 
-    LogDebug(BCLog::TOR, "Not connected to Tor control port %s, will retry", m_tor_control_center);
+    LogDebug(BCLog::TOR, "Not connected to Tor control port %s, retrying in %.2f s",
+             m_tor_control_center, m_reconnect_timeout.count());
     _conn.Disconnect();
+
+    m_interrupt.sleep_for(std::chrono::duration_cast<std::chrono::milliseconds>(m_reconnect_timeout));
+    m_reconnect_timeout = std::min(m_reconnect_timeout * RECONNECT_TIMEOUT_EXP, RECONNECT_TIMEOUT_MAX);
 }
 
 fs::path TorController::GetPrivateKeyFile()

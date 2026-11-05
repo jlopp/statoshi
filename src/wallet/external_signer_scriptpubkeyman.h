@@ -15,18 +15,12 @@ struct bilingual_str;
 namespace wallet {
 class ExternalSignerScriptPubKeyMan : public DescriptorScriptPubKeyMan
 {
-  public:
-  ExternalSignerScriptPubKeyMan(WalletStorage& storage, WalletDescriptor& descriptor, int64_t keypool_size)
-      :   DescriptorScriptPubKeyMan(storage, descriptor, keypool_size)
-      {}
-  ExternalSignerScriptPubKeyMan(WalletStorage& storage, int64_t keypool_size)
-      :   DescriptorScriptPubKeyMan(storage, keypool_size)
-      {}
+private:
+    using DescriptorScriptPubKeyMan::DescriptorScriptPubKeyMan;
 
-  /** Provide a descriptor at setup time
-  * Returns false if already setup or setup fails, true if setup is successful
-  */
-  bool SetupDescriptor(WalletBatch& batch, std::unique_ptr<Descriptor>desc);
+public:
+    static std::unique_ptr<ExternalSignerScriptPubKeyMan> LoadFromStorage(WalletStorage& storage, const uint256& id, WalletDescriptor& descriptor, int64_t keypool_size, const KeyMap& keys, const CryptedKeyMap& ckeys);
+    static std::unique_ptr<ExternalSignerScriptPubKeyMan> CreateNew(WalletStorage& storage, WalletBatch& batch, int64_t keypool_size, std::unique_ptr<Descriptor> desc);
 
   static util::Result<ExternalSigner> GetExternalSigner();
 
@@ -36,7 +30,7 @@ class ExternalSignerScriptPubKeyMan : public DescriptorScriptPubKeyMan
   */
  util::Result<void> DisplayAddress(const CTxDestination& dest, const ExternalSigner& signer) const;
 
-  std::optional<common::PSBTError> FillPSBT(PartiallySignedTransaction& psbt, const PrecomputedTransactionData& txdata, std::optional<int> sighash_type = std::nullopt, bool sign = true, bool bip32derivs = false, int* n_signed = nullptr, bool finalize = true) const override;
+  std::optional<common::PSBTError> FillPSBT(PartiallySignedTransaction& psbt, const PrecomputedTransactionData& txdata, const common::PSBTFillOptions& options, int* n_signed = nullptr) const override;
 };
 } // namespace wallet
 #endif // BITCOIN_WALLET_EXTERNAL_SIGNER_SCRIPTPUBKEYMAN_H

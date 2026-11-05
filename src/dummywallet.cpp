@@ -3,7 +3,7 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <common/args.h>
-#include <logging.h>
+#include <util/log.h>
 #include <walletinitinterface.h>
 
 class ArgsManager;
@@ -37,6 +37,7 @@ void DummyWalletInit::AddWalletOptions(ArgsManager& argsman) const
         "-keypool=<n>",
         "-maxapsfee=<n>",
         "-maxtxfee=<amt>",
+        "-maxfeerate=<amt>",
         "-mintxfee=<amt>",
         "-signer=<cmd>",
         "-spendzeroconfchange",

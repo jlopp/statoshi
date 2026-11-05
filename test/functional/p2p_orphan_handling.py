@@ -8,11 +8,11 @@ import time
 from test_framework.blocktools import MAX_STANDARD_TX_WEIGHT
 from test_framework.mempool_util import (
     create_large_orphan,
+    DEFAULT_ANCESTOR_LIMIT,
     tx_in_orphanage,
 )
 from test_framework.messages import (
     CInv,
-    DEFAULT_ANCESTOR_LIMIT,
     MSG_TX,
     MSG_WITNESS_TX,
     MSG_WTX,
@@ -50,20 +50,19 @@ TXREQUEST_TIME_SKIP = NONPREF_PEER_TX_DELAY + TXID_RELAY_DELAY + OVERLOADED_PEER
 
 def cleanup(func):
     def wrapper(self):
-        try:
-            func(self)
-        finally:
-            # Clear mempool
-            self.generate(self.nodes[0], 1)
-            self.nodes[0].disconnect_p2ps()
-            # Check that mempool and orphanage have been cleared
-            self.wait_until(lambda: len(self.nodes[0].getorphantxs()) == 0)
-            assert_equal(0, len(self.nodes[0].getrawmempool()))
+        func(self)
 
-            self.restart_node(0, extra_args=["-persistmempool=0"])
-            # Allow use of bumpmocktime again
-            self.nodes[0].setmocktime(int(time.time()))
-            self.wallet.rescan_utxos(include_mempool=True)
+        # Clear mempool
+        self.generate(self.nodes[0], 1)
+        self.nodes[0].disconnect_p2ps()
+        # Check that mempool and orphanage have been cleared
+        self.wait_until(lambda: len(self.nodes[0].getorphantxs()) == 0)
+        assert_equal(0, len(self.nodes[0].getrawmempool()))
+
+        self.restart_node(0, extra_args=["-persistmempool=0"])
+        # Allow use of bumpmocktime again
+        self.nodes[0].setmocktime(int(time.time()))
+        self.wallet.rescan_utxos(include_mempool=True)
     return wrapper
 
 class PeerTxRelayer(P2PTxInvStore):
@@ -383,6 +382,31 @@ class OrphanHandlingTest(BitcoinTestFramework):
         self.nodes[0].bumpmocktime(NONPREF_PEER_TX_DELAY + TXID_RELAY_DELAY)
         assert tx_in_orphanage(node, orphan["tx"])
         peer.wait_for_parent_requests([int(missing_parent["txid"], 16)])
+
+    @cleanup
+    def test_orphan_parent_confirmed(self):
+        node = self.nodes[0]
+        peer = node.add_p2p_connection(PeerTxRelayer())
+
+        parent = self.wallet.create_self_transfer(fee_rate=0)
+        child = self.wallet.create_self_transfer(utxo_to_spend=parent["new_utxo"])
+
+        self.log.info("Test orphan reconsideration when its missing parent is confirmed")
+        self.relay_transaction(peer, child["tx"])
+        assert tx_in_orphanage(node, child["tx"])
+
+        # Withhold the requested parent so it can only become available through the block.
+        node.bumpmocktime(TXREQUEST_TIME_SKIP)
+        peer.wait_for_parent_requests([parent["tx"].txid_int])
+        assert_equal(node.getrawmempool(), [])
+
+        self.generateblock(
+            node,
+            output=self.wallet.get_address(),
+            transactions=[parent["hex"]],
+        )
+        self.wait_until(lambda: child["txid"] in node.getrawmempool())
+        assert not tx_in_orphanage(node, child["tx"])
 
     @cleanup
     def test_orphan_inherit_rejection(self):
@@ -827,6 +851,7 @@ class OrphanHandlingTest(BitcoinTestFramework):
         self.test_orphan_multiple_parents()
         self.test_orphans_overlapping_parents()
         self.test_orphan_of_orphan()
+        self.test_orphan_parent_confirmed()
         self.test_orphan_inherit_rejection()
         self.test_same_txid_orphan()
         self.test_same_txid_orphan_of_orphan()

@@ -6,7 +6,6 @@
 #define BITCOIN_WALLET_SPEND_H
 
 #include <consensus/amount.h>
-#include <policy/fees/block_policy_estimator.h>
 #include <util/result.h>
 #include <wallet/coinselection.h>
 #include <wallet/transaction.h>
@@ -40,7 +39,7 @@ TxSize CalculateMaximumSignedTxSize(const CTransaction& tx, const CWallet* walle
  * This struct is really just a wrapper around OutputType vectors with a convenient
  * method for concatenating and returning all COutputs as one vector.
  *
- * Size(), Clear(), Erase(), Shuffle(), and Add() methods are implemented to
+ * Size(), Erase(), Shuffle(), and Add() methods are implemented to
  * allow easy interaction with the struct.
  */
 struct CoinsResult {
@@ -54,7 +53,6 @@ struct CoinsResult {
     size_t Size() const;
     /** Return how many different output types this struct stores */
     size_t TypesCount() const { return coins.size(); }
-    void Clear();
     void Erase(const std::unordered_set<COutPoint, SaltedOutpointHasher>& coins_to_remove);
     void Shuffle(FastRandomContext& rng_fast);
     void Add(OutputType type, const COutput& out);
@@ -121,6 +119,15 @@ FilteredOutputGroups GroupOutputs(const CWallet& wallet,
                           const CoinsResult& coins,
                           const CoinSelectionParams& coin_sel_params,
                           const std::vector<SelectionFilter>& filters);
+
+/**
+ * Group coins by the provided filters, groups that pass no filter are appended to `ret_discarded_groups`.
+ */
+FilteredOutputGroups GroupOutputs(const CWallet& wallet,
+                                  const CoinsResult& coins,
+                                  const CoinSelectionParams& coin_sel_params,
+                                  const std::vector<SelectionFilter>& filters,
+                                  std::vector<OutputGroup>& ret_discarded_groups);
 
 /**
  * Attempt to find a valid input set that preserves privacy by not mixing OutputTypes.

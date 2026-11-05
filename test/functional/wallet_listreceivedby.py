@@ -18,8 +18,7 @@ from test_framework.wallet_util import test_address
 class ReceivedByTest(BitcoinTestFramework):
     def set_test_params(self):
         self.num_nodes = 2
-        # whitelist peers to speed up tx relay / mempool sync
-        self.noban_tx_relay = True
+        self.noban_tx_relay = True  # faster tx relay
 
     def skip_test_if_missing_module(self):
         self.skip_if_no_wallet()
@@ -100,6 +99,17 @@ class ReceivedByTest(BitcoinTestFramework):
         other_addr = self.nodes[0].getnewaddress()  # note on node[0]! just a random addr
         res = self.nodes[1].listreceivedbyaddress(0, True, True, other_addr)
         assert_equal(len(res), 0)
+
+        self.log.info("listreceivedbyaddress and listreceivedbylabel exclude not owned addresses")
+        # setlabel assigns a "send" purpose when the wallet doesn't own the address.
+        send_label = "external-address"
+        external_addr = self.nodes[0].getnewaddress(send_label)
+        self.nodes[1].setlabel(external_addr, send_label)
+        assert_equal(self.nodes[1].getaddressinfo(external_addr)["ismine"], False)
+        assert_array_result(self.nodes[1].listreceivedbyaddress(minconf=0, include_empty=True),
+                            {"address": external_addr}, {}, True)
+        assert_array_result(self.nodes[1].listreceivedbylabel(minconf=0, include_empty=True),
+                            {"label": send_label}, {}, True)
 
         self.log.info("getreceivedbyaddress Test")
 

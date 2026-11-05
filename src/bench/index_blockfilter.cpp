@@ -13,16 +13,19 @@
 #include <primitives/transaction.h>
 #include <pubkey.h>
 #include <script/script.h>
-#include <span.h>
 #include <sync.h>
 #include <test/util/setup_common.h>
+#include <test/util/time.h>
+#include <test/util/validation.h>
 #include <uint256.h>
+#include <util/check.h>
 #include <util/strencodings.h>
 #include <util/time.h>
 #include <validation.h>
 
-#include <cassert>
+#include <array>
 #include <memory>
+#include <span>
 #include <vector>
 
 using namespace util::hex_literals;
@@ -39,7 +42,7 @@ static void BlockFilterIndexSync(benchmark::Bench& bench)
     std::vector<CMutableTransaction> noTxns;
     for (int i = 0; i < CHAIN_SIZE - 100; i++) {
         test_setup->CreateAndProcessBlock(noTxns, script);
-        SetMockTime(GetTime() + 1);
+        test_setup->m_clock += 1s;
     }
     assert(WITH_LOCK(::cs_main, return test_setup->m_node.chainman->ActiveHeight() == CHAIN_SIZE));
 
@@ -54,8 +57,7 @@ static void BlockFilterIndexSync(benchmark::Bench& bench)
         assert(summary.synced);
         assert(summary.best_block_hash == WITH_LOCK(::cs_main, return test_setup->m_node.chainman->ActiveTip()->GetBlockHash()));
 
-        // Shutdown sequence (c.f. Shutdown() in init.cpp)
-        filter_index.Stop();
+        StopIndex(filter_index, test_setup->m_node);
     });
 }
 

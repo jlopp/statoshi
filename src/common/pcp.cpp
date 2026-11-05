@@ -4,19 +4,29 @@
 
 #include <common/pcp.h>
 
-#include <atomic>
-#include <common/netif.h>
+#include <compat/compat.h>
 #include <crypto/common.h>
-#include <logging.h>
+#include <crypto/hex_base.h>
 #include <netaddress.h>
 #include <netbase.h>
-#include <random.h>
-#include <span.h>
+#include <tinyformat.h>
 #include <util/check.h>
-#include <util/readwritefile.h>
+#include <util/log.h>
 #include <util/sock.h>
-#include <util/strencodings.h>
+#include <util/string.h>
 #include <util/threadinterrupt.h>
+#include <util/time.h>
+
+#include <algorithm>
+#include <compare>
+#include <cstring>
+#include <functional>
+#include <map>
+#include <memory>
+#include <optional>
+#include <span>
+#include <utility>
+#include <vector>
 
 namespace {
 
@@ -247,7 +257,7 @@ std::optional<std::vector<uint8_t>> PCPSendRecv(Sock &sock, const std::string &p
         while ((cur_time = time_point_cast<milliseconds>(MockableSteadyClock::now())) < deadline) {
             if (interrupt) return std::nullopt;
             Sock::Event occurred = 0;
-            if (!sock.Wait(deadline - cur_time, Sock::RECV, &occurred)) {
+            if (!sock.Wait(deadline - cur_time, Sock::RecvEvent, &occurred)) {
                 LogWarning("%s: Could not wait on socket: %s\n", protocol, NetworkErrorString(WSAGetLastError()));
                 return std::nullopt; // Network-level error, probably no use retrying.
             }
@@ -380,14 +390,9 @@ std::variant<MappingResult, MappingError> NATPMPRequestPortMap(const CNetAddr &g
         uint16_t result_code = ReadBE16(response.data() + NATPMP_RESPONSE_HDR_RESULT_OFS);
         if (result_code != NATPMP_RESULT_SUCCESS) {
             if (result_code == NATPMP_RESULT_NOT_AUTHORIZED) {
-                static std::atomic<bool> warned{false};
-                if (!warned.exchange(true)) {
-                    LogWarning("natpmp: Port mapping failed with result %s\n", NATPMPResultString(result_code));
-                } else {
-                    LogDebug(BCLog::NET, "natpmp: Port mapping failed with result %s\n", NATPMPResultString(result_code));
-                }
+                LogWarnThenDebug(BCLog::NET, "natpmp: Port mapping failed with result %s", NATPMPResultString(result_code));
             } else {
-                LogWarning("natpmp: Port mapping failed with result %s\n", NATPMPResultString(result_code));
+                LogWarning("natpmp: Port mapping failed with result %s", NATPMPResultString(result_code));
             }
             if (result_code == NATPMP_RESULT_NO_RESOURCES) {
                 return MappingError::NO_RESOURCES;
@@ -523,14 +528,9 @@ std::variant<MappingResult, MappingError> PCPRequestPortMap(const PCPMappingNonc
     CNetAddr external_addr{PCPUnwrapAddress(response.subspan(PCP_HDR_SIZE + PCP_MAP_EXTERNAL_IP_OFS, ADDR_IPV6_SIZE))};
     if (result_code != PCP_RESULT_SUCCESS) {
         if (result_code == PCP_RESULT_NOT_AUTHORIZED) {
-            static std::atomic<bool> warned{false};
-            if (!warned.exchange(true)) {
-                LogWarning("pcp: Mapping failed with result %s\n", PCPResultString(result_code));
-            } else {
-                LogDebug(BCLog::NET, "pcp: Mapping failed with result %s\n", PCPResultString(result_code));
-            }
+            LogWarnThenDebug(BCLog::NET, "pcp: Mapping failed with result %s", PCPResultString(result_code));
         } else {
-            LogWarning("pcp: Mapping failed with result %s\n", PCPResultString(result_code));
+            LogWarning("pcp: Mapping failed with result %s", PCPResultString(result_code));
         }
         if (result_code == PCP_RESULT_NO_RESOURCES) {
             return MappingError::NO_RESOURCES;

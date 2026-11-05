@@ -30,7 +30,6 @@ add_library(bitcoinkernel
   ../deploymentstatus.cpp
   ../flatfile.cpp
   ../hash.cpp
-  ../logging.cpp
   ../node/blockstorage.cpp
   ../node/chainstate.cpp
   ../node/utxo_snapshot.cpp
@@ -61,6 +60,7 @@ add_library(bitcoinkernel
   ../uint256.cpp
   ../util/chaintype.cpp
   ../util/check.cpp
+  ../util/exception.cpp
   ../util/expected.cpp
   ../util/feefrac.cpp
   ../util/fs.cpp
@@ -70,6 +70,7 @@ add_library(bitcoinkernel
   ../util/rbf.cpp
   ../util/signalinterrupt.cpp
   ../util/syserror.cpp
+  ../util/thread.cpp
   ../util/threadnames.cpp
   ../util/time.cpp
   ../util/tokenpipe.cpp

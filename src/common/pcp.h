@@ -6,15 +6,21 @@
 #define BITCOIN_COMMON_PCP_H
 
 #include <netaddress.h>
-#include <util/threadinterrupt.h>
+#include <util/time.h>
 
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <string>
 #include <variant>
+
+class CThreadInterrupt;
 
 // RFC6886 NAT-PMP and RFC6887 Port Control Protocol (PCP) implementation.
 // NAT-PMP and PCP use network byte order (big-endian).
 
 //! Mapping nonce size in bytes (see RFC6887 section 11.1).
-constexpr size_t PCP_MAP_NONCE_SIZE = 12;
+inline constexpr size_t PCP_MAP_NONCE_SIZE = 12;
 
 //! PCP mapping nonce. Arbitrary data chosen by the client to identify a mapping.
 typedef std::array<uint8_t, PCP_MAP_NONCE_SIZE> PCPMappingNonce;

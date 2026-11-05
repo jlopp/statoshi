@@ -24,8 +24,7 @@ class AbandonConflictTest(BitcoinTestFramework):
     def set_test_params(self):
         self.num_nodes = 2
         self.extra_args = [["-minrelaytxfee=0.00001"], []]
-        # whitelist peers to speed up tx relay / mempool sync
-        self.noban_tx_relay = True
+        self.noban_tx_relay = True  # faster tx relay
 
     def skip_test_if_missing_module(self):
         self.skip_if_no_wallet()
@@ -115,10 +114,9 @@ class AbandonConflictTest(BitcoinTestFramework):
         # inputs are still spent, but change not received
         newbalance = alice.getbalance()
         assert_equal(newbalance, balance - signed3_change)
-        # Unconfirmed received funds that are not in mempool, also shouldn't show
-        # up in unconfirmed balance
+        # Unconfirmed received funds that are not in mempool
         balances = alice.getbalances()['mine']
-        assert_equal(balances['untrusted_pending'] + balances['trusted'], newbalance)
+        assert_equal(balances['untrusted_pending'] + balances['trusted'] + balances['nonmempool'], newbalance)
         # Also shouldn't show up in listunspent
         assert txABC2 not in [utxo["txid"] for utxo in alice.listunspent(0)]
         balance = newbalance

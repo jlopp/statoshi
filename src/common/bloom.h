@@ -6,16 +6,17 @@
 #define BITCOIN_COMMON_BLOOM_H
 
 #include <serialize.h>
-#include <span.h>
 
+#include <cstdint>
+#include <span>
 #include <vector>
 
 class COutPoint;
 class CTransaction;
 
 //! 20,000 items with fp rate < 0.1% or 10,000 items and <0.0001%
-static constexpr unsigned int MAX_BLOOM_FILTER_SIZE = 36000; // bytes
-static constexpr unsigned int MAX_HASH_FUNCS = 50;
+inline constexpr unsigned int MAX_BLOOM_FILTER_SIZE{36'000}; // bytes
+inline constexpr unsigned int MAX_HASH_FUNCS = 50;
 
 /**
  * First two bits of nFlags control how much IsRelevantAndUpdate actually updates
@@ -54,6 +55,8 @@ private:
 public:
     /**
      * Creates a new bloom filter which will provide the given fp rate when filled with the given number of elements
+     * nFPRate must be in [0, 1].
+     * An nElements of 0 creates an empty filter which ignores inserts and matches everything.
      * Note that if the given parameters will result in a filter outside the bounds of the protocol limits,
      * the filter created will be as close to the given parameters as possible within the protocol limits.
      * This will apply if nFPRate is very low or nElements is unreasonably high.

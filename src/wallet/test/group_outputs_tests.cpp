@@ -44,7 +44,7 @@ static void addCoin(CoinsResult& coins,
     auto ret = wallet.mapWallet.emplace(std::piecewise_construct, std::forward_as_tuple(txid), std::forward_as_tuple(MakeTransactionRef(std::move(tx)), TxStateInactive{}));
     assert(ret.second);
     CWalletTx& wtx = (*ret.first).second;
-    const auto& txout = wtx.tx->vout.at(0);
+    const auto& txout = wtx.GetTx()->vout.at(0);
     coins.Add(*Assert(OutputTypeFromDestination(dest)),
               {COutPoint(wtx.GetHash(), 0),
                    txout,
@@ -201,6 +201,11 @@ BOOST_AUTO_TEST_CASE(outputs_grouping_tests)
             /*expected_with_partial_spends_size=*/ GROUP_SIZE * 2 + 1,
             /*expected_without_partial_spends_size=*/ 3,
             /*positive_only=*/ false);
+
+    // The two ineligible UTXOs must be discarded exactly once each
+    std::vector<OutputGroup> discarded_groups;
+    GroupOutputs(*wallet, group_verifier.coins_pool, makeSelectionParams(group_verifier.rand, /*avoid_partial_spends=*/true), {{BASIC_FILTER}}, discarded_groups);
+    BOOST_CHECK_EQUAL(discarded_groups.size(), 2U);
 
     // ###########################################################################################
     // 7) Surpass the OUTPUT_GROUP_MAX_ENTRIES and verify that a second partial group gets created

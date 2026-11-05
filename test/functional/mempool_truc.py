@@ -21,23 +21,23 @@ from test_framework.wallet import (
 from test_framework.blocktools import (
     create_empty_fork,
 )
-
-MAX_REPLACEMENT_CANDIDATES = 100
-TRUC_MAX_VSIZE = 10000
-TRUC_CHILD_MAX_VSIZE = 1000
+from test_framework.mempool_util import (
+    MAX_REPLACEMENT_CANDIDATES,
+    TRUC_MAX_VSIZE,
+    TRUC_CHILD_MAX_VSIZE,
+)
 
 def cleanup(extra_args=None):
     def decorator(func):
         def wrapper(self):
-            try:
-                if extra_args is not None:
-                    self.restart_node(0, extra_args=extra_args)
-                func(self)
-            finally:
-                # Clear mempool again after test
-                self.generate(self.nodes[0], 1)
-                if extra_args is not None:
-                    self.restart_node(0)
+            if extra_args is not None:
+                self.restart_node(0, extra_args=extra_args)
+            func(self)
+
+            # Clear mempool again after test
+            self.generate(self.nodes[0], 1)
+            if extra_args is not None:
+                self.restart_node(0)
         return wrapper
     return decorator
 

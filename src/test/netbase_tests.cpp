@@ -59,6 +59,9 @@ BOOST_AUTO_TEST_CASE(netbase_properties)
     BOOST_CHECK(ResolveIP("198.18.0.0").IsRFC2544());
     BOOST_CHECK(ResolveIP("198.19.255.255").IsRFC2544());
     BOOST_CHECK(ResolveIP("2001:0DB8::").IsRFC3849());
+    BOOST_CHECK(ResolveIP("3FFF::").IsRFC9637());
+    BOOST_CHECK(ResolveIP("3FFF:0FFF:FFFF:FFFF:FFFF:FFFF:FFFF:FFFF").IsRFC9637());
+    BOOST_CHECK(!ResolveIP("3FFF:1000::").IsRFC9637());
     BOOST_CHECK(ResolveIP("169.254.1.1").IsRFC3927());
     BOOST_CHECK(ResolveIP("2002::1").IsRFC3964());
     BOOST_CHECK(ResolveIP("FC00::").IsRFC4193());
@@ -73,6 +76,7 @@ BOOST_AUTO_TEST_CASE(netbase_properties)
     BOOST_CHECK(ResolveIP("8.8.8.8").IsRoutable());
     BOOST_CHECK(ResolveIP("2001::1").IsRoutable());
     BOOST_CHECK(ResolveIP("127.0.0.1").IsValid());
+    BOOST_CHECK(!ResolveIP("3FFF::").IsValid());
     BOOST_CHECK(CreateInternal("FD6B:88C0:8724:edb1:8e4:3588:e546:35ca").IsInternal());
     BOOST_CHECK(CreateInternal("bar.com").IsInternal());
 
@@ -579,7 +583,8 @@ BOOST_AUTO_TEST_CASE(caddress_unserialize_v1)
     std::vector<CAddress> addresses_unserialized;
 
     SpanReader{ParseHex(stream_addrv1_hex)} >> CAddress::V1_NETWORK(addresses_unserialized);
-    BOOST_CHECK(fixture_addresses == addresses_unserialized);
+    BOOST_CHECK_EQUAL_COLLECTIONS(fixture_addresses.begin(), fixture_addresses.end(),
+                                  addresses_unserialized.begin(), addresses_unserialized.end());
 }
 
 BOOST_AUTO_TEST_CASE(caddress_serialize_v2)
@@ -595,7 +600,8 @@ BOOST_AUTO_TEST_CASE(caddress_unserialize_v2)
     std::vector<CAddress> addresses_unserialized;
 
     SpanReader{ParseHex(stream_addrv2_hex)} >> CAddress::V2_NETWORK(addresses_unserialized);
-    BOOST_CHECK(fixture_addresses == addresses_unserialized);
+    BOOST_CHECK_EQUAL_COLLECTIONS(fixture_addresses.begin(), fixture_addresses.end(),
+                                  addresses_unserialized.begin(), addresses_unserialized.end());
 }
 
 BOOST_AUTO_TEST_CASE(isbadport)

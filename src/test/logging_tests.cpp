@@ -14,6 +14,8 @@
 #include <util/fs_helpers.h>
 #include <util/string.h>
 
+#include <boost/test/unit_test.hpp>
+
 #include <chrono>
 #include <fstream>
 #include <future>
@@ -21,14 +23,24 @@
 #include <iostream>
 #include <source_location>
 #include <string>
+#include <type_traits>
 #include <unordered_map>
 #include <utility>
 #include <vector>
 
-#include <boost/test/unit_test.hpp>
-
 using util::SplitString;
 using util::TrimString;
+
+/* defined in logging.cpp */
+namespace BCLog {
+    std::string LogEscapeMessage(std::string_view str);
+}
+
+template <auto str>
+concept IsLogFormatString = requires { typename std::bool_constant<(util::log::FormatString<0>{str()}, true)>; };
+
+static_assert(IsLogFormatString<[] { return "format string without a trailing newline"; }>);
+static_assert(!IsLogFormatString<[] { return "format string ending in a newline\n"; }>);
 
 BOOST_FIXTURE_TEST_SUITE(logging_tests, BasicTestingSetup)
 
@@ -110,7 +122,20 @@ BOOST_AUTO_TEST_CASE(logging_timer)
     BOOST_CHECK_EQUAL(micro_timer.LogMsg("msg").substr(0, result_prefix.size()), result_prefix);
 }
 
-BOOST_FIXTURE_TEST_CASE(logging_LogPrintStr, LogSetup)
+BOOST_AUTO_TEST_CASE(test_LogEscapeMessage)
+{
+    // ASCII and UTF-8 must pass through unaltered.
+    BOOST_CHECK_EQUAL(BCLog::LogEscapeMessage("Valid log message貓"), "Valid log message貓");
+    // Newlines are escaped too, so a message can't forge log lines.
+    BOOST_CHECK_EQUAL(BCLog::LogEscapeMessage("Message\n with newlines\n"), R"(Message\x0a with newlines\x0a)");
+    // Other control characters are escaped in C syntax.
+    BOOST_CHECK_EQUAL(BCLog::LogEscapeMessage("\x01\x7f Corrupted log message\x0d"), R"(\x01\x7f Corrupted log message\x0d)");
+    // Embedded NULL characters are escaped too.
+    const std::string NUL("O\x00O", 3);
+    BOOST_CHECK_EQUAL(BCLog::LogEscapeMessage(NUL), R"(O\x00O)");
+}
+
+BOOST_FIXTURE_TEST_CASE(logging_LogPrint, LogSetup)
 {
     LogInstance().m_log_sourcelocations = true;
 
@@ -134,7 +159,7 @@ BOOST_FIXTURE_TEST_CASE(logging_LogPrintStr, LogSetup)
     std::vector<std::string> expected;
     for (auto& [msg, category, level, prefix, loc] : cases) {
         expected.push_back(tfm::format("[%s:%s] [%s] %s%s", util::RemovePrefix(loc.file_name(), "./"), loc.line(), loc.function_name_short(), prefix, msg));
-        LogInstance().LogPrintStr(msg, std::move(loc), category, level, /*should_ratelimit=*/false);
+        LogInstance().LogPrint({.category = category, .level = level, .should_ratelimit = false, .source_loc = std::move(loc), .message = msg});
     }
     std::vector<std::string> log_lines{ReadDebugLogLines()};
     BOOST_CHECK_EQUAL_COLLECTIONS(log_lines.begin(), log_lines.end(), expected.begin(), expected.end());
@@ -166,7 +191,7 @@ BOOST_FIXTURE_TEST_CASE(logging_LogPrintMacros_CategoryName, LogSetup)
     const auto category_names = SplitString(concatenated_category_names, ',');
     for (const auto& category_name : category_names) {
         const auto trimmed_category_name = TrimString(category_name);
-        const auto category{*Assert(GetLogCategory(trimmed_category_name))};
+        const auto category{*Assert(BCLog::Logger::GetLogCategory(trimmed_category_name))};
         expected_category_names.emplace_back(category, trimmed_category_name);
     }
 
@@ -206,6 +231,29 @@ BOOST_FIXTURE_TEST_CASE(logging_SeverityLevels, LogSetup)
         "[error] err_5",
     };
     std::vector<std::string> log_lines{ReadDebugLogLines()};
+    BOOST_CHECK_EQUAL_COLLECTIONS(log_lines.begin(), log_lines.end(), expected.begin(), expected.end());
+}
+
+namespace {
+void CheckLogWarnThenDebug(std::string_view message)
+{
+    LogWarnThenDebug(BCLog::NET, "warn_then_debug: %s", message);
+}
+} // namespace
+
+BOOST_FIXTURE_TEST_CASE(logging_LogWarnThenDebug, LogSetup)
+{
+    ResetLogger();
+    CheckLogWarnThenDebug("first");
+    CheckLogWarnThenDebug("suppressed");
+    LogInstance().EnableCategory(BCLog::NET);
+    CheckLogWarnThenDebug("debug");
+
+    std::vector log_lines{ReadDebugLogLines()};
+    std::vector<std::string> expected = {
+        "[warning] warn_then_debug: first",
+        "[net] warn_then_debug: debug",
+    };
     BOOST_CHECK_EQUAL_COLLECTIONS(log_lines.begin(), log_lines.end(), expected.begin(), expected.end());
 }
 
@@ -267,6 +315,13 @@ BOOST_FIXTURE_TEST_CASE(logging_Conf, LogSetup)
         const auto http_it{category_levels.find(BCLog::LogFlags::HTTP)};
         BOOST_CHECK(http_it != category_levels.end());
         BOOST_CHECK_EQUAL(http_it->second, BCLog::Level::Info);
+    }
+
+    // Removed categories (like "libevent") should not store a category-specific level
+    {
+        ResetLogger();
+        BOOST_CHECK(LogInstance().SetCategoryLogLevel(/*category_str=*/"libevent", /*level_str=*/"trace"));
+        BOOST_CHECK(LogInstance().CategoryLevels().empty());
     }
 }
 
@@ -382,7 +437,7 @@ void LogFromLocation(Location location, const std::string& message) {
         LogDebug(BCLog::LogFlags::HTTP, "%s\n", message);
         return;
     case Location::INFO_NOLIMIT:
-        LogPrintLevel_(BCLog::LogFlags::ALL, BCLog::Level::Info, /*should_ratelimit=*/false, "%s\n", message);
+        LogInfo(util::log::NO_RATE_LIMIT, "%s\n", message);
         return;
     } // no default case, so the compiler can warn about missing cases
     assert(false);

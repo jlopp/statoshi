@@ -4,11 +4,30 @@
 
 #include <test/util/validation.h>
 
+#include <coins.h>
+#include <consensus/consensus.h>
+#include <index/base.h>
+#include <index/blockfilterindex.h>
+#include <interfaces/chain.h>
+#include <node/block_template_manager.h>
 #include <node/blockstorage.h>
+#include <node/context.h>
+#include <node/mining_types.h>
+#include <test/util/mining.h>
+#include <test/util/script.h>
+#include <test/util/setup_common.h>
+#include <test/util/time.h>
+#include <test/util/txmempool.h>
+#include <txmempool.h>
+#include <util/byte_units.h>
 #include <util/check.h>
 #include <util/time.h>
 #include <validation.h>
 #include <validationinterface.h>
+
+#include <memory>
+#include <utility>
+#include <vector>
 
 using kernel::ChainstateRole;
 
@@ -90,4 +109,54 @@ CBlockIndex* TestChainstateManager::FindMostWorkChain()
 void TestChainstateManager::ResetBestInvalid()
 {
     m_best_invalid = nullptr;
+}
+
+std::vector<std::pair<COutPoint, CAmount>> ResetChainmanAndMempool(TestingSetup& setup, FakeNodeClock& node_clock, const ResetOptions& opts)
+{
+    node_clock.set(setup.m_node.chainman->GetParams().GenesisBlock().Time());
+
+    DestroyAllBlockFilterIndexes();
+
+    bilingual_str error{};
+    setup.m_node.block_template_manager.reset();
+    setup.m_node.mempool.reset();
+    setup.m_node.mempool = std::make_unique<CTxMemPool>(MemPoolOptionsForTest(setup.m_node), error);
+    Assert(error.empty());
+
+    setup.m_node.chainman.reset();
+    setup.m_make_chainman();
+    setup.LoadVerifyActivateChainstate();
+    setup.CreateBlockTemplateManager();
+
+    node::BlockCreateOptions options;
+    options.coinbase_output_script = P2WSH_OP_TRUE;
+
+    std::vector<std::pair<COutPoint, CAmount>> mature_coinbase;
+    for (int i = 0; i < 2 * COINBASE_MATURITY; ++i) {
+        COutPoint prevout{MineBlock(setup.m_node, options)};
+        if (i < COINBASE_MATURITY) {
+            LOCK(cs_main);
+            CAmount subsidy{setup.m_node.chainman->ActiveChainstate().CoinsTip().GetCoin(prevout)->out.nValue};
+            mature_coinbase.emplace_back(prevout, subsidy);
+        }
+    }
+
+    if (opts.init_block_filter_basic) {
+        Assert(InitBlockFilterIndex([&] { return interfaces::MakeChain(setup.m_node); }, BlockFilterType::BASIC, 1_MiB, /*f_memory=*/true, /*f_wipe=*/true));
+        auto& index = *Assert(GetBlockFilterIndex(BlockFilterType::BASIC));
+        Assert(index.Init());
+        index.Sync();
+        // The index serves the static setup chain only. Leaving it registered
+        // deadlocks with ImmediateBackgroundTaskRunner when a fuzzed block
+        // connects under cs_main.
+        StopIndex(index, setup.m_node);
+    }
+
+    return mature_coinbase;
+}
+
+void StopIndex(BaseIndex& index, node::NodeContext& node)
+{
+    Assert(node.validation_signals)->SyncWithValidationInterfaceQueue();
+    index.Stop();
 }

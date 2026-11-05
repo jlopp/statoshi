@@ -5,13 +5,13 @@
 #ifndef BITCOIN_ADDRMAN_IMPL_H
 #define BITCOIN_ADDRMAN_IMPL_H
 
-#include <logging.h>
 #include <logging/timer.h>
 #include <netaddress.h>
 #include <protocol.h>
 #include <serialize.h>
 #include <sync.h>
 #include <uint256.h>
+#include <util/log.h>
 #include <util/time.h>
 
 #include <cstdint>
@@ -23,14 +23,14 @@
 #include <vector>
 
 /** Total number of buckets for tried addresses */
-static constexpr int32_t ADDRMAN_TRIED_BUCKET_COUNT_LOG2{8};
-static constexpr int ADDRMAN_TRIED_BUCKET_COUNT{1 << ADDRMAN_TRIED_BUCKET_COUNT_LOG2};
+inline constexpr int32_t ADDRMAN_TRIED_BUCKET_COUNT_LOG2{8};
+inline constexpr int ADDRMAN_TRIED_BUCKET_COUNT{1 << ADDRMAN_TRIED_BUCKET_COUNT_LOG2};
 /** Total number of buckets for new addresses */
-static constexpr int32_t ADDRMAN_NEW_BUCKET_COUNT_LOG2{10};
-static constexpr int ADDRMAN_NEW_BUCKET_COUNT{1 << ADDRMAN_NEW_BUCKET_COUNT_LOG2};
+inline constexpr int32_t ADDRMAN_NEW_BUCKET_COUNT_LOG2{10};
+inline constexpr int ADDRMAN_NEW_BUCKET_COUNT{1 << ADDRMAN_NEW_BUCKET_COUNT_LOG2};
 /** Maximum allowed number of entries in buckets for new and tried addresses */
-static constexpr int32_t ADDRMAN_BUCKET_SIZE_LOG2{6};
-static constexpr int ADDRMAN_BUCKET_SIZE{1 << ADDRMAN_BUCKET_SIZE_LOG2};
+inline constexpr int32_t ADDRMAN_BUCKET_SIZE_LOG2{6};
+inline constexpr int ADDRMAN_BUCKET_SIZE{1 << ADDRMAN_BUCKET_SIZE_LOG2};
 
 /**
  * User-defined type for the internally used nIds

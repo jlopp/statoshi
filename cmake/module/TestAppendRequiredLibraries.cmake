@@ -15,7 +15,6 @@ function(test_append_socket_library target)
   endif()
 
   set(check_socket_source "
-    #include <sys/types.h>
     #include <ifaddrs.h>
 
     int main() {
@@ -70,7 +69,7 @@ function(test_append_atomic_library target)
 
       std::atomic<double> d{};
       d.store(3.14);
-      auto d1 = d.load();
+      [[maybe_unused]] auto d1 = d.load();
 
       std::atomic<int64_t> a{};
       int64_t v = 5;

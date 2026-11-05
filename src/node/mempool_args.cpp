@@ -11,11 +11,11 @@
 #include <common/messages.h>
 #include <consensus/amount.h>
 #include <kernel/chainparams.h>
-#include <logging.h>
 #include <policy/feerate.h>
 #include <policy/policy.h>
 #include <tinyformat.h>
 #include <txgraph.h>
+#include <util/log.h>
 #include <util/moneystr.h>
 #include <util/translation.h>
 
@@ -102,8 +102,6 @@ util::Result<void> ApplyArgsManOptions(const ArgsManager& argsman, const CChainP
     if (!chainparams.IsTestChain() && !mempool_opts.require_standard) {
         return util::Error{Untranslated(strprintf("acceptnonstdtxn is not currently supported for %s chain", chainparams.GetChainTypeString()))};
     }
-
-    mempool_opts.persist_v1_dat = argsman.GetBoolArg("-persistmempoolv1", mempool_opts.persist_v1_dat);
 
     ApplyArgsManOptions(argsman, mempool_opts.limits);
 

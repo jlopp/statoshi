@@ -18,13 +18,9 @@ public:
     COutPoint passOutPoint(COutPoint o) { return o; }
     UniValue passUniValue(UniValue v) { return v; }
     CTransactionRef passTransaction(CTransactionRef t) { return t; }
+    std::vector<CTransactionRef> passTransactions(std::vector<CTransactionRef> t) { return t; }
     std::vector<char> passVectorChar(std::vector<char> v) { return v; }
-    BlockValidationState passBlockState(BlockValidationState s) { return s; }
     CScript passScript(CScript s) { return s; }
 };
-
-void IpcPipeTest();
-void IpcSocketPairTest();
-void IpcSocketTest(const fs::path& datadir);
 
 #endif // BITCOIN_IPC_TEST_IPC_TEST_H

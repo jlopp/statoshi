@@ -40,7 +40,7 @@ using common::AmountErrMsg;
 using common::AmountHighWarn;
 using common::FeeModeFromString;
 using common::ResolveErrMsg;
-using util::ContainsNoNUL;
+using util::ContainsNUL;
 using util::Join;
 using util::RemovePrefix;
 using util::SplitString;
@@ -67,7 +67,8 @@ FUZZ_TARGET(string)
     (void)HelpExampleCli(random_string_1, random_string_2);
     (void)HelpExampleRpc(random_string_1, random_string_2);
     (void)HelpMessageGroup(random_string_1);
-    (void)HelpMessageOpt(random_string_1, random_string_2);
+    (void)HelpMessageOpt(random_string_1, "", random_string_2);
+    (void)HelpMessageOpt(random_string_1, random_string_2, "");
     (void)IsDeprecatedRPCEnabled(random_string_1);
     (void)Join(random_string_vector, random_string_1);
     (void)JSONRPCError(fuzzed_data_provider.ConsumeIntegral<int>(), random_string_1);
@@ -99,7 +100,7 @@ FUZZ_TARGET(string)
     (void)TrimString(random_string_1);
     (void)TrimString(random_string_1, random_string_2);
     (void)UrlDecode(random_string_1);
-    (void)ContainsNoNUL(random_string_1);
+    (void)ContainsNUL(random_string_1);
     try {
         throw scriptnum_error{random_string_1};
     } catch (const std::runtime_error&) {

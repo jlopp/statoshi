@@ -8,24 +8,30 @@
 #include <util/byte_units.h>
 
 #include <algorithm>
+#include <cstdint>
+#include <limits>
 
+//! Minimum total database cache (bytes)
+inline constexpr uint64_t MIN_DBCACHE_BYTES{4_MiB};
+//! Maximum total database cache on current architecture (bytes)
+inline constexpr uint64_t MAX_DBCACHE_BYTES{sizeof(void*) == 4 ? 1_GiB : std::numeric_limits<uint64_t>::max()};
 //! Suggested default amount of cache reserved for the kernel (bytes)
-static constexpr size_t DEFAULT_KERNEL_CACHE{450_MiB};
+inline constexpr uint64_t DEFAULT_KERNEL_CACHE{450_MiB};
 //! Default LevelDB write batch size
-static constexpr size_t DEFAULT_DB_CACHE_BATCH{32_MiB};
+inline constexpr uint64_t DEFAULT_DB_CACHE_BATCH{32_MiB};
 
 //! Max memory allocated to block tree DB specific cache (bytes)
-static constexpr size_t MAX_BLOCK_DB_CACHE{2_MiB};
+inline constexpr uint64_t MAX_BLOCK_DB_CACHE{2_MiB};
 //! Max memory allocated to coin DB specific cache (bytes)
-static constexpr size_t MAX_COINS_DB_CACHE{8_MiB};
+inline constexpr uint64_t MAX_COINS_DB_CACHE{8_MiB};
 
 namespace kernel {
 struct CacheSizes {
-    size_t block_tree_db;
-    size_t coins_db;
-    size_t coins;
+    uint64_t block_tree_db;
+    uint64_t coins_db;
+    uint64_t coins;
 
-    CacheSizes(size_t total_cache)
+    CacheSizes(uint64_t total_cache)
     {
         block_tree_db = std::min(total_cache / 8, MAX_BLOCK_DB_CACHE);
         total_cache -= block_tree_db;

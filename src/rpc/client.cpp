@@ -3,14 +3,17 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#include <common/args.h>
 #include <rpc/client.h>
+
 #include <tinyformat.h>
 
-#include <cstdint>
-#include <set>
+#include <algorithm>
+#include <cstddef>
+#include <ranges>
+#include <stdexcept>
 #include <string>
 #include <string_view>
+#include <utility>
 
 //! Specify whether parameter should be parsed by bitcoin-cli as a JSON value,
 //! or passed unchanged as a string, or a combination of both.
@@ -105,6 +108,9 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "listtransactions", 1, "count" },
     { "listtransactions", 2, "skip" },
     { "listtransactions", 3, "include_watchonly" },
+    { "listrawtransactions", 0, "count" },
+    { "listrawtransactions", 1, "skip" },
+    { "listrawtransactions", 2, "verbose" },
     { "walletpassphrase", 0, "passphrase", ParamFormat::STRING },
     { "walletpassphrase", 1, "timeout" },
     { "getblocktemplate", 0, "template_request" },
@@ -208,6 +214,7 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "walletcreatefundedpsbt", 3, "max_tx_weight"},
     { "walletcreatefundedpsbt", 4, "bip32derivs" },
     { "walletcreatefundedpsbt", 5, "version" },
+    { "walletcreatefundedpsbt", 6, "psbt_version" },
     { "walletprocesspsbt", 0, "psbt", ParamFormat::STRING },
     { "walletprocesspsbt", 1, "sign" },
     { "walletprocesspsbt", 2, "sighashtype", ParamFormat::STRING },
@@ -223,12 +230,14 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "createpsbt", 2, "locktime" },
     { "createpsbt", 3, "replaceable" },
     { "createpsbt", 4, "version" },
+    { "createpsbt", 5, "psbt_version" },
     { "combinepsbt", 0, "txs"},
     { "joinpsbts", 0, "txs"},
     { "finalizepsbt", 0, "psbt", ParamFormat::STRING },
     { "finalizepsbt", 1, "extract"},
     { "converttopsbt", 1, "permitsigdata"},
     { "converttopsbt", 2, "iswitness"},
+    { "converttopsbt", 3, "psbt_version"},
     { "gettxout", 1, "n" },
     { "gettxout", 2, "include_mempool" },
     { "gettxoutproof", 0, "txids" },
@@ -302,6 +311,7 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "getrawmempool", 1, "mempool_sequence" },
     { "getorphantxs", 0, "verbosity" },
     { "estimatesmartfee", 0, "conf_target" },
+    { "estimatesmartfee", 2, "options" },
     { "estimaterawfee", 0, "conf_target" },
     { "estimaterawfee", 1, "threshold" },
     { "prioritisetransaction", 1, "dummy" },
@@ -328,12 +338,16 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "psbtbumpfee", 1, "replaceable"},
     { "psbtbumpfee", 1, "outputs"},
     { "psbtbumpfee", 1, "original_change_index"},
+    { "psbtbumpfee", 1, "psbt_version"},
     { "logging", 0, "include" },
     { "logging", 1, "exclude" },
     { "disconnectnode", 1, "nodeid" },
+    { "getopenrpcinfo", 0, "show_hidden" },
     { "gethdkeys", 0, "active_only" },
     { "gethdkeys", 0, "options" },
     { "gethdkeys", 0, "private" },
+    { "derivehdkey", 1, "options" },
+    { "derivehdkey", 1, "private" },
     { "createwalletdescriptor", 1, "options" },
     { "createwalletdescriptor", 1, "internal" },
     // Echo with conversion (For testing only)
@@ -384,6 +398,7 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "loadtxoutset", 0, "path", ParamFormat::STRING },
     { "migratewallet", 0, "wallet_name", ParamFormat::STRING },
     { "migratewallet", 1, "passphrase", ParamFormat::STRING },
+    { "migratewallet", 2, "load_wallet"},
     { "setlabel", 1, "label", ParamFormat::STRING },
     { "signmessage", 1, "message", ParamFormat::STRING },
     { "signmessagewithprivkey", 1, "message", ParamFormat::STRING },

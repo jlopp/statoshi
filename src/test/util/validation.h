@@ -5,12 +5,34 @@
 #ifndef BITCOIN_TEST_UTIL_VALIDATION_H
 #define BITCOIN_TEST_UTIL_VALIDATION_H
 
+#include <consensus/amount.h>
+#include <primitives/transaction.h>
+#include <util/task_runner.h>
 #include <validation.h>
+
+#include <cstddef>
+#include <functional>
+#include <thread>
+#include <utility>
+#include <vector>
 
 namespace node {
 class BlockManager;
+struct NodeContext;
 }
+class BaseIndex;
 class CValidationInterface;
+class FakeNodeClock;
+struct TestingSetup;
+
+/// Runs callbacks synchronously and deterministically, while avoiding DEBUG_LOCKORDER false positives.
+class ImmediateBackgroundTaskRunner : public util::TaskRunnerInterface
+{
+public:
+    void insert(std::function<void()> func) override { std::thread(std::move(func)).join(); }
+    void flush() override {}
+    size_t size() override { return 0; }
+};
 
 struct TestBlockManager : public node::BlockManager {
     /** Test-only method to clear internal state for fuzzing */
@@ -40,5 +62,14 @@ public:
         const std::shared_ptr<const CBlock>& block,
         const CBlockIndex* pindex);
 };
+
+struct ResetOptions {
+    bool init_block_filter_basic{false};
+};
+
+std::vector<std::pair<COutPoint, CAmount>> ResetChainmanAndMempool(TestingSetup& setup, FakeNodeClock& node_clock, const ResetOptions& opts = {});
+
+/// Drain validation callbacks before stopping an index, matching Shutdown() in init.cpp.
+void StopIndex(BaseIndex& index, node::NodeContext& node);
 
 #endif // BITCOIN_TEST_UTIL_VALIDATION_H

@@ -49,7 +49,10 @@ public:
         const std::optional<CService> local_ipv6{Lookup("2a10:1234:5678:9abc:def0:1234:5678:9abc", 1, false)};
         const std::optional<CService> gateway_ipv4{Lookup("192.168.0.1", 1, false)};
         const std::optional<CService> gateway_ipv6{Lookup("2a10:1234:5678:9abc:def0:0000:0000:0000", 1, false)};
-        BOOST_REQUIRE(local_ipv4 && local_ipv6 && gateway_ipv4 && gateway_ipv6);
+        BOOST_REQUIRE(local_ipv4);
+        BOOST_REQUIRE(local_ipv6);
+        BOOST_REQUIRE(gateway_ipv4);
+        BOOST_REQUIRE(gateway_ipv6);
         default_local_ipv4 = *local_ipv4;
         default_local_ipv6 = *local_ipv6;
         default_gateway_ipv4 = *gateway_ipv4;
@@ -92,7 +95,6 @@ public:
           m_local_ip(local_ip),
           m_gateway_ip(gateway_ip)
     {
-        ElapseTime(std::chrono::seconds(0)); // start mocking steady time
         PrepareOp();
     }
 
@@ -192,14 +194,14 @@ public:
               Event* occurred = nullptr) const override
     {
         // Only handles receive events.
-        if (AtEndOfScript() || requested != Sock::RECV) {
-            ElapseTime(timeout);
+        if (AtEndOfScript() || requested != Sock::RecvEvent) {
+            m_clock += timeout;
         } else {
             std::chrono::milliseconds delay = std::min(m_time_left, timeout);
-            ElapseTime(delay);
+            m_clock += delay;
             m_time_left -= delay;
             if (CurOp().op == TestOp::RECV && m_time_left == 0s && occurred != nullptr) {
-                *occurred = Sock::RECV;
+                *occurred = Sock::RecvEvent;
             }
             if (CurOp().op == TestOp::NOP) {
                 // This was a pure delay operation, move to the next op.
@@ -223,17 +225,11 @@ private:
     const std::vector<TestOp> m_script;
     mutable size_t m_script_ptr = 0;
     mutable std::chrono::milliseconds m_time_left;
-    mutable std::chrono::milliseconds m_time{MockableSteadyClock::INITIAL_MOCK_TIME};
+    mutable FakeSteadyClock m_clock{};
     mutable bool m_connected{false};
     mutable CService m_bound;
     mutable CNetAddr m_local_ip;
     mutable CNetAddr m_gateway_ip;
-
-    void ElapseTime(std::chrono::milliseconds duration) const
-    {
-        m_time += duration;
-        MockableSteadyClock::SetMockTime(m_time);
-    }
 
     bool AtEndOfScript() const { return m_script_ptr == m_script.size(); }
     const TestOp &CurOp() const {

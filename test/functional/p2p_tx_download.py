@@ -16,6 +16,7 @@ from test_framework.messages import (
     CInv,
     MSG_TX,
     MSG_TYPE_MASK,
+    MSG_WITNESS_TX,
     MSG_WTX,
     msg_inv,
     msg_notfound,
@@ -116,17 +117,23 @@ class TxDownloadTest(BitcoinTestFramework):
         self.nodes[0].sendrawtransaction(tx['hex'])
 
         # Since node 1 is connected outbound to an honest peer (node 0), it
-        # should get the tx within a timeout. (Assuming that node 0
-        # announced the tx within the timeout)
+        # should get the tx within a timeout.
+        # However, node 0 sees the same connection as inbound, so it may not
+        # announce the tx within the timeout.
         # The timeout is the sum of
         # * the worst case until the tx is first requested from an inbound
         #   peer, plus
         # * the first time it is re-requested from the outbound peer, plus
         # * 2 seconds to avoid races
+        assert_equal(self.nodes[0].getpeerinfo()[0]["inbound"], True)
+        assert_equal(self.nodes[0].getpeerinfo()[0]["inv_to_send"], 1)
         assert_equal(self.nodes[1].getpeerinfo()[0]['inbound'], False)
         timeout = 2 + NONPREF_PEER_TX_DELAY + GETDATA_TX_INTERVAL
         self.log.info("Tx should be received at node 1 after {} seconds".format(timeout))
         self.nodes[0].bumpmocktime(timeout)
+        # Use an unrelated peer to ensure node 0 calls `SendMessages` at least once
+        self.nodes[0].p2ps[0].sync_with_ping()
+        assert_equal(self.nodes[0].getpeerinfo()[0]['inv_to_send'], 0)  # May fail rarely, retry the test
         self.sync_mempools()
 
         self.nodes[0].setmocktime(0)
@@ -263,7 +270,7 @@ class TxDownloadTest(BitcoinTestFramework):
         self.nodes[0].bumpmocktime(NONPREF_PEER_TX_DELAY)
         with p2p_lock:
             for peer in non_pref_peers:
-                    assert_equal(peer.tx_getdata_count, 0)
+                assert_equal(peer.tx_getdata_count, 0)
 
         # Now add another outbound (preferred) which is immediately ready for consideration
         # upon advertisement
@@ -317,6 +324,72 @@ class TxDownloadTest(BitcoinTestFramework):
         peer.send_without_ping(msg_inv([CInv(t=MSG_WTX, h=wtxid) for wtxid in range(MAX_PEER_TX_ANNOUNCEMENTS + 1)]))
         peer.wait_until(lambda: peer.tx_getdata_count == MAX_PEER_TX_ANNOUNCEMENTS)
         peer.sync_with_ping()
+
+    def test_duplicate_tx_inv(self):
+        self.log.info('Check that duplicate transaction identifiers in one inv message are processed once')
+        node = self.nodes[0]
+        node.logging(include=['net'])
+
+        def send_invs_and_read_log(peer, invs):
+            log_start = node.debug_log_size(encoding='utf-8')
+            peer.send_and_ping(msg_inv(invs))
+            with open(node.debug_log_path, encoding='utf-8', errors='replace') as debug_log:
+                debug_log.seek(log_start)
+                return debug_log.read()
+
+        for wtxidrelay, inv_type, inv_name, mismatched_type, mismatched_name, hash_a, hash_b in [
+            (False, MSG_TX, 'tx', MSG_WTX, 'wtx', 0xaabbcc, 0xddeeff),
+            (True, MSG_WTX, 'wtx', MSG_TX, 'tx', 0x112233, 0x445566),
+        ]:
+            peer = node.add_p2p_connection(TestP2PConn(wtxidrelay=wtxidrelay))
+            inv_a_log = f"got inv: {inv_name} {hash_a:064x}"
+            inv_b_log = f"got inv: {inv_name} {hash_b:064x}"
+            mismatched_inv_log = f"got inv: {mismatched_name} {hash_a:064x}"
+
+            log = send_invs_and_read_log(peer, [
+                CInv(t=mismatched_type, h=hash_a),
+                CInv(t=inv_type, h=hash_a),
+                CInv(t=inv_type, h=hash_b),
+                CInv(t=inv_type, h=hash_a),
+                CInv(t=inv_type, h=hash_b),
+            ])
+            assert_equal(log.count(inv_a_log), 1)
+            assert_equal(log.count(inv_b_log), 1)
+            assert_equal(log.count(mismatched_inv_log), 0)
+
+            # The duplicate filter is scoped to a single INV message.
+            log = send_invs_and_read_log(peer, [
+                CInv(t=inv_type, h=hash_a),
+                CInv(t=inv_type, h=hash_a),
+            ])
+            assert_equal(log.count(inv_a_log), 1)
+            assert_equal(log.count(inv_b_log), 0)
+
+        self.log.info('Check that MSG_TX and MSG_WITNESS_TX are deduplicated as txids')
+        peer = node.add_p2p_connection(TestP2PConn(wtxidrelay=False))
+        for first_type, first_name, second_type, second_name, hash_a in [
+            (MSG_TX, 'tx', MSG_WITNESS_TX, 'witness-tx', 0x667788),
+            (MSG_WITNESS_TX, 'witness-tx', MSG_TX, 'tx', 0x778899),
+        ]:
+            log = send_invs_and_read_log(peer, [
+                CInv(t=first_type, h=hash_a),
+                CInv(t=second_type, h=hash_a),
+            ])
+            assert_equal(log.count(f"got inv: {first_name} {hash_a:064x}"), 1)
+            assert_equal(log.count(f"got inv: {second_name} {hash_a:064x}"), 0)
+
+        self.log.info('Check that txids and wtxids are deduplicated separately')
+        peer = node.add_p2p_connection(TestP2PConn(wtxidrelay=True))
+        for first_type, second_type, hash_a in [
+            (MSG_WITNESS_TX, MSG_WTX, 0x8899aa),
+            (MSG_WTX, MSG_WITNESS_TX, 0x99aabb),
+        ]:
+            log = send_invs_and_read_log(peer, [
+                CInv(t=first_type, h=hash_a),
+                CInv(t=second_type, h=hash_a),
+            ])
+            assert_equal(log.count(f"got inv: witness-tx {hash_a:064x}"), 1)
+            assert_equal(log.count(f"got inv: wtx {hash_a:064x}"), 1)
 
     def test_spurious_notfound(self):
         self.log.info('Check that spurious notfound is ignored')
@@ -389,6 +462,7 @@ class TxDownloadTest(BitcoinTestFramework):
         self.test_txid_inv_delay()
         self.test_txid_inv_delay(True)
         self.test_large_inv_batch()
+        self.test_duplicate_tx_inv()
         self.test_spurious_notfound()
 
         # Run each test against new bitcoind instances, as setting mocktimes has long-term effects on when

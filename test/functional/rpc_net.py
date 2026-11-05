@@ -107,7 +107,10 @@ class NetTest(BitcoinTestFramework):
         time_now = int(time.time())
         peer_info = [x.getpeerinfo() for x in self.nodes]
         # Verify last_block and last_transaction keys/values.
-        for node, peer, field in product(range(self.num_nodes), range(2), ['last_block', 'last_transaction']):
+        for node, peer, field in product(range(self.num_nodes), range(2),
+                                         ['last_block',
+                                          'last_block_announcement',
+                                          'last_transaction']):
             assert field in peer_info[node][peer].keys()
             if peer_info[node][peer][field] != 0:
                 assert_approx(peer_info[node][peer][field], time_now, vspan=60)
@@ -161,6 +164,7 @@ class NetTest(BitcoinTestFramework):
                 "inbound": True,
                 "inflight": [],
                 "last_block": 0,
+                "last_block_announcement": 0,
                 "last_transaction": 0,
                 "lastrecv": 0 if not self.options.v2transport else no_version_peer_conntime,
                 "lastsend": 0 if not self.options.v2transport else no_version_peer_conntime,
@@ -202,7 +206,9 @@ class NetTest(BitcoinTestFramework):
         self.wait_until(lambda: (self.nodes[0].getnettotals()['totalbytesrecv'] >= net_totals_before['totalbytesrecv'] + ping_size * 2), timeout=1)
 
         for peer_before in peer_info_before:
-            peer_after = lambda: next(p for p in self.nodes[0].getpeerinfo() if p['id'] == peer_before['id'])
+            def peer_after():
+                return next(p for p in self.nodes[0].getpeerinfo() if p['id'] == peer_before['id'])
+
             self.wait_until(lambda: peer_after()['bytesrecv_per_msg'].get('pong', 0) >= peer_before['bytesrecv_per_msg'].get('pong', 0) + ping_size, timeout=1)
             self.wait_until(lambda: peer_after()['bytessent_per_msg'].get('ping', 0) >= peer_before['bytessent_per_msg'].get('ping', 0) + ping_size, timeout=1)
 
@@ -270,6 +276,11 @@ class NetTest(BitcoinTestFramework):
         assert_equal(added_nodes[0]['addednode'], "11.22.33.44")
         self.log.info("Check that an invalid command returns an error")
         assert_raises_rpc_error(-1, 'addnode "node" "command"', self.nodes[0].addnode, node=ip_port, command='abc')
+        self.log.info("Check that an empty node address returns an error")
+        for command in ['add', 'remove', 'onetry']:
+            assert_raises_rpc_error(-8, "Node address cannot be empty", self.nodes[0].addnode, node="", command=command)
+            assert_raises_rpc_error(-8, "Node address cannot be empty", self.nodes[0].addnode, node=" ", command=command)
+        assert_equal(len(self.nodes[0].getaddednodeinfo()), 1)
         self.log.info("Check that trying to remove the node again returns an error")
         assert_raises_rpc_error(-24, "Node could not be removed", self.nodes[0].addnode, node=ip_port, command='remove')
         self.log.info("Check that a non-existent node returns an error")
@@ -327,13 +338,13 @@ class NetTest(BitcoinTestFramework):
         assert_equal(res[0]["port"], 8333)
         assert_equal(res[0]["services"], P2P_SERVICES)
 
-        # Test for the absence of onion, I2P and CJDNS addresses.
-        for network in ["onion", "i2p", "cjdns"]:
+        for network in ["onion", "OnIoN", "i2p", "cjdns"]:
             assert_equal(self.nodes[0].getnodeaddresses(0, network), [])
 
         # Test invalid arguments.
         assert_raises_rpc_error(-8, "Address count out of range", self.nodes[0].getnodeaddresses, -1)
-        assert_raises_rpc_error(-8, "Network not recognized: Foo", self.nodes[0].getnodeaddresses, 1, "Foo")
+        for network in ["Foo", "tor"]:
+            assert_raises_rpc_error(-8, f"Network not recognized: {network}", self.nodes[0].getnodeaddresses, 1, network)
 
     def test_addpeeraddress(self):
         self.log.info("Test addpeeraddress")

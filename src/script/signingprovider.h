@@ -9,14 +9,25 @@
 #include <addresstype.h>
 #include <attributes.h>
 #include <key.h>
-#include <musig.h>
 #include <pubkey.h>
 #include <script/keyorigin.h>
 #include <script/script.h>
 #include <sync.h>
+#include <uint256.h>
 
+#include <compare>
+#include <cstdint>
 #include <functional>
+#include <map>
+#include <memory>
 #include <optional>
+#include <set>
+#include <span>
+#include <tuple>
+#include <utility>
+#include <vector>
+
+class MuSig2SecNonce;
 
 struct ShortestVectorFirstComparator
 {
@@ -289,7 +300,7 @@ protected:
      * payments.
      *
      * The FillableSigningProvider::mapScripts script map should not be confused
-     * with LegacyScriptPubKeyMan::setWatchOnly script set. The two collections
+     * with the wallet::LegacyDataSPKM::setWatchOnly script set. The two collections
      * can hold the same scripts, but they serve different purposes. The
      * setWatchOnly script set is intended to expand the set of outputs the
      * wallet considers payments. Every output with a script it contains is
@@ -313,9 +324,8 @@ public:
     virtual bool HaveKey(const CKeyID &address) const override;
     virtual std::set<CKeyID> GetKeys() const;
     virtual bool GetKey(const CKeyID &address, CKey &keyOut) const override;
-    virtual bool AddCScript(const CScript& redeemScript);
+    [[nodiscard]] virtual bool AddCScript(const CScript& redeemScript);
     virtual bool HaveCScript(const CScriptID &hash) const override;
-    virtual std::set<CScriptID> GetCScripts() const;
     virtual bool GetCScript(const CScriptID &hash, CScript& redeemScriptOut) const override;
 };
 

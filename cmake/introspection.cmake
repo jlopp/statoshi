@@ -8,7 +8,9 @@ include(CheckCXXSymbolExists)
 check_cxx_symbol_exists(O_CLOEXEC "fcntl.h" HAVE_O_CLOEXEC)
 check_cxx_symbol_exists(fdatasync "unistd.h" HAVE_FDATASYNC)
 check_cxx_symbol_exists(fork "unistd.h" HAVE_DECL_FORK)
-check_cxx_symbol_exists(pipe2 "unistd.h" HAVE_DECL_PIPE2)
+if (NOT CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+  check_cxx_symbol_exists(pipe2 "unistd.h" HAVE_DECL_PIPE2)
+endif()
 check_cxx_symbol_exists(setsid "unistd.h" HAVE_DECL_SETSID)
 
 if(NOT WIN32)
@@ -17,13 +19,14 @@ if(NOT WIN32)
 endif()
 
 include(TestAppendRequiredLibraries)
+if(NOT CMAKE_SYSTEM_NAME STREQUAL "Generic")
 test_append_atomic_library(core_interface)
+endif()
 
 # Even though ::system is part of the standard library, we still check
 # for it, to support building targets that don't have it, such as iOS.
 check_cxx_symbol_exists(std::system "cstdlib" HAVE_STD_SYSTEM)
-check_cxx_symbol_exists(::_wsystem "stdlib.h" HAVE__WSYSTEM)
-if(HAVE_STD_SYSTEM OR HAVE__WSYSTEM)
+if(HAVE_STD_SYSTEM)
   set(HAVE_SYSTEM 1)
 endif()
 
@@ -179,7 +182,7 @@ if(NOT MSVC)
   )
 
   # Check for x86 SHA-NI intrinsics.
-  set(X86_SHANI_CXXFLAGS -msse4 -msha)
+  set(X86_SHANI_CXXFLAGS -msse4.1 -msha)
   check_cxx_source_compiles_with_flags("
     #include <immintrin.h>
 
@@ -201,7 +204,9 @@ if(NOT MSVC)
 
     int main()
     {
-      uint32x4_t a, b, c;
+      uint32x4_t a = vdupq_n_u32(0);
+      uint32x4_t b = vdupq_n_u32(1);
+      uint32x4_t c = vdupq_n_u32(2);
       vsha256h2q_u32(a, b, c);
       vsha256hq_u32(a, b, c);
       vsha256su0q_u32(a, b);

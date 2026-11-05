@@ -81,10 +81,7 @@ class ScopedHandle {
 
   ScopedHandle& operator=(const ScopedHandle&) = delete;
 
-  ScopedHandle& operator=(ScopedHandle&& rhs) noexcept {
-    if (this != &rhs) handle_ = rhs.Release();
-    return *this;
-  }
+  ScopedHandle& operator=(ScopedHandle&& rhs) = delete;
 
   bool Close() {
     if (!is_valid()) {
@@ -678,9 +675,9 @@ class WindowsEnv : public Env {
   }
 
  private:
-  void BackgroundThreadMain();
+  [[noreturn]] void BackgroundThreadMain();
 
-  static void BackgroundThreadEntryPoint(WindowsEnv* env) {
+  [[noreturn]] static void BackgroundThreadEntryPoint(WindowsEnv* env) {
     env->BackgroundThreadMain();
   }
 

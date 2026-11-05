@@ -12,6 +12,7 @@ from test_framework.test_framework import BitcoinTestFramework
 from test_framework.util import (
     assert_equal,
     assert_greater_than,
+    assert_not_equal,
 )
 
 PRIVKEY_RE = re.compile(r"^tr\((.+?)/.+\)#.{8}$")
@@ -111,6 +112,31 @@ class WalletMuSigTest(BitcoinTestFramework):
 
         return wallets, psbt
 
+    def assert_musig_signer_data(self, first, second, different_field):
+        assert_equal(first["participant_pubkey"], second["participant_pubkey"])
+        assert_equal(first["aggregate_pubkey"], second["aggregate_pubkey"])
+        if "leaf_hash" in first:
+            assert_equal(first["leaf_hash"], second["leaf_hash"])
+        else:
+            assert "leaf_hash" not in second
+
+        assert_not_equal(first[different_field], second[different_field])
+
+    def assert_musig_aggregate_in_script(self, signer_data, pattern, psbtin):
+        pubkey = signer_data["aggregate_pubkey"][2:]
+        if "pkh" in pattern or "pk_h" in pattern:
+            pubkey = hash160(bytes.fromhex(pubkey)).hex()
+        if pubkey in psbtin["witness_utxo"]["scriptPubKey"]["hex"]:
+            return
+        elif "taproot_scripts" in psbtin:
+            for leaf_scripts in psbtin["taproot_scripts"]:
+                if pubkey in leaf_scripts["script"]:
+                    break
+            else:
+                assert False, "Aggregate pubkey not seen as output key, or in any scripts"
+        else:
+            assert False, "Aggregate pubkey not seen as output key or internal key"
+
     def test_failure_case_1(self, comment, pat):
         self.log.info(f"Testing {comment}")
         wallets, psbt = self.setup_musig_scenario(pat)
@@ -176,6 +202,9 @@ class WalletMuSigTest(BitcoinTestFramework):
         wallets, keys = self.create_wallets_and_keys_from_pattern(pat)
         self.construct_and_import_musig_descriptor_in_wallets(pat, wallets, keys, only_one_musig_wallet)
 
+        # The participant maps are keyed by the aggregate pubkey, which does not depend on the
+        # order of the participants nor on the derivation applied to the aggregate.
+        expected_participant_maps = len({tuple(sorted(musig.split(","))) for musig in MUSIG_RE.findall(pat)})
         expected_pubnonces = 0
         expected_partial_sigs = 0
         for musig in MUSIG_RE.findall(pat):
@@ -226,14 +255,15 @@ class WalletMuSigTest(BitcoinTestFramework):
 
         dec_psbt = self.nodes[0].decodepsbt(psbt)
         assert_equal(len(dec_psbt["inputs"]), 1)
-        assert_equal(len(dec_psbt["inputs"][0]["musig2_participant_pubkeys"]), pattern.count("musig("))
+        assert_equal(len(dec_psbt["inputs"][0]["musig2_participant_pubkeys"]), expected_participant_maps)
         if has_internal:
-            assert_equal(len(dec_psbt["outputs"][1]["musig2_participant_pubkeys"]), pattern.count("musig("))
+            assert_equal(len(dec_psbt["outputs"][1]["musig2_participant_pubkeys"]), expected_participant_maps)
 
         # Check all participant pubkeys in the input and change output
         psbt_maps = [dec_psbt["inputs"][0]]
         if has_internal:
             psbt_maps.append(dec_psbt["outputs"][1])
+        origin_paths = {ORIGIN_PATH_RE.search(pub).group(1) for _, pub in keys}
         for psbt_map in psbt_maps:
             part_pks = set()
             for agg in psbt_map["musig2_participant_pubkeys"]:
@@ -241,72 +271,65 @@ class WalletMuSigTest(BitcoinTestFramework):
                     part_pks.add(part_pub[2:])
             # Check that there are as many participants as we expected
             assert_equal(len(part_pks), len(keys))
-            # Check that each participant has a derivation path
+            # Check that each participant has a derivation path, and that its origin appears in
+            # that path just once no matter how many musig() expressions the participant is in
             for deriv_path in psbt_map["taproot_bip32_derivs"]:
                 if deriv_path["pubkey"] in part_pks:
+                    origin = next((o for o in origin_paths if deriv_path["path"].startswith(f"m{o}")), None)
+                    assert origin is not None, deriv_path["path"]
+                    assert_equal(deriv_path["path"].count(origin), 1)
                     part_pks.remove(deriv_path["pubkey"])
             assert_equal(len(part_pks), 0)
 
+        # Run 2 signing sessions simultaneously to verify no nonce reuse
         # Add pubnonces
         nonce_psbts = []
+        nonce_psbts2 = []
         for i, wallet in enumerate(wallets):
             if nosign_wallets and i in nosign_wallets:
                 continue
-            proc = wallet.walletprocesspsbt(psbt=psbt, sighashtype=sighash_type)
-            assert_equal(proc["complete"], False)
-            nonce_psbts.append(proc["psbt"])
+            for psbt_list in [nonce_psbts, nonce_psbts2]:
+                proc = wallet.walletprocesspsbt(psbt=psbt, sighashtype=sighash_type)
+                assert_equal(proc["complete"], False)
+                psbt_list.append(proc["psbt"])
 
         comb_nonce_psbt = self.nodes[0].combinepsbt(nonce_psbts)
+        comb_nonce_psbt2 = self.nodes[0].combinepsbt(nonce_psbts2)
 
         dec_psbt = self.nodes[0].decodepsbt(comb_nonce_psbt)
-        assert_equal(len(dec_psbt["inputs"][0]["musig2_pubnonces"]), expected_pubnonces)
-        for pn in dec_psbt["inputs"][0]["musig2_pubnonces"]:
-            pubkey = pn["aggregate_pubkey"][2:]
-            if "pkh" in pattern or "pk_h" in pattern:
-                pubkey = hash160(bytes.fromhex(pubkey)).hex()
-            if pubkey in dec_psbt["inputs"][0]["witness_utxo"]["scriptPubKey"]["hex"]:
-                continue
-            elif "taproot_scripts" in dec_psbt["inputs"][0]:
-                for leaf_scripts in dec_psbt["inputs"][0]["taproot_scripts"]:
-                    if pubkey in leaf_scripts["script"]:
-                        break
-                else:
-                    assert False, "Aggregate pubkey for pubnonce not seen as output key, or in any scripts"
-            else:
-                assert False, "Aggregate pubkey for pubnonce not seen as output key or internal key"
+        dec_psbt2 = self.nodes[0].decodepsbt(comb_nonce_psbt2)
+        assert_equal(len(dec_psbt["inputs"][0]["musig2_pubnonces"]), len(dec_psbt2["inputs"][0]["musig2_pubnonces"]), expected_pubnonces)
+        for pn, pn2 in zip(dec_psbt["inputs"][0]["musig2_pubnonces"], dec_psbt2["inputs"][0]["musig2_pubnonces"]):
+            self.assert_musig_signer_data(pn, pn2, "pubnonce")
+            self.assert_musig_aggregate_in_script(pn, pattern, dec_psbt["inputs"][0])
 
         # Add partial sigs
         psig_psbts = []
+        psig_psbts2 = []
         for i, wallet in enumerate(wallets):
             if nosign_wallets and i in nosign_wallets:
                 continue
-            proc = wallet.walletprocesspsbt(psbt=comb_nonce_psbt, sighashtype=sighash_type)
-            assert_equal(proc["complete"], False)
-            psig_psbts.append(proc["psbt"])
+            for psbt, psbt_list in [(comb_nonce_psbt, psig_psbts), (comb_nonce_psbt2, psig_psbts2)]:
+                proc = wallet.walletprocesspsbt(psbt=psbt, sighashtype=sighash_type)
+                assert_equal(proc["complete"], False)
+                psbt_list.append(proc["psbt"])
 
         comb_psig_psbt = self.nodes[0].combinepsbt(psig_psbts)
+        comb_psig_psbt2 = self.nodes[0].combinepsbt(psig_psbts2)
 
         dec_psbt = self.nodes[0].decodepsbt(comb_psig_psbt)
-        assert_equal(len(dec_psbt["inputs"][0]["musig2_partial_sigs"]), expected_partial_sigs)
-        for ps in dec_psbt["inputs"][0]["musig2_partial_sigs"]:
-            pubkey = ps["aggregate_pubkey"][2:]
-            if "pkh" in pattern or "pk_h" in pattern:
-                pubkey = hash160(bytes.fromhex(pubkey)).hex()
-            if pubkey in dec_psbt["inputs"][0]["witness_utxo"]["scriptPubKey"]["hex"]:
-                continue
-            elif "taproot_scripts" in dec_psbt["inputs"][0]:
-                for leaf_scripts in dec_psbt["inputs"][0]["taproot_scripts"]:
-                    if pubkey in leaf_scripts["script"]:
-                        break
-                else:
-                    assert False, "Aggregate pubkey for partial sig not seen as output key or in any scripts"
-            else:
-                assert False, "Aggregate pubkey for partial sig not seen as output key"
+        dec_psbt2 = self.nodes[0].decodepsbt(comb_psig_psbt2)
+        assert_equal(len(dec_psbt["inputs"][0]["musig2_partial_sigs"]), len(dec_psbt2["inputs"][0]["musig2_partial_sigs"]), expected_partial_sigs)
+        for ps, ps2 in zip(dec_psbt["inputs"][0]["musig2_partial_sigs"], dec_psbt2["inputs"][0]["musig2_partial_sigs"]):
+            self.assert_musig_signer_data(ps, ps2, "partial_sig")
+            self.assert_musig_aggregate_in_script(ps, pattern, dec_psbt["inputs"][0])
 
         # Non-participant aggregates partial sigs and send
         finalized = self.nodes[0].finalizepsbt(psbt=comb_psig_psbt, extract=False)
-        assert_equal(finalized["complete"], True)
+        finalized2 = self.nodes[0].finalizepsbt(psbt=comb_psig_psbt2, extract=False)
+        assert_equal(finalized["complete"], finalized2["complete"], True)
         witness = self.nodes[0].decodepsbt(finalized["psbt"])["inputs"][0]["final_scriptwitness"]
+        assert_not_equal(witness, self.nodes[0].decodepsbt(finalized2["psbt"])["inputs"][0]["final_scriptwitness"])
         if scriptpath:
             assert_greater_than(len(witness), 1)
         else:
@@ -331,6 +354,7 @@ class WalletMuSigTest(BitcoinTestFramework):
         self.test_success_case("tr(H,pk(musig/*))", "tr($H,pk(musig($0,$1,$2)/<0;1>/*))", scriptpath=True)
         self.test_success_case("tr(H,{pk(musig/*), pk(musig/*)})", "tr($H,{pk(musig($0,$1,$2)/<0;1>/*),pk(musig($3,$4,$5)/0/*)})", scriptpath=True)
         self.test_success_case("tr(H,{pk(musig/*), pk(same keys different musig/*)})", "tr($H,{pk(musig($0,$1,$2)/<0;1>/*),pk(musig($1,$2)/0/*)})", scriptpath=True)
+        self.test_success_case("tr(H,and(pk(musig/*),pk(same musig, other derivation/*)))", "tr($H,and_v(v:pk(musig($0,$1,$2)/<0;1>/*),pk(musig($0,$1,$2)/<2;3>/*)))", scriptpath=True)
         self.test_success_case("tr(musig/*,{pk(partial keys diff musig-1/*),pk(partial keys diff musig-2/*)})}", "tr(musig($0,$1,$2)/<3;4>/*,{pk(musig($0,$1)/<5;6>/*),pk(musig($1,$2)/7/*)})")
         self.test_success_case("tr(musig/*,{pk(partial keys diff musig-1/*),pk(partial keys diff musig-2/*)})} script-path", "tr(musig($0,$1,$2)/<3;4>/*,{pk(musig($0,$1)/<5;6>/*),pk(musig($1,$2)/7/*)})", scriptpath=True, nosign_wallets=[0])
         self.test_success_case("tr(H,and(pk(musig/*),after(1)))", "tr($H,and_v(v:pk(musig($0,$1,$2)/<0;1>/*),after(1)))", scriptpath=True)

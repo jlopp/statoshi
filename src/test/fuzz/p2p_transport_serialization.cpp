@@ -10,6 +10,7 @@
 #include <test/fuzz/FuzzedDataProvider.h>
 #include <test/fuzz/fuzz.h>
 #include <test/fuzz/util.h>
+#include <test/fuzz/util/reachability.h>
 #include <util/chaintype.h>
 
 #include <algorithm>
@@ -22,12 +23,19 @@
 namespace {
 
 auto g_all_messages = ALL_NET_MESSAGE_TYPES;
+constexpr ReachabilityGoal V1_TRANSPORT_RECEIVES_COMPLETE_MESSAGE{"v1 transport receives a complete message"};
 
-void initialize_p2p_transport_serialization()
+void initialize_p2p_transport()
 {
     static ECC_Context ecc_context{};
     SelectParams(ChainType::REGTEST);
     std::sort(g_all_messages.begin(), g_all_messages.end());
+}
+
+void initialize_p2p_transport_serialization()
+{
+    RegisterReachabilityGoal(V1_TRANSPORT_RECEIVES_COMPLETE_MESSAGE);
+    initialize_p2p_transport();
 }
 
 } // namespace
@@ -73,11 +81,13 @@ FUZZ_TARGET(p2p_transport_serialization, .init = initialize_p2p_transport_serial
 
     mutable_msg_bytes.insert(mutable_msg_bytes.end(), payload_bytes.begin(), payload_bytes.end());
     std::span<const uint8_t> msg_bytes{mutable_msg_bytes};
+    bool received_complete_message{false};
     while (msg_bytes.size() > 0) {
         if (!recv_transport.ReceivedBytes(msg_bytes)) {
             break;
         }
         if (recv_transport.ReceivedMessageComplete()) {
+            received_complete_message = true;
             const auto time{NodeClock::time_point::max()};
             bool reject_message{false};
             CNetMessage msg = recv_transport.GetReceivedMessage(time, reject_message);
@@ -86,7 +96,6 @@ FUZZ_TARGET(p2p_transport_serialization, .init = initialize_p2p_transport_serial
             assert(msg.m_raw_message_size == CMessageHeader::HEADER_SIZE + msg.m_message_size);
             assert(msg.m_time == time);
 
-            std::vector<unsigned char> header;
             auto msg2 = NetMsg::Make(msg.m_type, std::span{msg.m_recv});
             bool queued = send_transport.SetMessageToSend(msg2);
             assert(queued);
@@ -100,6 +109,7 @@ FUZZ_TARGET(p2p_transport_serialization, .init = initialize_p2p_transport_serial
             }
         }
     }
+    ObserveReachabilityGoal(received_complete_message, V1_TRANSPORT_RECEIVES_COMPLETE_MESSAGE);
 }
 
 namespace {
@@ -294,7 +304,7 @@ void SimulationTest(Transport& initiator, Transport& responder, R& rng, FuzzedDa
     };
 
     // Main loop, interleaving new messages, sends, and receives.
-    LIMITED_WHILE(provider.remaining_bytes(), 1000) {
+    LIMITED_WHILE (provider.remaining_bytes(), 1000) {
         CallOneOf(provider,
             // (Try to) give the next message to the transport.
             [&] { new_msg_fn(/*side=*/0); },
@@ -372,7 +382,7 @@ std::unique_ptr<Transport> MakeV2Transport(NodeId nodeid, bool initiator, RNG& r
 
 } // namespace
 
-FUZZ_TARGET(p2p_transport_bidirectional, .init = initialize_p2p_transport_serialization)
+FUZZ_TARGET(p2p_transport_bidirectional, .init = initialize_p2p_transport)
 {
     // Test with two V1 transports talking to each other.
     FuzzedDataProvider provider{buffer.data(), buffer.size()};
@@ -383,7 +393,7 @@ FUZZ_TARGET(p2p_transport_bidirectional, .init = initialize_p2p_transport_serial
     SimulationTest(*t1, *t2, rng, provider);
 }
 
-FUZZ_TARGET(p2p_transport_bidirectional_v2, .init = initialize_p2p_transport_serialization)
+FUZZ_TARGET(p2p_transport_bidirectional_v2, .init = initialize_p2p_transport)
 {
     // Test with two V2 transports talking to each other.
     FuzzedDataProvider provider{buffer.data(), buffer.size()};
@@ -394,7 +404,7 @@ FUZZ_TARGET(p2p_transport_bidirectional_v2, .init = initialize_p2p_transport_ser
     SimulationTest(*t1, *t2, rng, provider);
 }
 
-FUZZ_TARGET(p2p_transport_bidirectional_v1v2, .init = initialize_p2p_transport_serialization)
+FUZZ_TARGET(p2p_transport_bidirectional_v1v2, .init = initialize_p2p_transport)
 {
     // Test with a V1 initiator talking to a V2 responder.
     FuzzedDataProvider provider{buffer.data(), buffer.size()};

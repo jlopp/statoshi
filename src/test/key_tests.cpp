@@ -41,13 +41,17 @@ BOOST_FIXTURE_TEST_SUITE(key_tests, BasicTestingSetup)
 BOOST_AUTO_TEST_CASE(key_test1)
 {
     CKey key1  = DecodeSecret(strSecret1);
-    BOOST_CHECK(key1.IsValid() && !key1.IsCompressed());
+    BOOST_CHECK(key1.IsValid());
+    BOOST_CHECK(!key1.IsCompressed());
     CKey key2  = DecodeSecret(strSecret2);
-    BOOST_CHECK(key2.IsValid() && !key2.IsCompressed());
+    BOOST_CHECK(key2.IsValid());
+    BOOST_CHECK(!key2.IsCompressed());
     CKey key1C = DecodeSecret(strSecret1C);
-    BOOST_CHECK(key1C.IsValid() && key1C.IsCompressed());
+    BOOST_CHECK(key1C.IsValid());
+    BOOST_CHECK(key1C.IsCompressed());
     CKey key2C = DecodeSecret(strSecret2C);
-    BOOST_CHECK(key2C.IsValid() && key2C.IsCompressed());
+    BOOST_CHECK(key2C.IsValid());
+    BOOST_CHECK(key2C.IsCompressed());
     CKey bad_key = DecodeSecret(strAddressBad);
     BOOST_CHECK(!bad_key.IsValid());
 
@@ -76,10 +80,10 @@ BOOST_AUTO_TEST_CASE(key_test1)
     BOOST_CHECK(!key2C.VerifyPubKey(pubkey2));
     BOOST_CHECK(key2C.VerifyPubKey(pubkey2C));
 
-    BOOST_CHECK(DecodeDestination(addr1)  == CTxDestination(PKHash(pubkey1)));
-    BOOST_CHECK(DecodeDestination(addr2)  == CTxDestination(PKHash(pubkey2)));
-    BOOST_CHECK(DecodeDestination(addr1C) == CTxDestination(PKHash(pubkey1C)));
-    BOOST_CHECK(DecodeDestination(addr2C) == CTxDestination(PKHash(pubkey2C)));
+    BOOST_CHECK_EQUAL(DecodeDestination(addr1),  CTxDestination(PKHash(pubkey1)));
+    BOOST_CHECK_EQUAL(DecodeDestination(addr2),  CTxDestination(PKHash(pubkey2)));
+    BOOST_CHECK_EQUAL(DecodeDestination(addr1C), CTxDestination(PKHash(pubkey1C)));
+    BOOST_CHECK_EQUAL(DecodeDestination(addr2C), CTxDestination(PKHash(pubkey2C)));
 
     for (int n=0; n<16; n++)
     {
@@ -131,10 +135,10 @@ BOOST_AUTO_TEST_CASE(key_test1)
         BOOST_CHECK(rkey1C.RecoverCompact(hashMsg, csign1C));
         BOOST_CHECK(rkey2C.RecoverCompact(hashMsg, csign2C));
 
-        BOOST_CHECK(rkey1  == pubkey1);
-        BOOST_CHECK(rkey2  == pubkey2);
-        BOOST_CHECK(rkey1C == pubkey1C);
-        BOOST_CHECK(rkey2C == pubkey2C);
+        BOOST_CHECK_EQUAL(rkey1, pubkey1);
+        BOOST_CHECK_EQUAL(rkey2, pubkey2);
+        BOOST_CHECK_EQUAL(rkey1C, pubkey1C);
+        BOOST_CHECK_EQUAL(rkey2C, pubkey2C);
     }
 
     // test deterministic signing
@@ -233,7 +237,7 @@ static void CmpSerializationPubkey(const CPubKey& pubkey)
     stream << pubkey;
     CPubKey pubkey2;
     stream >> pubkey2;
-    BOOST_CHECK(pubkey == pubkey2);
+    BOOST_CHECK_EQUAL(pubkey, pubkey2);
 }
 
 BOOST_AUTO_TEST_CASE(pubkey_unserialize)
@@ -351,7 +355,7 @@ BOOST_AUTO_TEST_CASE(key_ellswift)
             // to compare.
             decoded_pubkey.Decompress();
         }
-        BOOST_CHECK(key.GetPubKey() == decoded_pubkey);
+        BOOST_CHECK_EQUAL(key.GetPubKey(), decoded_pubkey);
     }
 }
 
@@ -361,7 +365,7 @@ BOOST_AUTO_TEST_CASE(bip341_test_h)
     HashWriter hw;
     hw.write(G_uncompressed);
     XOnlyPubKey H{hw.GetSHA256()};
-    BOOST_CHECK(XOnlyPubKey::NUMS_H == H);
+    BOOST_CHECK_EQUAL(XOnlyPubKey::NUMS_H, H);
 }
 
 BOOST_AUTO_TEST_CASE(key_schnorr_tweak_smoke_test)

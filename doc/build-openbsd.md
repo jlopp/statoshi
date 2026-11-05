@@ -1,8 +1,8 @@
 # OpenBSD Build Guide
 
-**Updated for OpenBSD [7.8](https://www.openbsd.org/78.html)**
+Bitcoin Core is supported on [the two most recent OpenBSD releases](https://www.openbsd.org/faq/faq5.html#Flavors).
 
-This guide describes how to build bitcoind, command-line utilities, and GUI on OpenBSD.
+This guide describes how to build bitcoind, command-line utilities, and GUI on the latest release.
 
 ## Preparation
 
@@ -10,7 +10,7 @@ This guide describes how to build bitcoind, command-line utilities, and GUI on O
 Run the following as root to install the base dependencies for building.
 
 ```bash
-pkg_add git cmake boost libevent
+pkg_add git cmake boost
 ```
 
 SQLite is required for the wallet:
@@ -64,18 +64,14 @@ Otherwise, if you don't need QR encoding support, use the `-DWITH_QRENCODE=OFF` 
 #### Notifications
 ###### ZeroMQ
 
-Bitcoin Core can provide notifications via ZeroMQ. If the package is installed, support will be compiled in.
+Bitcoin Core can provide notifications via ZeroMQ. To compile ZMQ support, install the following dependency and pass `-DWITH_ZMQ=ON` when configuring.
 ```bash
 pkg_add zeromq
 ```
 
 #### Test Suite Dependencies
-There is an included test suite that is useful for testing code changes when developing.
-To run the test suite (recommended), you will need to have Python 3 installed:
 
-```bash
-pkg_add python py3-zmq  # Select the newest version of the python package if necessary.
-```
+See [`test/README.md`](/test/README.md#dependencies-and-prerequisites).
 
 ## Building Bitcoin Core
 

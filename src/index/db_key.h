@@ -7,9 +7,9 @@
 
 #include <dbwrapper.h>
 #include <interfaces/types.h>
-#include <logging.h>
 #include <serialize.h>
 #include <uint256.h>
+#include <util/log.h>
 
 #include <cstdint>
 #include <ios>
@@ -26,8 +26,8 @@ namespace index_util {
  * Keys for the hash index have the type [DB_BLOCK_HASH, uint256].
  */
 
-static constexpr uint8_t DB_BLOCK_HASH{'s'};
-static constexpr uint8_t DB_BLOCK_HEIGHT{'t'};
+inline constexpr uint8_t DB_BLOCK_HASH{'s'};
+inline constexpr uint8_t DB_BLOCK_HEIGHT{'t'};
 
 struct DBHeightKey {
     int height;

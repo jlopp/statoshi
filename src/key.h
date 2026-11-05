@@ -7,15 +7,25 @@
 #ifndef BITCOIN_KEY_H
 #define BITCOIN_KEY_H
 
-#include <musig.h>
+#include <attributes.h>
 #include <pubkey.h>
+#include <script/keyorigin.h>
 #include <serialize.h>
 #include <support/allocators/secure.h>
+#include <support/cleanse.h>
 #include <uint256.h>
 
+#include <array>
+#include <cassert>
+#include <optional>
+#include <span>
 #include <stdexcept>
+#include <utility>
 #include <vector>
 
+struct secp256k1_context_struct;
+typedef struct secp256k1_context_struct secp256k1_context;
+struct secp256k1_keypair;
 
 /**
  * CPrivKey is a serialized private key, with all parameters included
@@ -24,7 +34,7 @@
 typedef std::vector<unsigned char, secure_allocator<unsigned char> > CPrivKey;
 
 /** Size of ECDH shared secrets. */
-constexpr static size_t ECDH_SECRET_SIZE = CSHA256::OUTPUT_SIZE;
+inline constexpr size_t ECDH_SECRET_SIZE = CSHA256::OUTPUT_SIZE;
 
 // Used to represent ECDH shared secret (ECDH_SECRET_SIZE bytes)
 using ECDHSecret = std::array<std::byte, ECDH_SECRET_SIZE>;
@@ -38,8 +48,8 @@ public:
     /**
      * secp256k1:
      */
-    static const unsigned int SIZE            = 279;
-    static const unsigned int COMPRESSED_SIZE = 214;
+    static constexpr unsigned int SIZE{279};
+    static constexpr unsigned int COMPRESSED_SIZE{214};
     /**
      * see www.keylength.com
      * script supports up to 75 for single byte push
@@ -221,16 +231,13 @@ public:
      *                               Merkle root of the script tree).
      */
     KeyPair ComputeKeyPair(const uint256* merkle_root) const;
-
-    std::vector<uint8_t> CreateMuSig2Nonce(MuSig2SecNonce& secnonce, const uint256& sighash, const CPubKey& aggregate_pubkey, const std::vector<CPubKey>& pubkeys);
-    std::optional<uint256> CreateMuSig2PartialSig(const uint256& hash, const CPubKey& aggregate_pubkey, const std::vector<CPubKey>& pubkeys, const std::map<CPubKey, std::vector<uint8_t>>& pubnonces, MuSig2SecNonce& secnonce, const std::vector<std::pair<uint256, bool>>& tweaks);
 };
 
 CKey GenerateRandomKey(bool compressed = true) noexcept;
 
 struct CExtKey {
     unsigned char nDepth;
-    unsigned char vchFingerprint[4];
+    KeyFingerprint fingerprint;
     unsigned int nChild;
     ChainCode chaincode;
     CKey key;
@@ -238,24 +245,46 @@ struct CExtKey {
     friend bool operator==(const CExtKey& a, const CExtKey& b)
     {
         return a.nDepth == b.nDepth &&
-            memcmp(a.vchFingerprint, b.vchFingerprint, sizeof(vchFingerprint)) == 0 &&
+            a.fingerprint == b.fingerprint &&
             a.nChild == b.nChild &&
             a.chaincode == b.chaincode &&
             a.key == b.key;
     }
 
     CExtKey() = default;
-    CExtKey(const CExtPubKey& xpub, const CKey& key_in) : nDepth(xpub.nDepth), nChild(xpub.nChild), chaincode(xpub.chaincode), key(key_in)
+    CExtKey(const CExtPubKey& xpub, const CKey& key_in) : nDepth(xpub.nDepth), fingerprint(xpub.fingerprint), nChild(xpub.nChild), chaincode(xpub.chaincode), key(key_in) {}
+
+    KeyFingerprint id_key_fingerprint() const
     {
-        std::copy(xpub.vchFingerprint, xpub.vchFingerprint + sizeof(xpub.vchFingerprint), vchFingerprint);
+        return key.GetPubKey().GetID().fingerprint();
     }
 
-    void Encode(unsigned char code[BIP32_EXTKEY_SIZE]) const;
-    void Decode(const unsigned char code[BIP32_EXTKEY_SIZE]);
+    //! BIP32 serialization without the version bytes (BIP32_EXTKEY_SIZE bytes)
+    template <typename Stream>
+    void Serialize(Stream& s) const
+    {
+        assert(key.size() == 32);
+        s << nDepth << fingerprint << Using<BigEndianFormatter<4>>(nChild) << chaincode << uint8_t{0} << std::span{key.data(), key.size()};
+    }
+    template <typename Stream>
+    void Unserialize(Stream& s)
+    {
+        uint8_t key_prefix;
+        std::vector<unsigned char, secure_allocator<unsigned char>> ser_key(32);
+        s >> nDepth >> fingerprint >> Using<BigEndianFormatter<4>>(nChild) >> chaincode >> key_prefix >> std::span{ser_key};
+        key.Set(ser_key.begin(), ser_key.end(), true);
+        if ((nDepth == 0 && (nChild != 0 || fingerprint != KeyFingerprint{})) || key_prefix != 0) key = CKey();
+    }
     [[nodiscard]] bool Derive(CExtKey& out, unsigned int nChild) const;
     CExtPubKey Neuter() const;
     void SetSeed(std::span<const std::byte> seed);
 };
+
+//! Get extended key and origin info for a given path
+//! @param[in] ext_key The extended private key to derive from
+//! @param[in] path The BIP 32 path
+//! @return the resulting extended private key and origin info
+std::optional<std::pair<CExtKey, KeyOriginInfo>> DeriveExtKey(const CExtKey& ext_key, const std::vector<uint32_t>& path);
 
 /** KeyPair
  *
@@ -292,6 +321,12 @@ public:
     friend KeyPair CKey::ComputeKeyPair(const uint256* merkle_root) const;
     [[nodiscard]] bool SignSchnorr(const uint256& hash, std::span<unsigned char> sig, const uint256& aux) const;
 
+    //! Pointer to this KeyPair's internal `secp256k1_keypair` data or nullptr if invalid.
+    const secp256k1_keypair* GetSecpKeypair() const LIFETIMEBOUND
+    {
+        return IsValid() ? reinterpret_cast<const secp256k1_keypair*>(m_keypair->data()) : nullptr;
+    }
+
     //! Check whether this keypair is valid.
     bool IsValid() const { return !!m_keypair; }
 
@@ -314,6 +349,9 @@ private:
 
 /** Check that required EC support is available at runtime. */
 bool ECC_InitSanityCheck();
+
+/** Access the secp256k1 context used for signing and MuSig2 nonce generation. */
+secp256k1_context* GetSecp256k1SignContext();
 
 /**
  * RAII class initializing and deinitializing global state for elliptic curve support.

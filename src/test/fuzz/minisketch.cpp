@@ -3,14 +3,16 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <minisketch.h>
-#include <node/minisketchwrapper.h>
+
 #include <test/fuzz/FuzzedDataProvider.h>
 #include <test/fuzz/fuzz.h>
 #include <test/fuzz/util.h>
 #include <util/check.h>
 
+#include <limits>
 #include <map>
 #include <numeric>
+#include <utility>
 
 namespace {
 
@@ -36,8 +38,7 @@ FUZZ_TARGET(minisketch)
 
     // Fill two sets and keep the difference in a map
     std::map<uint32_t, bool> diff;
-    LIMITED_WHILE(fuzzed_data_provider.ConsumeBool(), 10000)
-    {
+    LIMITED_WHILE (fuzzed_data_provider.ConsumeBool(), 10000) {
         const auto entry{fuzzed_data_provider.ConsumeIntegralInRange<uint32_t>(1, std::numeric_limits<uint32_t>::max() - 1)};
         const auto KeepDiff{[&] {
             bool& mut{diff[entry]};

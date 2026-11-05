@@ -23,7 +23,10 @@ To receive security and update notifications, please subscribe to:
 With the release of this new major version, versions *version minus 3* and
 older are at "End of Life" and will no longer receive updates.
 
-In accordance with the security policy, we will in two weeks disclose:
+In accordance with our [security policy](https://bitcoincore.org/en/security-advisories/), any **easily discoverable** vulnerabilities fixed in this
+release will be disclosed as soon as fixed releases are available for all maintained major versions.
+
+Under the regular disclosure schedule, we will disclose the following in two weeks:
 
 * Medium and high severity vulnerabilities fixed in *version minus 2*. There are N of these.
 
@@ -35,7 +38,7 @@ How to Upgrade
 If you are running an older version, shut it down. Wait until it has completely
 shut down (which might take a few minutes in some cases), then run the
 installer (on Windows) or just copy over `/Applications/Bitcoin-Qt` (on macOS)
-or `bitcoind`/`bitcoin-qt` (on Linux).
+or `bin/` and `libexec/` (on Linux).
 
 Upgrading directly from a version of Bitcoin Core that has reached its EOL is
 possible, but it might take some time if the data directory needs to be migrated. Old

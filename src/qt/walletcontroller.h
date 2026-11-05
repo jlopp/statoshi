@@ -23,7 +23,6 @@
 #include <QString>
 
 class ClientModel;
-class OptionsModel;
 class PlatformStyle;
 class WalletModel;
 
@@ -78,7 +77,6 @@ private:
     ClientModel& m_client_model;
     interfaces::Node& m_node;
     const PlatformStyle* const m_platform_style;
-    OptionsModel* const m_options_model;
     mutable QMutex m_mutex;
     std::vector<WalletModel*> m_wallets;
     std::unique_ptr<interfaces::Handler> m_handler_load_wallet;
@@ -196,7 +194,7 @@ Q_SIGNALS:
 private:
     QString m_success_message;
 
-    void do_migrate(const std::string& name);
+    void do_migrate(const std::string& name, bool load_wallet);
     void finish();
 };
 

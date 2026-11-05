@@ -8,7 +8,9 @@
 #include <test/util/random.h>
 #include <test/util/common.h>
 #include <test/util/setup_common.h>
+#include <test/util/versionbits.h>
 #include <util/chaintype.h>
+#include <validation.h>
 #include <versionbits.h>
 #include <versionbits_impl.h>
 
@@ -294,7 +296,8 @@ void check_computeblockversion(VersionBitsCache& versionbitscache, const Consens
     BOOST_REQUIRE(nStartTime < nTimeout);
     BOOST_REQUIRE(nStartTime >= 0);
     BOOST_REQUIRE(nTimeout <= std::numeric_limits<uint32_t>::max() || nTimeout == Consensus::BIP9Deployment::NO_TIMEOUT);
-    BOOST_REQUIRE(0 <= bit && bit < 32);
+    BOOST_REQUIRE(0 <= bit);
+    BOOST_REQUIRE(bit < 32);
     // Make sure that no deployment tries to set an invalid bit.
     BOOST_REQUIRE(((1 << bit) & VERSIONBITS_TOP_MASK) == 0);
     BOOST_REQUIRE(min_activation_height >= 0);
@@ -438,6 +441,28 @@ void check_computeblockversion(VersionBitsCache& versionbitscache, const Consens
 }
 }; // struct BlockVersionTest
 
+BOOST_FIXTURE_TEST_CASE(blockscriptflags, RegTestingSetup)
+{
+    // RegTest should have all possible flags enabled by default
+    // If this check fails, then either remove the flag from
+    // CONSENSUS_SCRIPT_VERIFY_FLAGS, so that it's never a consensus
+    // flag for any chain, or ensure the deployment is enabled by
+    // default for RegTest.
+    auto regtest{CreateChainParams(*m_node.args, ChainType::REGTEST)};
+    BOOST_CHECK_EQUAL(ChainstateManager::GetAllConsensusScriptFlags(regtest->GetConsensus()).as_int(), CONSENSUS_SCRIPT_VERIFY_FLAGS.as_int());
+
+    // Check stored value is consistent
+    ChainstateManager& chainman = *m_node.chainman;
+    BOOST_CHECK_EQUAL(chainman.m_all_consensus_script_flags.as_int(), CONSENSUS_SCRIPT_VERIFY_FLAGS.as_int());
+
+    // Every other chain should have a subset (though this should already have been checked at compile-time)
+    for (const auto& chain_type : {ChainType::MAIN, ChainType::TESTNET, ChainType::TESTNET4, ChainType::SIGNET}) {
+        auto params{CreateChainParams(*m_node.args, chain_type)};
+        script_verify_flags possible_flags{ChainstateManager::GetAllConsensusScriptFlags(params->GetConsensus())};
+        BOOST_CHECK_EQUAL((possible_flags & CONSENSUS_SCRIPT_VERIFY_FLAGS).as_int(), possible_flags.as_int());
+    }
+}
+
 BOOST_FIXTURE_TEST_CASE(versionbits_computeblockversion, BlockVersionTest)
 {
     VersionBitsCache vbcache;
@@ -454,9 +479,20 @@ BOOST_FIXTURE_TEST_CASE(versionbits_computeblockversion, BlockVersionTest)
             // not take precedence over STARTED/LOCKED_IN. So all softforks on
             // the same bit might overlap, even when non-overlapping start-end
             // times are picked.
-            const uint32_t dep_mask{uint32_t{1} << chainParams->GetConsensus().vDeployments[dep].bit};
+            const auto& dep_info = chainParams->GetConsensus().vDeployments[dep];
+            const uint32_t dep_mask{uint32_t{1} << dep_info.bit};
             BOOST_CHECK(!(chain_all_vbits & dep_mask));
             chain_all_vbits |= dep_mask;
+            BOOST_CHECK(0 <= dep_info.bit);
+            BOOST_CHECK(dep_info.bit < VERSIONBITS_MAX_NUM_BITS);
+            if (chain_type != ChainType::REGTEST) {
+                if (dep == Consensus::DEPLOYMENT_TESTDUMMY) {
+                    BOOST_CHECK_EQUAL(dep_info.nStartTime, Consensus::BIP9Deployment::NEVER_ACTIVE);
+                    BOOST_CHECK_EQUAL(dep_info.nTimeout, Consensus::BIP9Deployment::NO_TIMEOUT);
+                } else {
+                    BOOST_CHECK(dep_info.bit < VERSIONBITS_NUM_BITS);
+                }
+            }
             check_computeblockversion(vbcache, chainParams->GetConsensus(), dep);
         }
     }

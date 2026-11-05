@@ -4,31 +4,38 @@
 
 #include <addresstype.h>
 #include <blockfilter.h>
-#include <chainparams.h>
-#include <consensus/merkle.h>
-#include <consensus/validation.h>
+#include <chain.h>
 #include <index/blockfilterindex.h>
 #include <interfaces/chain.h>
-#include <node/miner.h>
-#include <pow.h>
+#include <key.h>
+#include <node/blockstorage.h>
+#include <primitives/block.h>
+#include <script/script.h>
+#include <sync.h>
 #include <test/util/blockfilter.h>
 #include <test/util/common.h>
+#include <test/util/mining.h>
 #include <test/util/setup_common.h>
+#include <test/util/validation.h>
+#include <uint256.h>
+#include <util/check.h>
 #include <validation.h>
 
 #include <boost/test/unit_test.hpp>
-#include <future>
 
-using node::BlockAssembler;
+#include <compare>
+#include <cstddef>
+#include <cstdint>
+#include <functional>
+#include <memory>
+#include <span>
+#include <string>
+#include <utility>
+#include <vector>
+
 using node::BlockManager;
-using node::CBlockTemplate;
 
 BOOST_AUTO_TEST_SUITE(blockfilter_index_tests)
-
-struct BuildChainTestingSetup : public TestChain100Setup {
-    CBlock CreateBlock(const CBlockIndex* prev, const std::vector<CMutableTransaction>& txns, const CScript& scriptPubKey);
-    bool BuildChain(const CBlockIndex* pindex, const CScript& coinbase_script_pub_key, size_t length, std::vector<std::shared_ptr<CBlock>>& chain);
-};
 
 static bool CheckFilterLookups(BlockFilterIndex& filter_index, const CBlockIndex* block_index,
                                uint256& last_header, const BlockManager& blockman)
@@ -64,59 +71,9 @@ static bool CheckFilterLookups(BlockFilterIndex& filter_index, const CBlockIndex
     return true;
 }
 
-CBlock BuildChainTestingSetup::CreateBlock(const CBlockIndex* prev,
-    const std::vector<CMutableTransaction>& txns,
-    const CScript& scriptPubKey)
+BOOST_FIXTURE_TEST_CASE(blockfilter_index_initial_sync, TestChain100Setup)
 {
-    BlockAssembler::Options options;
-    options.coinbase_output_script = scriptPubKey;
-    options.include_dummy_extranonce = true;
-    std::unique_ptr<CBlockTemplate> pblocktemplate = BlockAssembler{m_node.chainman->ActiveChainstate(), m_node.mempool.get(), options}.CreateNewBlock();
-    CBlock& block = pblocktemplate->block;
-    block.hashPrevBlock = prev->GetBlockHash();
-    block.nTime = prev->nTime + 1;
-
-    // Replace mempool-selected txns with just coinbase plus passed-in txns:
-    block.vtx.resize(1);
-    for (const CMutableTransaction& tx : txns) {
-        block.vtx.push_back(MakeTransactionRef(tx));
-    }
-    {
-        CMutableTransaction tx_coinbase{*block.vtx.at(0)};
-        tx_coinbase.nLockTime = static_cast<uint32_t>(prev->nHeight);
-        tx_coinbase.vin.at(0).scriptSig = CScript{} << prev->nHeight + 1;
-        block.vtx.at(0) = MakeTransactionRef(std::move(tx_coinbase));
-        block.hashMerkleRoot = BlockMerkleRoot(block);
-    }
-
-    while (!CheckProofOfWork(block.GetHash(), block.nBits, m_node.chainman->GetConsensus())) ++block.nNonce;
-
-    return block;
-}
-
-bool BuildChainTestingSetup::BuildChain(const CBlockIndex* pindex,
-    const CScript& coinbase_script_pub_key,
-    size_t length,
-    std::vector<std::shared_ptr<CBlock>>& chain)
-{
-    std::vector<CMutableTransaction> no_txns;
-
-    chain.resize(length);
-    for (auto& block : chain) {
-        block = std::make_shared<CBlock>(CreateBlock(pindex, no_txns, coinbase_script_pub_key));
-
-        BlockValidationState state;
-        if (!Assert(m_node.chainman)->ProcessNewBlockHeaders({{*block}}, true, state, &pindex)) {
-            return false;
-        }
-    }
-
-    return true;
-}
-
-BOOST_FIXTURE_TEST_CASE(blockfilter_index_initial_sync, BuildChainTestingSetup)
-{
-    BlockFilterIndex filter_index(interfaces::MakeChain(m_node), BlockFilterType::BASIC, 1 << 20, true);
+    BlockFilterIndex filter_index(interfaces::MakeChain(m_node), BlockFilterType::BASIC, 1_MiB, true);
     BOOST_REQUIRE(filter_index.Init());
 
     uint256 last_header;
@@ -132,7 +89,7 @@ BOOST_FIXTURE_TEST_CASE(blockfilter_index_initial_sync, BuildChainTestingSetup)
 
         for (const CBlockIndex* block_index = m_node.chainman->ActiveChain().Genesis();
              block_index != nullptr;
-             block_index = m_node.chainman->ActiveChain().Next(block_index)) {
+             block_index = m_node.chainman->ActiveChain().Next(*block_index)) {
             BOOST_CHECK(!filter_index.LookupFilter(block_index, filter));
             BOOST_CHECK(!filter_index.LookupFilterHeader(block_index, filter_header));
             BOOST_CHECK(!filter_index.LookupFilterRange(block_index->nHeight, block_index, filters));
@@ -152,7 +109,7 @@ BOOST_FIXTURE_TEST_CASE(blockfilter_index_initial_sync, BuildChainTestingSetup)
         const CBlockIndex* block_index;
         for (block_index = m_node.chainman->ActiveChain().Genesis();
              block_index != nullptr;
-             block_index = m_node.chainman->ActiveChain().Next(block_index)) {
+             block_index = m_node.chainman->ActiveChain().Next(*block_index)) {
             CheckFilterLookups(filter_index, block_index, last_header, m_node.chainman->m_blockman);
         }
     }
@@ -168,8 +125,8 @@ BOOST_FIXTURE_TEST_CASE(blockfilter_index_initial_sync, BuildChainTestingSetup)
     CScript coinbase_script_pub_key_A = GetScriptForDestination(PKHash(coinbase_key_A.GetPubKey()));
     CScript coinbase_script_pub_key_B = GetScriptForDestination(PKHash(coinbase_key_B.GetPubKey()));
     std::vector<std::shared_ptr<CBlock>> chainA, chainB;
-    BOOST_REQUIRE(BuildChain(tip, coinbase_script_pub_key_A, 10, chainA));
-    BOOST_REQUIRE(BuildChain(tip, coinbase_script_pub_key_B, 10, chainB));
+    BOOST_REQUIRE(BuildChain(m_node, tip, coinbase_script_pub_key_A, 10, chainA));
+    BOOST_REQUIRE(BuildChain(m_node, tip, coinbase_script_pub_key_B, 10, chainB));
 
     // Check that new blocks on chain A get indexed.
     uint256 chainA_last_header = last_header;
@@ -267,7 +224,7 @@ BOOST_FIXTURE_TEST_CASE(blockfilter_index_initial_sync, BuildChainTestingSetup)
     filter_hashes.clear();
 
     filter_index.Interrupt();
-    filter_index.Stop();
+    StopIndex(filter_index, m_node);
 }
 
 BOOST_FIXTURE_TEST_CASE(blockfilter_index_init_destroy, BasicTestingSetup)
@@ -277,14 +234,14 @@ BOOST_FIXTURE_TEST_CASE(blockfilter_index_init_destroy, BasicTestingSetup)
     filter_index = GetBlockFilterIndex(BlockFilterType::BASIC);
     BOOST_CHECK(filter_index == nullptr);
 
-    BOOST_CHECK(InitBlockFilterIndex([&]{ return interfaces::MakeChain(m_node); }, BlockFilterType::BASIC, 1 << 20, true, false));
+    BOOST_CHECK(InitBlockFilterIndex([&]{ return interfaces::MakeChain(m_node); }, BlockFilterType::BASIC, 1_MiB, true, false));
 
     filter_index = GetBlockFilterIndex(BlockFilterType::BASIC);
     BOOST_CHECK(filter_index != nullptr);
     BOOST_CHECK(filter_index->GetFilterType() == BlockFilterType::BASIC);
 
     // Initialize returns false if index already exists.
-    BOOST_CHECK(!InitBlockFilterIndex([&]{ return interfaces::MakeChain(m_node); }, BlockFilterType::BASIC, 1 << 20, true, false));
+    BOOST_CHECK(!InitBlockFilterIndex([&]{ return interfaces::MakeChain(m_node); }, BlockFilterType::BASIC, 1_MiB, true, false));
 
     int iter_count = 0;
     ForEachBlockFilterIndex([&iter_count](BlockFilterIndex& _index) { iter_count++; });
@@ -299,89 +256,12 @@ BOOST_FIXTURE_TEST_CASE(blockfilter_index_init_destroy, BasicTestingSetup)
     BOOST_CHECK(filter_index == nullptr);
 
     // Reinitialize index.
-    BOOST_CHECK(InitBlockFilterIndex([&]{ return interfaces::MakeChain(m_node); }, BlockFilterType::BASIC, 1 << 20, true, false));
+    BOOST_CHECK(InitBlockFilterIndex([&]{ return interfaces::MakeChain(m_node); }, BlockFilterType::BASIC, 1_MiB, true, false));
 
     DestroyAllBlockFilterIndexes();
 
     filter_index = GetBlockFilterIndex(BlockFilterType::BASIC);
     BOOST_CHECK(filter_index == nullptr);
-}
-
-class IndexReorgCrash : public BaseIndex
-{
-private:
-    std::unique_ptr<BaseIndex::DB> m_db;
-    std::shared_future<void> m_blocker;
-    int m_blocking_height;
-
-public:
-    explicit IndexReorgCrash(std::unique_ptr<interfaces::Chain> chain, std::shared_future<void> blocker,
-                             int blocking_height) : BaseIndex(std::move(chain), "test index"), m_blocker(blocker),
-                                                    m_blocking_height(blocking_height)
-    {
-        const fs::path path = gArgs.GetDataDirNet() / "index";
-        fs::create_directories(path);
-        m_db = std::make_unique<BaseIndex::DB>(path / "db", /*n_cache_size=*/0, /*f_memory=*/true, /*f_wipe=*/false);
-    }
-
-    bool AllowPrune() const override { return false; }
-    BaseIndex::DB& GetDB() const override { return *m_db; }
-
-    bool CustomAppend(const interfaces::BlockInfo& block) override
-    {
-        // Simulate a delay so new blocks can get connected during the initial sync
-        if (block.height == m_blocking_height) m_blocker.wait();
-
-        // Move mock time forward so the best index gets updated only when we are not at the blocking height
-        if (block.height == m_blocking_height - 1 || block.height > m_blocking_height) {
-            SetMockTime(GetTime<std::chrono::seconds>() + 31s);
-        }
-
-        return true;
-    }
-};
-
-BOOST_FIXTURE_TEST_CASE(index_reorg_crash, BuildChainTestingSetup)
-{
-    // Enable mock time
-    SetMockTime(GetTime<std::chrono::minutes>());
-
-    std::promise<void> promise;
-    std::shared_future<void> blocker(promise.get_future());
-    int blocking_height = WITH_LOCK(cs_main, return m_node.chainman->ActiveChain().Tip()->nHeight);
-
-    IndexReorgCrash index(interfaces::MakeChain(m_node), blocker, blocking_height);
-    BOOST_REQUIRE(index.Init());
-    BOOST_REQUIRE(index.StartBackgroundSync());
-
-    auto func_wait_until = [&](int height, std::chrono::milliseconds timeout) {
-        auto deadline = std::chrono::steady_clock::now() + timeout;
-        while (index.GetSummary().best_block_height < height) {
-            if (std::chrono::steady_clock::now() > deadline) {
-                BOOST_FAIL(strprintf("Timeout waiting for index height %d (current: %d)", height, index.GetSummary().best_block_height));
-                return;
-            }
-            std::this_thread::sleep_for(100ms);
-        }
-    };
-
-    // Wait until the index is one block before the fork point
-    func_wait_until(blocking_height - 1, /*timeout=*/5s);
-
-    // Create a fork to trigger the reorg
-    std::vector<std::shared_ptr<CBlock>> fork;
-    const CBlockIndex* prev_tip = WITH_LOCK(cs_main, return m_node.chainman->ActiveChain().Tip()->pprev);
-    BOOST_REQUIRE(BuildChain(prev_tip, GetScriptForDestination(PKHash(GenerateRandomKey().GetPubKey())), 3, fork));
-
-    for (const auto& block : fork) {
-        BOOST_REQUIRE(m_node.chainman->ProcessNewBlock(block, /*force_processing=*/true, /*min_pow_checked=*/true, nullptr));
-    }
-
-    // Unblock the index thread so it can process the reorg
-    promise.set_value();
-    // Wait for the index to reach the new tip
-    func_wait_until(blocking_height + 2, 5s);
-    index.Stop();
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -11,6 +11,7 @@ from math import ceil
 from test_framework.address import address_to_scriptpubkey
 
 from test_framework.descriptors import descsum_create
+from test_framework.extendedkey import ExtendedPrivateKey
 from test_framework.messages import (
     COIN,
     CTransaction,
@@ -47,8 +48,7 @@ class RawTransactionsTest(BitcoinTestFramework):
         ] for i in range(self.num_nodes)]
 
         self.setup_clean_chain = True
-        # whitelist peers to speed up tx relay / mempool sync
-        self.noban_tx_relay = True
+        self.noban_tx_relay = True  # faster tx relay
         self.rpc_timeout = 90  # to prevent timeouts in `test_transaction_too_large`
         self.supports_cli = False
 
@@ -93,6 +93,11 @@ class RawTransactionsTest(BitcoinTestFramework):
             to_keep.append(self.watchonly_utxo)
         wallet.lockunspent(True)
         wallet.lockunspent(False, to_keep)
+
+    def reconnect_nodes(self):
+        self.connect_nodes(0, 1)
+        self.connect_nodes(0, 2)
+        self.connect_nodes(0, 3)
 
     def run_test(self):
         self.watchonly_utxo = None
@@ -294,6 +299,7 @@ class RawTransactionsTest(BitcoinTestFramework):
         assert_equal(utx['txid'], dec_tx['vin'][0]['txid'])
 
         assert_raises_rpc_error(-8, "Unknown named parameter foo", self.nodes[2].fundrawtransaction, rawtx, foo='bar')
+        assert_raises_rpc_error(-3, "JSON value of type bool is not of expected type object", self.nodes[2].fundrawtransaction, rawtx, True)
 
         # reserveChangeKey was deprecated and is now removed
         assert_raises_rpc_error(-8, "Unknown named parameter reserveChangeKey", lambda: self.nodes[2].fundrawtransaction(hexstring=rawtx, reserveChangeKey=True))
@@ -612,12 +618,12 @@ class RawTransactionsTest(BitcoinTestFramework):
 
         with WalletUnlock(wallet, "test"):
             wallet.importdescriptors([{
-                'desc': descsum_create('wpkh(tprv8ZgxMBicQKsPdYeeZbPSKd2KYLmeVKtcFA7kqCxDvDR13MQ6us8HopUR2wLcS2ZKPhLyKsqpDL2FtL73LMHcgoCL7DXsciA8eX8nbjCR2eG/0h/*h)'),
+                'desc': descsum_create(f'wpkh({ExtendedPrivateKey.generate().to_string()}/0h/*h)'),
                 'timestamp': 'now',
                 'active': True
             },
             {
-                'desc': descsum_create('wpkh(tprv8ZgxMBicQKsPdYeeZbPSKd2KYLmeVKtcFA7kqCxDvDR13MQ6us8HopUR2wLcS2ZKPhLyKsqpDL2FtL73LMHcgoCL7DXsciA8eX8nbjCR2eG/1h/*h)'),
+                'desc': descsum_create(f'wpkh({ExtendedPrivateKey.generate().to_string()}/1h/*h)'),
                 'timestamp': 'now',
                 'active': True,
                 'internal': True
@@ -761,8 +767,7 @@ class RawTransactionsTest(BitcoinTestFramework):
         }]
         wwatch.importdescriptors(desc_import)
 
-        # Backward compatibility test (2nd params is includeWatching)
-        result = wwatch.fundrawtransaction(rawtx, True)
+        result = wwatch.fundrawtransaction(rawtx)
         res_dec = self.nodes[0].decoderawtransaction(result["hex"])
         assert_equal(len(res_dec["vin"]), 1)
         assert_equal(res_dec["vin"][0]["txid"], self.watchonly_utxo['txid'])
@@ -829,6 +834,8 @@ class RawTransactionsTest(BitcoinTestFramework):
         # With no arguments passed, expect fee of 141 satoshis.
         assert_approx(node.fundrawtransaction(rawtx, fee_rate=self.fee_rate_sats_per_vb)["fee"], vexp=0.00000141, vspan=0.00000001)
         # Expect fee to be 10,000x higher when an explicit fee rate 10,000x greater is specified.
+        # Restart node with a high -maxfeerate to allow the wallet to create high fee rate transactions
+        self.restart_node(3, extra_args=["-maxfeerate=1"])
         result = node.fundrawtransaction(rawtx, fee_rate=10000)
         assert_approx(result["fee"], vexp=0.0141, vspan=0.0001)
 
@@ -852,7 +859,7 @@ class RawTransactionsTest(BitcoinTestFramework):
 
         self.log.info("Test invalid fee rate settings")
         for param, value in {("fee_rate", 100000), ("feeRate", 1.000)}:
-            assert_raises_rpc_error(-4, "Fee exceeds maximum configured by user (e.g. -maxtxfee, maxfeerate)",
+            assert_raises_rpc_error(-4, "Fee exceeds maximum configured by user (maxtxfee)",
                 node.fundrawtransaction, rawtx, add_inputs=True, **{param: value})
             assert_raises_rpc_error(-3, "Amount out of range",
                 node.fundrawtransaction, rawtx, add_inputs=True, **{param: -1})
@@ -887,6 +894,7 @@ class RawTransactionsTest(BitcoinTestFramework):
         self.log.info("- raises RPC error if both fee_rate and estimate_mode are passed")
         assert_raises_rpc_error(-8, "Cannot specify both estimate_mode and fee_rate",
             node.fundrawtransaction, rawtx, fee_rate=1, estimate_mode="economical", add_inputs=True)
+        self.connect_nodes(0, 3)
 
     def test_address_reuse(self):
         """Test no address reuse occurs."""
@@ -1176,10 +1184,10 @@ class RawTransactionsTest(BitcoinTestFramework):
         tx = wallet.send(outputs=[{addr1: 8}], **options)
         assert tx["complete"]
         # Check that only the preset inputs were added to the tx
-        decoded_psbt_inputs = self.nodes[0].decodepsbt(tx["psbt"])['tx']['vin']
+        decoded_psbt_inputs = self.nodes[0].decodepsbt(tx["psbt"])["inputs"]
         assert_equal(len(decoded_psbt_inputs), 2)
         for input in decoded_psbt_inputs:
-            assert_equal(input["txid"], source_tx["txid"])
+            assert_equal(input["previous_txid"], source_tx["txid"])
 
         # Case (5), assert that inputs are added to the tx by explicitly setting add_inputs=true
         options = {"add_inputs": True, "add_to_wallet": True}
@@ -1218,10 +1226,10 @@ class RawTransactionsTest(BitcoinTestFramework):
         })
         psbt_tx = wallet.walletcreatefundedpsbt(outputs=[{addr1: 8}], inputs=inputs, **options)
         # Check that only the preset inputs were added to the tx
-        decoded_psbt_inputs = self.nodes[0].decodepsbt(psbt_tx["psbt"])['tx']['vin']
+        decoded_psbt_inputs = self.nodes[0].decodepsbt(psbt_tx["psbt"])["inputs"]
         assert_equal(len(decoded_psbt_inputs), 2)
         for input in decoded_psbt_inputs:
-            assert_equal(input["txid"], source_tx["txid"])
+            assert_equal(input["previous_txid"], source_tx["txid"])
 
         # Case (5), 'walletcreatefundedpsbt' command
         # Explicit add_inputs=true, no preset inputs
@@ -1389,8 +1397,10 @@ class RawTransactionsTest(BitcoinTestFramework):
         # Make sure the default wallet will not be loaded when restarted with a high minrelaytxfee
         self.nodes[0].unloadwallet(self.default_wallet_name, False)
         feerate = Decimal("0.1")
-        self.restart_node(0, [f"-minrelaytxfee={feerate}", "-discardfee=0"]) # Set high minrelayfee, set discardfee to 0 for easier calculation
-
+        # Set a high -minrelaytxfee and set -discardfee to 0 for easier calculation.
+        # Set -maxfeerate higher than minrelaytxfee to allow high fee rate txs to be
+        # created and broadcasted.
+        self.restart_node(0, [f"-minrelaytxfee={feerate}", "-discardfee=0", "-maxfeerate=1"])
         self.nodes[0].loadwallet(self.default_wallet_name, True)
         funds = self.nodes[0].get_wallet_rpc(self.default_wallet_name)
         self.nodes[0].createwallet(wallet_name="tester")
@@ -1433,9 +1443,7 @@ class RawTransactionsTest(BitcoinTestFramework):
         do_fund_send(upper_bound)
 
         self.restart_node(0)
-        self.connect_nodes(0, 1)
-        self.connect_nodes(0, 2)
-        self.connect_nodes(0, 3)
+        self.reconnect_nodes()
 
     def test_feerate_rounding(self):
         self.log.info("Test that rounding of GetFee does not result in an assertion")

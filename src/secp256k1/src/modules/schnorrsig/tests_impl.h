@@ -38,7 +38,7 @@ static void run_nonce_function_bip340_tests(void) {
     unsigned char *args[5];
     int i;
 
-    const secp256k1_hash_ctx *hash_ctx = secp256k1_get_hash_context(CTX);
+    const secp256k1_hash_ctx *hash_ctx = &CTX->hash_ctx;
 
     /* Check that hash initialized by
      * secp256k1_nonce_function_bip340_sha256_tagged has the expected
@@ -164,7 +164,7 @@ static void test_schnorrsig_sha256_tagged(void) {
     unsigned char tag[] = {'B', 'I', 'P', '0', '3', '4', '0', '/', 'c', 'h', 'a', 'l', 'l', 'e', 'n', 'g', 'e'};
     secp256k1_sha256 sha;
     secp256k1_sha256 sha_optimized;
-    const secp256k1_hash_ctx *hash_ctx = secp256k1_get_hash_context(CTX);
+    const secp256k1_hash_ctx *hash_ctx = &CTX->hash_ctx;
 
     secp256k1_sha256_initialize_tagged(hash_ctx, &sha, (unsigned char *) tag, sizeof(tag));
     secp256k1_schnorrsig_sha256_tagged(&sha_optimized);
@@ -823,9 +823,6 @@ static void test_schnorrsig_sign_internal(void) {
     CHECK(secp256k1_keypair_xonly_pub(CTX, &pk, NULL, &keypair));
     CHECK(secp256k1_schnorrsig_sign32(CTX, sig, msg, &keypair, NULL) == 1);
     CHECK(secp256k1_schnorrsig_verify(CTX, sig, msg, sizeof(msg), &pk));
-    /* Check that deprecated alias gives the same result */
-    CHECK(secp256k1_schnorrsig_sign(CTX, sig2, msg, &keypair, NULL) == 1);
-    CHECK(secp256k1_memcmp_var(sig, sig2, sizeof(sig)) == 0);
 
     /* Test different nonce functions */
     CHECK(secp256k1_schnorrsig_sign_custom(CTX, sig, msg, sizeof(msg), &keypair, &extraparams) == 1);
