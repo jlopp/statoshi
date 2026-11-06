@@ -21,7 +21,7 @@
 #include <cmath>
 #include <unordered_map>
 
-statsd::StatsdClient statsClientTx;
+#include <statsd_client.h>
 
 namespace node {
 /** Minimum NodeId for lower_bound lookups (in practice, NodeIds start at 0). */
@@ -351,8 +351,8 @@ bool TxOrphanageImpl::AddTx(const CTransactionRef& tx, NodeId peer)
 
     // DoS prevention: do not allow m_orphanage to grow unbounded (see CVE-2012-3789)
     LimitOrphans();
-    statsClientTx.inc("transactions.orphans.add", 1.0f);
-    statsClientTx.gauge("transactions.orphans", m_orphans.size());
+    statsClient.inc("transactions.orphans.add", 1.0f);
+    statsClient.gauge("transactions.orphans", m_orphans.size());
     return brand_new;
 }
 
@@ -403,8 +403,8 @@ bool TxOrphanageImpl::EraseTxInternal(const Wtxid& wtxid)
         num_ann += 1;
     }
     LogDebug(BCLog::TXPACKAGES, "removed orphan tx %s (wtxid=%s) (%u announcements)\n", txid.ToString(), wtxid.ToString(), num_ann);
-    statsClientTx.inc("transactions.orphans.remove", 1.0f);
-    statsClientTx.gauge("transactions.orphans", m_orphans.size());
+    statsClient.inc("transactions.orphans.remove", 1.0f);
+    statsClient.gauge("transactions.orphans", m_orphans.size());
 
     return true;
 }
@@ -431,7 +431,7 @@ void TxOrphanageImpl::EraseForPeer(NodeId peer)
         // Delete item, cleaning up m_outpoint_to_orphan_wtxids iff this entry is unique by wtxid.
         Erase<ByPeer>(it++);
         num_ann += 1;
-        statsClientTx.inc("transactions.orphans.remove", 1.0f);
+        statsClient.inc("transactions.orphans.remove", 1.0f);
     }
     Assume(!m_peer_orphanage_info.contains(peer));
 
@@ -439,7 +439,7 @@ void TxOrphanageImpl::EraseForPeer(NodeId peer)
 
     // Deletions can cause the orphanage's MaxGlobalUsage to decrease, so we may need to trim here.
     LimitOrphans();
-    statsClientTx.gauge("transactions.orphans", m_orphans.size());
+    statsClient.gauge("transactions.orphans", m_orphans.size());
 }
 
 /** If the data structure needs trimming, evicts announcements by selecting the DoSiest peer and evicting its oldest
@@ -650,8 +650,8 @@ void TxOrphanageImpl::EraseForBlock(const CBlock& block)
 
     if (num_erased != 0) {
         LogDebug(BCLog::TXPACKAGES, "Erased %d orphan transaction(s) included or conflicted by block\n", num_erased);
-        statsClientTx.inc("transactions.orphans.remove", num_erased);
-        statsClientTx.gauge("transactions.orphans", m_orphans.size());
+        statsClient.inc("transactions.orphans.remove", num_erased);
+        statsClient.gauge("transactions.orphans", m_orphans.size());
     }
     Assume(wtxids_to_erase.size() == num_erased);
 

@@ -1427,6 +1427,11 @@ public:
     uint64_t GetTotalBytesRecv() const;
     uint64_t GetTotalBytesSent() const EXCLUSIVE_LOCKS_REQUIRED(!m_total_bytes_sent_mutex);
 
+    //! Emit the peer and bandwidth gauges. Called whenever the number of
+    //! connections changes, and periodically by the scheduler so the gauges
+    //! stay fresh on a node with a stable peer set.
+    void EmitStats() EXCLUSIVE_LOCKS_REQUIRED(!m_nodes_mutex, !m_total_bytes_sent_mutex);
+
     /** Get a unique deterministic randomizer. */
     CSipHasher GetDeterministicRandomizer(uint64_t id) const;
 
@@ -1502,7 +1507,7 @@ private:
         EXCLUSIVE_LOCKS_REQUIRED(!m_nodes_mutex);
 
     void DisconnectNodes() EXCLUSIVE_LOCKS_REQUIRED(!m_reconnections_mutex, !m_nodes_mutex);
-    void NotifyNumConnectionsChanged() EXCLUSIVE_LOCKS_REQUIRED(!m_nodes_mutex);
+    void NotifyNumConnectionsChanged() EXCLUSIVE_LOCKS_REQUIRED(!m_nodes_mutex, !m_total_bytes_sent_mutex);
     /** Return true if the peer is inactive and should be disconnected. */
     bool InactivityCheck(const CNode& node, NodeClock::time_point now) const;
 

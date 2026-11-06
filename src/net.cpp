@@ -56,8 +56,6 @@ TRACEPOINT_SEMAPHORE(net, inbound_connection);
 TRACEPOINT_SEMAPHORE(net, outbound_connection);
 TRACEPOINT_SEMAPHORE(net, outbound_message);
 
-statsd::StatsdClient statsClient;
-
 /** Maximum number of block-relay-only anchor connections */
 static constexpr size_t MAX_BLOCK_RELAY_ONLY_ANCHORS = 2;
 static_assert (MAX_BLOCK_RELAY_ONLY_ANCHORS <= static_cast<size_t>(MAX_BLOCK_RELAY_ONLY_CONNECTIONS), "MAX_BLOCK_RELAY_ONLY_ANCHORS must not exceed MAX_BLOCK_RELAY_ONLY_CONNECTIONS.");
@@ -2031,76 +2029,90 @@ void CConnman::DisconnectNodes()
     }
 }
 
+void CConnman::EmitStats()
+{
+    AssertLockNotHeld(m_nodes_mutex);
+
+    int fullNodes = 0;
+    int spvNodes = 0;
+    int inboundNodes = 0;
+    int outboundNodes = 0;
+    int ipv4Nodes = 0;
+    int ipv6Nodes = 0;
+    int torNodes = 0;
+    size_t nodes_size;
+    mapMsgTypeSize mapRecvBytesMsgStats;
+    mapMsgTypeSize mapSentBytesMsgStats;
+    for (const std::string &msg : ALL_NET_MESSAGE_TYPES)
+    {
+        mapRecvBytesMsgStats[msg] = 0;
+        mapSentBytesMsgStats[msg] = 0;
+    }
+    mapRecvBytesMsgStats[NET_MESSAGE_TYPE_OTHER] = 0;
+    mapSentBytesMsgStats[NET_MESSAGE_TYPE_OTHER] = 0;
+    {
+        LOCK(m_nodes_mutex);
+        nodes_size = m_nodes.size();
+        for (const CNode* pnode : m_nodes)
+        {
+            for (const mapMsgTypeSize::value_type &i : pnode->mapRecvBytesPerMsgType)
+                mapRecvBytesMsgStats[i.first] += i.second;
+            for (const mapMsgTypeSize::value_type &i : pnode->mapSendBytesPerMsgType)
+                mapSentBytesMsgStats[i.first] += i.second;
+            if(pnode->m_bloom_filter_loaded)
+                spvNodes++;
+            else
+                fullNodes++;
+            if(pnode->IsInboundConn())
+                inboundNodes++;
+            else
+                outboundNodes++;
+            if(pnode->addr.IsIPv4())
+                ipv4Nodes++;
+            if(pnode->addr.IsIPv6())
+                ipv6Nodes++;
+            if(pnode->addr.IsTor())
+                torNodes++;
+            const auto ping_time{pnode->m_last_ping_time.load()};
+            if(ping_time.count() > 0)
+                statsClient.timing("peers.ping_us", static_cast<size_t>(ping_time.count()), 1.0f);
+        }
+    }
+    for (const std::string &msg : ALL_NET_MESSAGE_TYPES)
+    {
+        statsClient.gauge("bandwidth.message." + msg + ".totalBytesReceived", mapRecvBytesMsgStats[msg], 1.0f);
+        statsClient.gauge("bandwidth.message." + msg + ".totalBytesSent", mapSentBytesMsgStats[msg], 1.0f);
+    }
+    statsClient.gauge("bandwidth.totalBytesReceived", GetTotalBytesRecv(), 1.0f);
+    statsClient.gauge("bandwidth.totalBytesSent", GetTotalBytesSent(), 1.0f);
+    statsClient.gauge("peers.knownAddresses", GetAddressCount(), 1.0f);
+    statsClient.gauge("peers.totalConnections", nodes_size, 1.0f);
+    statsClient.gauge("peers.spvNodeConnections", spvNodes, 1.0f);
+    statsClient.gauge("peers.fullNodeConnections", fullNodes, 1.0f);
+    statsClient.gauge("peers.inboundConnections", inboundNodes, 1.0f);
+    statsClient.gauge("peers.outboundConnections", outboundNodes, 1.0f);
+    statsClient.gauge("peers.ipv4Connections", ipv4Nodes, 1.0f);
+    statsClient.gauge("peers.ipv6Connections", ipv6Nodes, 1.0f);
+    statsClient.gauge("peers.torConnections", torNodes, 1.0f);
+}
+
 void CConnman::NotifyNumConnectionsChanged()
 {
     AssertLockNotHeld(m_nodes_mutex);
 
     size_t nodes_size;
+    bool changed;
     {
         LOCK(m_nodes_mutex);
         nodes_size = m_nodes.size();
+        changed = nodes_size != nPrevNodeCount;
+        if (changed) nPrevNodeCount = nodes_size;
     }
-    if(nodes_size != nPrevNodeCount) {
-        nPrevNodeCount = nodes_size;
+    if (changed) {
         if (m_client_interface) {
             m_client_interface->NotifyNumConnectionsChanged(nodes_size);
         }
-        // count various node attributes
-        int fullNodes = 0;
-        int spvNodes = 0;
-        int inboundNodes = 0;
-        int outboundNodes = 0;
-        int ipv4Nodes = 0;
-        int ipv6Nodes = 0;
-        int torNodes = 0;
-        mapMsgTypeSize mapRecvBytesMsgStats;
-        mapMsgTypeSize mapSentBytesMsgStats;
-        for (const std::string &msg : ALL_NET_MESSAGE_TYPES)
-        {
-            mapRecvBytesMsgStats[msg] = 0;
-            mapSentBytesMsgStats[msg] = 0;
-        }
-        mapRecvBytesMsgStats[NET_MESSAGE_TYPE_OTHER] = 0;
-        mapSentBytesMsgStats[NET_MESSAGE_TYPE_OTHER] = 0;
-        {
-            LOCK(m_nodes_mutex);
-            for (const CNode* pnode : m_nodes)
-            {
-                for (const mapMsgTypeSize::value_type &i : pnode->mapRecvBytesPerMsgType)
-                    mapRecvBytesMsgStats[i.first] += i.second;
-                for (const mapMsgTypeSize::value_type &i : pnode->mapSendBytesPerMsgType)
-                    mapSentBytesMsgStats[i.first] += i.second;
-                if(pnode->m_bloom_filter_loaded)
-                    spvNodes++;
-                else
-                    fullNodes++;
-                if(pnode->IsInboundConn())
-                    inboundNodes++;
-                else
-                    outboundNodes++;
-                if(pnode->addr.IsIPv4())
-                    ipv4Nodes++;
-                if(pnode->addr.IsIPv6())
-                    ipv6Nodes++;
-                if(pnode->addr.IsTor())
-                    torNodes++;
-                if(pnode->m_last_ping_time.load().count() > 0)
-                    statsClient.timing("peers.ping_us", static_cast<size_t>(pnode->m_last_ping_time.load().count()), 1.0f);
-            }
-        }
-        for (const std::string &msg : ALL_NET_MESSAGE_TYPES)
-        {
-            statsClient.gauge("bandwidth.message." + msg + ".totalBytesReceived", mapRecvBytesMsgStats[msg], 1.0f);
-            statsClient.gauge("bandwidth.message." + msg + ".totalBytesSent", mapSentBytesMsgStats[msg], 1.0f);
-        }
-        statsClient.gauge("peers.totalConnections", nPrevNodeCount, 1.0f);
-        statsClient.gauge("peers.spvNodeConnections", spvNodes, 1.0f);
-        statsClient.gauge("peers.fullNodeConnections", fullNodes, 1.0f);
-        statsClient.gauge("peers.inboundConnections", inboundNodes, 1.0f);
-        statsClient.gauge("peers.outboundConnections", outboundNodes, 1.0f);
-        statsClient.gauge("peers.ipv4Connections", ipv4Nodes, 1.0f);
-        statsClient.gauge("peers.ipv6Connections", ipv6Nodes, 1.0f);
-        statsClient.gauge("peers.torConnections", torNodes, 1.0f);
+        EmitStats();
     }
 }
 
@@ -4095,7 +4107,6 @@ void CConnman::RecordBytesRecv(uint64_t bytes)
 {
     nTotalBytesRecv += bytes;
     statsClient.count("bandwidth.bytesReceived", bytes, 0.1f);
-    statsClient.gauge("bandwidth.totalBytesReceived", nTotalBytesRecv, 0.01f);
 }
 
 void CConnman::RecordBytesSent(uint64_t bytes)
@@ -4105,7 +4116,6 @@ void CConnman::RecordBytesSent(uint64_t bytes)
 
     nTotalBytesSent += bytes;
     statsClient.count("bandwidth.bytesSent", bytes, 0.01f);
-    statsClient.gauge("bandwidth.totalBytesSent", nTotalBytesSent, 0.01f);
 
     const auto now = GetTime<std::chrono::seconds>();
     if (nMaxOutboundCycleStartTime + MAX_UPLOAD_TIMEFRAME < now)

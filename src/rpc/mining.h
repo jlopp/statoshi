@@ -7,7 +7,17 @@
 
 #include <cstdint>
 
+class CChain;
+
 /** Default max iterations to try in RPC generatetodescriptor, generatetoaddress, and generateblock. */
 inline constexpr uint64_t DEFAULT_MAX_TRIES{1'000'000};
+
+/**
+ * Estimate the network hashrate over the last 120 blocks, using the same
+ * computation as the getnetworkhashps RPC (default arguments).
+ *
+ * Must be called with ::cs_main held.
+ */
+double GetNetworkHashPS(const CChain& active_chain);
 
 #endif // BITCOIN_RPC_MINING_H

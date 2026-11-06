@@ -73,11 +73,14 @@
 #include <policy/settings.h>
 #include <protocol.h>
 #include <random.h>
+#include <rpc/blockchain.h>
 #include <rpc/register.h>
+#include <rpc/mining.h>
 #include <rpc/server.h>
 #include <rpc/util.h>
 #include <scheduler.h>
 #include <script/sigcache.h>
+#include <statsd_client.h>
 #include <sync.h>
 #include <tinyformat.h>
 #include <torcontrol.h>
@@ -173,7 +176,9 @@ static constexpr bool DEFAULT_PROXYRANDOMIZE{true};
 static constexpr bool DEFAULT_REST_ENABLE{false};
 static constexpr bool DEFAULT_I2P_ACCEPT_INCOMING{true};
 static constexpr bool DEFAULT_STOPAFTERBLOCKIMPORT{false};
-
+//! How often node-wide gauges are re-emitted so they do not go stale on a node
+//! that is otherwise idle (no new blocks, no transactions, stable peer set).
+static constexpr auto STATS_HEARTBEAT_INTERVAL{std::chrono::minutes{1}};
 #ifdef WIN32
 // Win32 LevelDB doesn't use filedescriptors, and the ones used for
 // accessing block files don't count towards the fd_set size limit
@@ -501,6 +506,10 @@ void SetupServerArgs(ArgsManager& argsman, bool can_listen_ipc)
         "-choosedatadir", "-lang=<lang>", "-min", "-resetguisettings", "-splash", "-uiplatform"};
 
     argsman.AddArg("-version", "Print version and exit", ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-statshost=<host>", strprintf("Hostname or IP address of the StatsD/Graphite server metrics are sent to (default: %s)", statsd::DEFAULT_STATSD_HOST), ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-statsport=<port>", strprintf("UDP port of the StatsD/Graphite server metrics are sent to (default: %d)", statsd::DEFAULT_STATSD_PORT), ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-statsnamespace=<prefix>", "Prefix prepended to every emitted metric name (default: none)", ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-statshostname=<name>", "Suffix appended to every emitted metric name, so that multiple nodes can report into one backend without collisions (default: none)", ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
 #if HAVE_SYSTEM
     argsman.AddArg("-alertnotify=<cmd>", "Execute command when an alert is raised (%s in cmd is replaced by message)", ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
 #endif
@@ -1520,6 +1529,36 @@ static ChainstateLoadResult InitAndLoadChainstate(
     return {status, error};
 };
 
+//! Emit the node-wide state gauges. Cheap enough to run every minute, and
+//! keeps the gauges fresh on a node that is otherwise idle. Guards against
+//! components that are not initialized yet (or are already torn down).
+static void EmitPeriodicStats(node::NodeContext& node)
+{
+    if (node.connman) {
+        node.connman->EmitStats();
+    }
+
+    if (node.mempool) {
+        CTxMemPool& pool = *node.mempool;
+        LOCK(pool.cs);
+        statsClient.gauge("transactions.txInMemoryPool", pool.size(), 1.0f);
+        statsClient.gauge("transactions.mempool.totalTransactions", pool.size(), 1.0f);
+        statsClient.gauge("transactions.mempool.totalTxBytes", (int64_t)pool.GetTotalTxSize(), 1.0f);
+        statsClient.gauge("transactions.mempool.memoryUsageBytes", (int64_t)pool.DynamicMemoryUsage(), 1.0f);
+        statsClient.gauge("transactions.mempool.minFeePerKb", pool.GetMinFee().GetFeePerK(), 1.0f);
+    }
+
+    if (node.chainman) {
+        ChainstateManager& chainman = *node.chainman;
+        LOCK(cs_main);
+        const CBlockIndex* tip = chainman.ActiveChain().Tip();
+        if (tip == nullptr) return;
+        statsClient.gauge("blocks.currentHeight", tip->nHeight, 1.0f);
+        statsClient.gaugeDouble("network.difficulty", GetDifficulty(*tip), 1.0f);
+        statsClient.gaugeDouble("network.exahashesPerSecond", GetNetworkHashPS(chainman.ActiveChain()) / 1e18, 1.0f);
+    }
+}
+
 bool AppInitMain(NodeContext& node, interfaces::BlockAndHeaderTipInfo* tip_info)
 {
     const ArgsManager& args = *Assert(node.args);
@@ -1538,6 +1577,12 @@ bool AppInitMain(NodeContext& node, interfaces::BlockAndHeaderTipInfo* tip_info)
     if (!init::StartLogging(args)) {
         // Detailed error printed inside StartLogging().
         return false;
+    }
+
+    // Apply the -stats* options before any metric can be emitted.
+    const auto stats_error{ConfigureStatsClient(statsClient, args)};
+    if (stats_error) {
+        return InitError(Untranslated(*stats_error));
     }
 
     LogInfo("Using at most %i automatic connections (%i file descriptors available)", num_p2p_max_connections, available_fds);
@@ -2448,6 +2493,13 @@ bool AppInitMain(NodeContext& node, interfaces::BlockAndHeaderTipInfo* tip_info)
     scheduler.scheduleEvery([banman]{
         banman->DumpBanlist();
     }, DUMP_BANS_INTERVAL);
+
+    // Gauges only describe the state at the moment they are emitted, so a node
+    // that stops changing (no blocks, no transactions, stable peer set) would
+    // otherwise leave them stale in the backend.
+    scheduler.scheduleEvery([&node]{
+        EmitPeriodicStats(node);
+    }, STATS_HEARTBEAT_INTERVAL);
 
     if (node.peerman) node.peerman->StartScheduledTasks(scheduler);
 

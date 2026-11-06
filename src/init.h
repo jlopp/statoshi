@@ -9,8 +9,6 @@
 #include <atomic>
 #include "statsd_client.h"
 
-extern statsd::StatsdClient statsClient;
-
 //! Default value for -daemon option
 inline constexpr bool DEFAULT_DAEMON = false;
 //! Default value for -daemonwait option

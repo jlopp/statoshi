@@ -3,7 +3,6 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#include <boost/lexical_cast.hpp>
 #include <statsd_client.h>
 #include <policy/fees/block_policy_estimator.h>
 
@@ -34,8 +33,8 @@
 #include <stdexcept>
 #include <system_error>
 #include <utility>
+#include <vector>
 
-extern statsd::StatsdClient statsClient;
 // The current format written, and the version required to read. Must be
 // increased to at least 309900+1 on the next breaking change.
 constexpr int CURRENT_FEES_FILE_VERSION{309900};
@@ -725,15 +724,21 @@ void CBlockPolicyEstimator::processBlock(const std::vector<RemovedMempoolTransac
     // emit stats for estimated fees
     // NOTE: this must happen *after* releasing m_cs_fee_estimator, because
     // estimateSmartFee() now acquires it (it is a non-recursive Mutex).
-    for (unsigned int i = 1; i <= 1008; i++)
-    {
-        std::string feeName = "estimates.fee.block" + boost::lexical_cast<std::string>(i);
-        CFeeRate feeEstimate = estimateSmartFee(i, nullptr, true);
-        if (feeEstimate.GetFeePerK() > 0)
-            statsClient.gauge(feeName, feeEstimate.GetFeePerK());
-        else
-            statsClient.gauge(feeName, 0);
+    //
+    // There are up to 1008 confirm targets. Emitting one datagram per target
+    // cost ~1000 syscalls per block, which dominated the cost of every other
+    // metric combined, so the values are collected first and then sent as a
+    // few large multi-line datagrams (StatsD allows several lines per packet).
+    static constexpr unsigned int MAX_TARGET{1008};
+    std::vector<int64_t> fee_estimates;
+    fee_estimates.reserve(MAX_TARGET);
+    for (unsigned int i = 1; i <= MAX_TARGET; i++) {
+        const CFeeRate feeEstimate = estimateSmartFee(i, nullptr, true);
+        // "No estimate" (and any negative rate) is reported as 0, matching the
+        // behaviour of the previous per-metric loop.
+        fee_estimates.push_back(std::max<int64_t>(0, feeEstimate.GetFeePerK()));
     }
+    statsClient.gaugeBatch("estimates.fee.block", fee_estimates, /*first_index=*/1);
 }
 
 CFeeRate CBlockPolicyEstimator::estimateFee(int confTarget) const

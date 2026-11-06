@@ -11,19 +11,13 @@
 #include <script/script.h>
 #include <serialize.h>
 
-#include <boost/date_time/posix_time/posix_time.hpp>
 #include <set>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include <statsd_client.h>
-
-statsd::StatsdClient txstatsClient2;
-
 bool CheckTransaction(const CTransaction& tx, TxValidationState& state)
 {
-    boost::posix_time::ptime start = boost::posix_time::microsec_clock::local_time();
     // Basic checks that don't depend on any context
     if (tx.vin.empty())
         return state.Invalid(TxValidationResult::TX_CONSENSUS, "bad-txns-vin-empty");
@@ -69,10 +63,6 @@ bool CheckTransaction(const CTransaction& tx, TxValidationState& state)
             if (txin.prevout.IsNull())
                 return state.Invalid(TxValidationResult::TX_CONSENSUS, "bad-txns-prevout-null");
     }
-
-    boost::posix_time::ptime finish = boost::posix_time::microsec_clock::local_time();
-    boost::posix_time::time_duration diff = finish - start;
-    txstatsClient2.timing("CheckTransaction_us", diff.total_microseconds(), 1.0f);
 
     return true;
 }

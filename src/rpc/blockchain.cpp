@@ -1161,7 +1161,7 @@ static RPCMethod gettxoutsetinfo()
         ret.pushKV("total_amount", ValueFromAmount(stats.total_amount.value()));
         statsClient.gauge("utxoset.txOutputs", stats.nTransactionOutputs, 1.0f);
         statsClient.gauge("utxoset.blockHeight", stats.nHeight, 1.0f);
-        statsClient.gauge("utxoset.totalBTCAmount", (double)stats.total_amount.value() / (double)COIN, 1.0f);
+        statsClient.gaugeDouble("utxoset.totalBTCAmount", (double)stats.total_amount.value() / (double)COIN, 1.0f);
 
         if (!stats.index_used) {
             ret.pushKV("transactions", stats.nTransactions);

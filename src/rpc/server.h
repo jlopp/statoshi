@@ -20,8 +20,6 @@
 #include <utility>
 #include <vector>
 
-extern statsd::StatsdClient statsClient;
-
 class CRPCCommand;
 
 /** Query whether RPC is running */

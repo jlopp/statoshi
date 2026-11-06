@@ -78,7 +78,6 @@
 #include <tuple>
 #include <utility>
 
-#include <boost/date_time/posix_time/posix_time.hpp>
 
 using kernel::CCoinsStats;
 using kernel::ChainstateRole;
@@ -787,9 +786,14 @@ bool MemPoolAccept::PreChecks(ATMPArgs& args, Workspace& ws)
     // Alias what we need out of ws
     TxValidationState& state = ws.m_state;
 
+    // Time CheckTransaction here rather than inside the consensus library: this
+    // is the mempool path, so block validation and bitcoin-tx do not pay for
+    // it, and consensus/ has no statsd dependency at all.
+    const auto check_tx_start{MockableSteadyClock::now()};
     if (!CheckTransaction(tx, state)) {
         return false; // state filled in by CheckTransaction
     }
+    statsClient.timing("CheckTransaction_us", Ticks<std::chrono::microseconds>(MockableSteadyClock::now() - check_tx_start), 1.0f);
 
     // Coinbase is only valid in a block, not as a loose transaction
     if (tx.IsCoinBase())
@@ -1319,7 +1323,7 @@ bool MemPoolAccept::SubmitPackage(const ATMPArgs& args, std::vector<Workspace>& 
 
 MempoolAcceptResult MemPoolAccept::AcceptSingleTransactionInternal(const CTransactionRef& ptx, ATMPArgs& args)
 {
-    boost::posix_time::ptime start = boost::posix_time::microsec_clock::local_time();
+    const auto start{MockableSteadyClock::now()};
     AssertLockHeld(cs_main);
     AssertLockHeld(m_pool.cs);
 
@@ -1422,16 +1426,15 @@ MempoolAcceptResult MemPoolAccept::AcceptSingleTransactionInternal(const CTransa
         m_pool.m_opts.signals->TransactionAddedToMempool(tx_info, m_pool.GetAndIncrementSequence());
     }
 
-    boost::posix_time::ptime finish = boost::posix_time::microsec_clock::local_time();
-    boost::posix_time::time_duration diff = finish - start;
-    statsClient.timing("AcceptToMemoryPool_ms", diff.total_milliseconds(), 1.0f);
-    statsClient.gauge("transactions.txInMemoryPool", m_pool.size(), 0.1f);
+    const auto diff{MockableSteadyClock::now() - start};
+    statsClient.timing("AcceptToMemoryPool_ms", Ticks<std::chrono::milliseconds>(diff), 1.0f);
+    statsClient.gauge("transactions.txInMemoryPool", m_pool.size(), 1.0f);
     statsClient.inc("transactions.accepted", 1.0f);
 
-    statsClient.gauge("transactions.mempool.totalTransactions", m_pool.size(), 0.1f);
-    statsClient.gauge("transactions.mempool.totalTxBytes", (int64_t) m_pool.GetTotalTxSize(), 0.1f);
-    statsClient.gauge("transactions.mempool.memoryUsageBytes", (int64_t) m_pool.DynamicMemoryUsage(), 0.1f);
-    statsClient.gauge("transactions.mempool.minFeePerKb", m_pool.GetMinFee().GetFeePerK(), 0.1f);
+    statsClient.gauge("transactions.mempool.totalTransactions", m_pool.size(), 1.0f);
+    statsClient.gauge("transactions.mempool.totalTxBytes", (int64_t) m_pool.GetTotalTxSize(), 1.0f);
+    statsClient.gauge("transactions.mempool.memoryUsageBytes", (int64_t) m_pool.DynamicMemoryUsage(), 1.0f);
+    statsClient.gauge("transactions.mempool.minFeePerKb", m_pool.GetMinFee().GetFeePerK(), 1.0f);
 
     if (!m_subpackage.m_replaced_transactions.empty()) {
         LogDebug(BCLog::MEMPOOL, "replaced %u mempool transactions with 1 new transaction for %s additional fees, %d delta bytes\n",
@@ -2030,7 +2033,7 @@ void UpdateCoins(const CTransaction& tx, CCoinsViewCache& inputs, CTxUndo &txund
         }
     }
     // add outputs
-    statsClient.gauge("transactions.txCacheSize", inputs.GetCacheSize(), 0.1f);
+    statsClient.gauge("transactions.txCacheSize", inputs.GetCacheSize(), 1.0f);
     AddCoins(inputs, tx, nHeight);
 }
 
@@ -2083,7 +2086,7 @@ bool CheckInputScripts(const CTransaction& tx, TxValidationState& state,
                        ValidationCache& validation_cache,
                        std::vector<CScriptCheck>* pvChecks)
 {
-    boost::posix_time::ptime start = boost::posix_time::microsec_clock::local_time();
+    const auto start{MockableSteadyClock::now()};
     if (tx.IsCoinBase()) return true;
 
     if (pvChecks) {
@@ -2152,9 +2155,8 @@ bool CheckInputScripts(const CTransaction& tx, TxValidationState& state,
         validation_cache.m_script_execution_cache.insert(hashCacheEntry);
     }
 
-    boost::posix_time::ptime finish = boost::posix_time::microsec_clock::local_time();
-    boost::posix_time::time_duration diff = finish - start;
-    statsClient.timing("CheckInputs_ms", diff.total_milliseconds(), 1.0f);
+    const auto diff{MockableSteadyClock::now() - start};
+    statsClient.timing("CheckInputs_ms", Ticks<std::chrono::milliseconds>(diff), 1.0f);
 
     return true;
 }
@@ -2204,7 +2206,7 @@ int ApplyTxInUndo(Coin&& undo, CCoinsViewCache& view, const COutPoint& out)
  *  When FAILED is returned, view is left in an indeterminate state. */
 DisconnectResult Chainstate::DisconnectBlock(const CBlock& block, const CBlockIndex* pindex, CCoinsViewCache& view)
 {
-    boost::posix_time::ptime start = boost::posix_time::microsec_clock::local_time();
+    const auto start{MockableSteadyClock::now()};
     AssertLockHeld(::cs_main);
     bool fClean = true;
 
@@ -2271,9 +2273,8 @@ DisconnectResult Chainstate::DisconnectBlock(const CBlock& block, const CBlockIn
     // move best block pointer to prevout block
     view.SetBestBlock(pindex->pprev->GetBlockHash());
 
-    boost::posix_time::ptime finish = boost::posix_time::microsec_clock::local_time();
-    boost::posix_time::time_duration diff = finish - start;
-    statsClient.timing("DisconnectBlock_ms", diff.total_milliseconds(), 1.0f);
+    const auto diff{MockableSteadyClock::now() - start};
+    statsClient.timing("DisconnectBlock_ms", Ticks<std::chrono::milliseconds>(diff), 1.0f);
     statsClient.gauge("transactions.txCacheSize", view.GetCacheSize(), 1.0f);
 
     return fClean ? DISCONNECT_OK : DISCONNECT_UNCLEAN;
@@ -2409,7 +2410,7 @@ script_verify_flags GetBlockScriptFlags(const CBlockIndex& block_index, const Ch
 bool Chainstate::ConnectBlock(const CBlock& block, BlockValidationState& state, CBlockIndex* pindex,
                                CCoinsViewCache& view, bool fJustCheck)
 {
-    boost::posix_time::ptime start = boost::posix_time::microsec_clock::local_time();
+    const auto start{MockableSteadyClock::now()};
     AssertLockHeld(cs_main);
     assert(pindex);
 
@@ -2784,9 +2785,8 @@ bool Chainstate::ConnectBlock(const CBlock& block, BlockValidationState& state, 
         Ticks<std::chrono::nanoseconds>(time_5 - time_start)
     );
 
-    boost::posix_time::ptime finish = boost::posix_time::microsec_clock::local_time();
-    boost::posix_time::time_duration diff = finish - start;
-    statsClient.timing("ConnectBlock_ms", diff.total_milliseconds(), 1.0f);
+    const auto diff{MockableSteadyClock::now() - start};
+    statsClient.timing("ConnectBlock_ms", Ticks<std::chrono::milliseconds>(diff), 1.0f);
 
     return true;
 }
@@ -3137,7 +3137,7 @@ bool Chainstate::ConnectTip(
     std::vector<ConnectedBlock>& connected_blocks,
     DisconnectedBlockTransactions& disconnectpool)
 {
-    boost::posix_time::ptime start = boost::posix_time::microsec_clock::local_time();
+    const auto start{MockableSteadyClock::now()};
     AssertLockHeld(cs_main);
     if (m_mempool) AssertLockHeld(m_mempool->cs);
 
@@ -3237,9 +3237,8 @@ bool Chainstate::ConnectTip(
     Chainstate& current_cs{m_chainman.CurrentChainstate()};
     m_chainman.MaybeValidateSnapshot(*this, current_cs);
 
-    boost::posix_time::ptime finish = boost::posix_time::microsec_clock::local_time();
-    boost::posix_time::time_duration diff = finish - start;
-    statsClient.timing("ConnectTip_ms", diff.total_milliseconds(), 1.0f);
+    const auto diff{MockableSteadyClock::now() - start};
+    statsClient.timing("ConnectTip_ms", Ticks<std::chrono::milliseconds>(diff), 1.0f);
     connected_blocks.emplace_back(pindexNew, std::move(block_to_connect));
     return true;
 }
@@ -3463,7 +3462,7 @@ bool Chainstate::ActivateBestChain(BlockValidationState& state, std::shared_ptr<
     // sanely for performance or correctness!
     AssertLockNotHeld(::cs_main);
 
-    boost::posix_time::ptime start = boost::posix_time::microsec_clock::local_time();
+    const auto start{MockableSteadyClock::now()};
     // ABC maintains a fair degree of expensive-to-calculate internal state
     // because this function periodically releases cs_main so that it does not lock up other threads for too long
     // during large connects - and to allow for e.g. the callback queue to drain
@@ -3618,9 +3617,8 @@ bool Chainstate::ActivateBestChain(BlockValidationState& state, std::shared_ptr<
 
     m_chainman.CheckBlockIndex();
 
-    boost::posix_time::ptime finish = boost::posix_time::microsec_clock::local_time();
-    boost::posix_time::time_duration diff = finish - start;
-    statsClient.timing("ActivateBestChain_ms", diff.total_milliseconds(), 1.0f);
+    const auto diff{MockableSteadyClock::now() - start};
+    statsClient.timing("ActivateBestChain_ms", Ticks<std::chrono::milliseconds>(diff), 1.0f);
 
     return true;
 }
@@ -4055,11 +4053,16 @@ static bool CheckWitnessMalleation(const CBlock& block, bool expect_witness_comm
 
 bool CheckBlock(const CBlock& block, BlockValidationState& state, const Consensus::Params& consensusParams, bool fCheckPOW, bool fCheckMerkleRoot)
 {
-    boost::posix_time::ptime start = boost::posix_time::microsec_clock::local_time();
     // These are checks that are independent of context.
 
+    // A block that has already passed these checks must not be re-timed or
+    // re-counted: CheckBlock() is called several times per block on the normal
+    // path, so emitting unconditionally here multiplied every block metric by
+    // the number of call sites.
     if (block.fChecked)
         return true;
+
+    const auto start{MockableSteadyClock::now()};
 
     // Check that the header is valid (particularly PoW).  This is mostly
     // redundant with the call in AcceptBlockHeader.
@@ -4117,16 +4120,25 @@ bool CheckBlock(const CBlock& block, BlockValidationState& state, const Consensu
 
     if (fCheckPOW && fCheckMerkleRoot)
         block.fChecked = true;
+    // A partial check (fCheckPOW / fCheckMerkleRoot not both set, as used on
+    // block *templates* by CreateNewBlock and getblocktemplate) is real work
+    // worth timing, but it does not describe a block that will be connected.
+    const bool full_check{fCheckPOW && fCheckMerkleRoot};
 
-    boost::posix_time::ptime finish = boost::posix_time::microsec_clock::local_time();
-    boost::posix_time::time_duration diff = finish - start;
-    statsClient.timing("CheckBlock_us", diff.total_microseconds(), 1.0f);
-    statsClient.gauge("blocks.currentSizeBytes", ::GetSerializeSize(TX_NO_WITNESS(block)), 1.0f);
-    statsClient.gauge("blocks.currentSizeWithWitnessBytes", ::GetSerializeSize(TX_WITH_WITNESS(block)), 1.0f);
-    statsClient.gauge("blocks.currentWeight", ::GetBlockWeight(block), 1.0f);
-    statsClient.gauge("blocks.currentVersion", block.nVersion, 1.0f);
-    statsClient.gauge("blocks.currentNumTransactions", block.vtx.size(), 1.0f);
-    statsClient.gauge("blocks.currentSigOps", nSigOps, 1.0f);
+    const auto finish{MockableSteadyClock::now()};
+    statsClient.timing("CheckBlock_us", Ticks<std::chrono::microseconds>(finish - start), 1.0f);
+
+    // Only a full check corresponds to a block that is about to be accepted.
+    // Emitting on partial (template) checks used to overwrite these gauges
+    // several times per block with template rather than connected-block data.
+    if (full_check) {
+        statsClient.gauge("blocks.currentSizeBytes", ::GetSerializeSize(TX_NO_WITNESS(block)), 1.0f);
+        statsClient.gauge("blocks.currentSizeWithWitnessBytes", ::GetSerializeSize(TX_WITH_WITNESS(block)), 1.0f);
+        statsClient.gauge("blocks.currentWeight", ::GetBlockWeight(block), 1.0f);
+        statsClient.gauge("blocks.currentVersion", block.nVersion, 1.0f);
+        statsClient.gauge("blocks.currentNumTransactions", block.vtx.size(), 1.0f);
+        statsClient.gauge("blocks.currentSigOps", nSigOps, 1.0f);
+    }
 
     return true;
 }
@@ -4446,7 +4458,7 @@ void ChainstateManager::ReportHeadersPresync(int64_t height, int64_t timestamp)
 /** Store block on disk. If dbp is non-nullptr, the file is known to already reside on disk */
 bool ChainstateManager::AcceptBlock(const std::shared_ptr<const CBlock>& pblock, BlockValidationState& state, CBlockIndex** ppindex, bool fRequested, const FlatFilePos* dbp, bool* fNewBlock, bool min_pow_checked)
 {
-    boost::posix_time::ptime start = boost::posix_time::microsec_clock::local_time();
+    const auto start{MockableSteadyClock::now()};
     const CBlock& block = *pblock;
 
     if (fNewBlock) *fNewBlock = false;
@@ -4549,9 +4561,8 @@ bool ChainstateManager::AcceptBlock(const std::shared_ptr<const CBlock>& pblock,
 
     CheckBlockIndex();
 
-    boost::posix_time::ptime finish = boost::posix_time::microsec_clock::local_time();
-    boost::posix_time::time_duration diff = finish - start;
-    statsClient.timing("AcceptBlock_us", diff.total_microseconds(), 1.0f);
+    const auto diff{MockableSteadyClock::now() - start};
+    statsClient.timing("AcceptBlock_us", Ticks<std::chrono::microseconds>(diff), 1.0f);
 
     return true;
 }

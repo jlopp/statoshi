@@ -15,10 +15,7 @@
 #include <tinyformat.h>
 #include <util/check.h>
 #include <util/moneystr.h>
-#include <statsd_client.h>
 #include <boost/thread.hpp>
-
-statsd::StatsdClient txstatsClient;
 
 #include <algorithm>
 #include <cstddef>

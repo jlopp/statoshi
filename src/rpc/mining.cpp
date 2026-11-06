@@ -92,7 +92,7 @@ using util::ToString;
  * If 'height' is -1, compute the estimate from current chain tip.
  * If 'height' is a valid block height, compute the estimate at the time when a given block was found.
  */
-static UniValue GetNetworkHashPS(int lookup, int height, const CChain& active_chain) {
+static double EstimateNetworkHashPS(int lookup, int height, const CChain& active_chain) {
     if (lookup < -1 || lookup == 0) {
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid nblocks. Must be a positive number or -1.");
     }
@@ -138,6 +138,11 @@ static UniValue GetNetworkHashPS(int lookup, int height, const CChain& active_ch
     return workDiff.getdouble() / timeDiff;
 }
 
+double GetNetworkHashPS(const CChain& active_chain)
+{
+    return EstimateNetworkHashPS(/*lookup=*/120, /*height=*/-1, active_chain);
+}
+
 static RPCMethod getnetworkhashps()
 {
     return RPCMethod{
@@ -159,7 +164,7 @@ static RPCMethod getnetworkhashps()
 {
     ChainstateManager& chainman = EnsureAnyChainman(request.context);
     LOCK(cs_main);
-    return GetNetworkHashPS(self.Arg<int>("nblocks"), self.Arg<int>("height"), chainman.ActiveChain());
+    return EstimateNetworkHashPS(self.Arg<int>("nblocks"), self.Arg<int>("height"), chainman.ActiveChain());
 },
     };
 }
@@ -523,8 +528,6 @@ static RPCMethod getmininginfo()
         obj.pushKV("signet_challenge", HexStr(signet_challenge));
     }
     obj.pushKV("warnings", node::GetWarningsForRpc(*CHECK_NONFATAL(node.warnings), IsDeprecatedRPCEnabled("warnings")));
-    statsClient.gauge("network.exahashesPerSecond", getnetworkhashps().HandleRequest(request).get_real() / 1e18);
-    statsClient.gauge("network.difficulty", (double)GetDifficulty(*CHECK_NONFATAL(active_chain.Tip())));
 
     return obj;
 },

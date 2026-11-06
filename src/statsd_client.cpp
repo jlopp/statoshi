@@ -38,8 +38,10 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <sys/types.h>
 #include <netinet/in.h>
 #include <common/args.h>
+#include <logging.h>
 #include "statsd_client.h"
 #include <fcntl.h>
+#include <mutex>
 
 using namespace std;
 namespace statsd {
@@ -68,8 +70,13 @@ struct _StatsdClientData {
     string  ns;
     string  host;
     string  nodename;
-    short   port;
+    int     port;
     bool    init;
+
+    // Metrics are emitted from many threads (net, validation, RPC, and the
+    // scheduler's heartbeat). The socket is created lazily on first send, so
+    // that creation must be serialized.
+    std::mutex init_mutex;
 
     char    errmsg[1024];
 };
@@ -105,8 +112,14 @@ void StatsdClient::config(const string& host, int port, const string& ns)
     d->sock = -1;
 }
 
+void StatsdClient::setNodeName(const string& name)
+{
+    d->nodename = name;
+}
+
 int StatsdClient::init()
 {
+    std::lock_guard<std::mutex> lock(d->init_mutex);
     if ( d->init ) return 0;
 
     d->sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
@@ -137,10 +150,6 @@ int StatsdClient::init()
         struct sockaddr_in* host_addr = (struct sockaddr_in*)result->ai_addr;
         memcpy(&d->server.sin_addr, &host_addr->sin_addr, sizeof(struct in_addr));
         freeaddrinfo(result);
-    }
-
-    if (gArgs.IsArgSet("-statshostname")) {
-        d->nodename = gArgs.GetArg("-statshostname", "");
     }
 
     d->init = true;
@@ -188,10 +197,16 @@ int StatsdClient::timing(const string& key, size_t ms, float sample_rate)
     return send(key, ms, "ms", sample_rate);
 }
 
-int StatsdClient::send(string key, size_t value, const string &type, float sample_rate)
+bool StatsdClient::format(string& out, string key, size_t value, const string &type, float sample_rate)
 {
+    // Gauges are absolute values, not events: sampling them would make the
+    // backend drop updates and leave the gauge stale. Always send them.
+    if (type == "g") {
+        sample_rate = 1.0;
+    }
+
     if (!should_send(sample_rate)) {
-        return 0;
+        return false;
     }
 
     // partition stats by node name if set
@@ -212,13 +227,21 @@ int StatsdClient::send(string key, size_t value, const string &type, float sampl
                 d->ns.c_str(), key.c_str(), value, type.c_str(), sample_rate);
     }
 
-    return send(buf);
+    out += buf;
+    out += '\n';
+    return true;
 }
 
-int StatsdClient::sendDouble(string key, double value, const string &type, float sample_rate)
+bool StatsdClient::formatDouble(string& out, string key, double value, const string &type, float sample_rate)
 {
+    // Gauges are absolute values, not events: sampling them would make the
+    // backend drop updates and leave the gauge stale. Always send them.
+    if (type == "g") {
+        sample_rate = 1.0;
+    }
+
     if (!should_send(sample_rate)) {
-        return 0;
+        return false;
     }
 
     // partition stats by node name if set
@@ -227,19 +250,41 @@ int StatsdClient::sendDouble(string key, double value, const string &type, float
 
     cleanup(key);
 
-    char buf[256];
+    char buf[320];
+    // Use %.17g so small values (e.g. regtest difficulty ~4.7e-10) are not
+    // rounded down to zero, while integers stay free of trailing decimals.
     if ( fequal( sample_rate, 1.0 ) )
     {
-        snprintf(buf, sizeof(buf), "%s%s:%f|%s",
+        snprintf(buf, sizeof(buf), "%s%s:%.17g|%s",
                 d->ns.c_str(), key.c_str(), value, type.c_str());
     }
     else
     {
-        snprintf(buf, sizeof(buf), "%s%s:%f|%s|@%.2f",
+        snprintf(buf, sizeof(buf), "%s%s:%.17g|%s|@%.2f",
                 d->ns.c_str(), key.c_str(), value, type.c_str(), sample_rate);
     }
 
-    return send(buf);
+    out += buf;
+    out += '\n';
+    return true;
+}
+
+int StatsdClient::send(string key, size_t value, const string &type, float sample_rate)
+{
+    string message;
+    if (!format(message, std::move(key), value, type, sample_rate)) {
+        return 0;
+    }
+    return send(message);
+}
+
+int StatsdClient::sendDouble(string key, double value, const string &type, float sample_rate)
+{
+    string message;
+    if (!formatDouble(message, std::move(key), value, type, sample_rate)) {
+        return 0;
+    }
+    return send(message);
 }
 
 int StatsdClient::send(const string &message)
@@ -263,5 +308,32 @@ const char* StatsdClient::errmsg()
     return d->errmsg;
 }
 
+} // namespace statsd
+
+statsd::StatsdClient statsClient{statsd::DEFAULT_STATSD_HOST, statsd::DEFAULT_STATSD_PORT, ""};
+
+std::optional<std::string> ConfigureStatsClient(statsd::StatsdClient& client, const ArgsManager& args)
+{
+    const std::string host{args.GetArg("-statshost", statsd::DEFAULT_STATSD_HOST)};
+    if (host.empty()) {
+        return "Invalid -statshost: may not be empty";
+    }
+
+    const int64_t port_arg{args.GetIntArg("-statsport", statsd::DEFAULT_STATSD_PORT)};
+    if (port_arg <= 0 || port_arg > 65535) {
+        return strprintf("Invalid -statsport: %d is not a valid UDP port (1-65535)", static_cast<int>(port_arg));
+    }
+
+    const std::string ns{args.GetArg("-statsnamespace", "")};
+    const std::string nodename{args.GetArg("-statshostname", "")};
+
+    client.config(host, static_cast<int>(port_arg), ns);
+    // The node name partitions every metric key, so it must be set after
+    // config() (which resets everything else) and before the first emission.
+    client.setNodeName(nodename);
+
+    LogInfo("Sending statsd metrics to %s:%d (namespace: '%s', node name: '%s')",
+            host, static_cast<int>(port_arg), ns, nodename);
+    return std::nullopt;
 }
 

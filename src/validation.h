@@ -52,7 +52,6 @@
 #include <vector>
 
 #include "statsd_client.h"
-extern statsd::StatsdClient statsClient;
 
 class Chainstate;
 class CTxMemPool;
