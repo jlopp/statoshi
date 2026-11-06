@@ -16,6 +16,7 @@
 #include <node/interface_ui.h>
 #include <rpc/protocol.h>
 #include <span.h>
+#include <statsd_client.h>
 #include <sync.h>
 #include <util/check.h>
 #include <util/signalinterrupt.h>
@@ -165,6 +166,7 @@ static void MaybeDispatchRequestToWorker(std::shared_ptr<HTTPRequest> hreq)
     if (i != iend) {
         if (static_cast<int>(g_threadpool_http.WorkQueueSize()) >= g_max_queue_depth) {
             LogWarning("Request rejected because http work queue depth exceeded, it can be increased with the -rpcworkqueue= setting");
+            statsClient.count("http.queueDepthRejected", 1, 1.0f);
             WriteNoStoreErrorReply(*hreq, HTTP_SERVICE_UNAVAILABLE, "Work queue depth exceeded");
             return;
         }

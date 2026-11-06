@@ -14,6 +14,7 @@
 #include <rpc/protocol.h>
 #include <rpc/server_util.h>
 #include <rpc/util.h>
+#include <statsd_client.h>
 #include <sync.h>
 #include <tinyformat.h>
 #include <util/check.h>
@@ -63,7 +64,13 @@ static RPCServerInfo g_rpc_server_info;
 struct RPCCommandExecution
 {
     std::list<RPCCommandExecutionInfo>::iterator it;
+    //! Sanitized method name; `request.strMethod` is attacker-controlled and is
+    //! not safe to use directly as a metric key component.
+    std::string metric_method;
+    SteadyClock::time_point metric_start;
+
     explicit RPCCommandExecution(const std::string& method)
+        : metric_method{statsd::SanitizeKeyPart(method)}, metric_start{SteadyClock::now()}
     {
         LOCK(g_rpc_server_info.mutex);
         it = g_rpc_server_info.active_commands.insert(g_rpc_server_info.active_commands.end(), {method, SteadyClock::now()});
@@ -72,6 +79,12 @@ struct RPCCommandExecution
     {
         LOCK(g_rpc_server_info.mutex);
         g_rpc_server_info.active_commands.erase(it);
+
+        // Every RPC passes through here, making this the one place that gives
+        // per-method request rate and latency.
+        statsClient.count("rpc.calls." + metric_method, 1, 1.0f);
+        statsClient.timing("rpc.duration_us." + metric_method,
+                           Ticks<std::chrono::microseconds>(SteadyClock::now() - metric_start), 1.0f);
     }
 };
 
@@ -886,8 +899,10 @@ static bool ExecuteCommand(const CRPCCommand& command, const JSONRPCRequest& req
             return command.actor(request, result, last_handler);
         }
     } catch (const UniValue::type_error& e) {
+        statsClient.count("rpc.errors.type", 1, 1.0f);
         throw JSONRPCError(RPC_TYPE_ERROR, e.what());
     } catch (const std::exception& e) {
+        statsClient.count("rpc.errors.other", 1, 1.0f);
         throw JSONRPCError(RPC_MISC_ERROR, e.what());
     }
 }

@@ -22,6 +22,7 @@
 #include <random.h>
 #include <serialize.h>
 #include <signet.h>
+#include <statsd_client.h>
 #include <streams.h>
 #include <sync.h>
 #include <tinyformat.h>
@@ -827,6 +828,7 @@ void BlockManager::UnlinkPrunedFiles(const std::set<int>& setFilesToPrune) const
         const bool removed_undofile{fs::remove(m_undo_file_seq.FileName(pos), ec)};
         if (removed_blockfile || removed_undofile) {
             LogDebug(BCLog::BLOCKSTORAGE, "Prune: %s deleted blk/rev (%05u)\n", __func__, *it);
+            statsClient.count("blocks.prunedFiles", 1, 1.0f);
         }
     }
 }
@@ -981,6 +983,7 @@ bool BlockManager::FindUndoPos(BlockValidationState& state, int nFile, FlatFileP
 bool BlockManager::WriteBlockUndo(const CBlockUndo& blockundo, BlockValidationState& state, CBlockIndex& block)
 {
     AssertLockHeld(::cs_main);
+    const auto start{MockableSteadyClock::now()};
     const BlockfileType type = BlockfileTypeForHeight(block.nHeight);
     auto& cursor = *Assert(m_blockfile_cursors[type]);
 
@@ -1042,6 +1045,9 @@ bool BlockManager::WriteBlockUndo(const CBlockUndo& blockundo, BlockValidationSt
         block.nUndoPos = pos.nPos;
         block.nStatus |= BLOCK_HAVE_UNDO;
         m_dirty_blockindex.insert(&block);
+
+        statsClient.timing("blocks.undoWrite_us", Ticks<std::chrono::microseconds>(MockableSteadyClock::now() - start), 1.0f);
+        statsClient.count("blocks.undoWriteBytes", blockundo_size, 1.0f);
     }
 
     return true;
@@ -1096,16 +1102,19 @@ bool BlockManager::ReadBlock(CBlock& block, const CBlockIndex& index) const
 
 BlockManager::ReadRawBlockResult BlockManager::ReadRawBlock(const FlatFilePos& pos, std::optional<std::pair<size_t, size_t>> block_part) const
 {
+    const auto start{MockableSteadyClock::now()};
     if (pos.nPos < STORAGE_HEADER_BYTES) {
         // If nPos is less than STORAGE_HEADER_BYTES, we can't read the header that precedes the block data
         // This would cause an unsigned integer underflow when trying to position the file cursor
         // This can happen after pruning or default constructed positions
         LogError("Failed for %s while reading raw block storage header", pos.ToString());
+        statsClient.count("blocks.readFailed", 1, 1.0f);
         return util::Unexpected{ReadRawError::IO};
     }
     AutoFile filein{OpenBlockFile({pos.nFile, pos.nPos - STORAGE_HEADER_BYTES}, /*fReadOnly=*/true)};
     if (filein.IsNull()) {
         LogError("OpenBlockFile failed for %s while reading raw block", pos.ToString());
+        statsClient.count("blocks.readFailed", 1, 1.0f);
         return util::Unexpected{ReadRawError::IO};
     }
 
@@ -1118,12 +1127,14 @@ BlockManager::ReadRawBlockResult BlockManager::ReadRawBlock(const FlatFilePos& p
         if (blk_start != GetParams().MessageStart()) {
             LogError("Block magic mismatch for %s: %s versus expected %s while reading raw block",
                 pos.ToString(), HexStr(blk_start), HexStr(GetParams().MessageStart()));
+            statsClient.count("blocks.readFailed", 1, 1.0f);
             return util::Unexpected{ReadRawError::IO};
         }
 
         if (blk_size > MAX_SIZE) {
             LogError("Block data is larger than maximum deserialization size for %s: %s versus %s while reading raw block",
                 pos.ToString(), blk_size, MAX_SIZE);
+            statsClient.count("blocks.readFailed", 1, 1.0f);
             return util::Unexpected{ReadRawError::IO};
         }
 
@@ -1138,9 +1149,12 @@ BlockManager::ReadRawBlockResult BlockManager::ReadRawBlock(const FlatFilePos& p
 
         std::vector<std::byte> data(blk_size); // Zeroing of memory is intentional here
         filein.read(data);
+        statsClient.timing("blocks.read_us", Ticks<std::chrono::microseconds>(MockableSteadyClock::now() - start), 1.0f);
+        statsClient.count("blocks.readBytes", blk_size, 1.0f);
         return data;
     } catch (const std::exception& e) {
         LogError("Read from block file failed: %s for %s while reading raw block", e.what(), pos.ToString());
+        statsClient.count("blocks.readFailed", 1, 1.0f);
         return util::Unexpected{ReadRawError::IO};
     }
 }
@@ -1148,15 +1162,18 @@ BlockManager::ReadRawBlockResult BlockManager::ReadRawBlock(const FlatFilePos& p
 FlatFilePos BlockManager::WriteBlock(const CBlock& block, int nHeight)
 {
     AssertLockHeld(::cs_main);
+    const auto start{MockableSteadyClock::now()};
     const unsigned int block_size{static_cast<unsigned int>(GetSerializeSize(TX_WITH_WITNESS(block)))};
     FlatFilePos pos{FindNextBlockPos(block_size + STORAGE_HEADER_BYTES, nHeight, block.GetBlockTime())};
     if (pos.IsNull()) {
         LogError("FindNextBlockPos failed for %s while writing block", pos.ToString());
+        statsClient.count("blocks.writeFailed", 1, 1.0f);
         return FlatFilePos();
     }
     AutoFile file{OpenBlockFile(pos, /*fReadOnly=*/false)};
     if (file.IsNull()) {
         LogError("OpenBlockFile failed for %s while writing block", pos.ToString());
+        statsClient.count("blocks.writeFailed", 1, 1.0f);
         m_opts.notifications.fatalError(_("Failed to write block."));
         return FlatFilePos();
     }
@@ -1172,10 +1189,13 @@ FlatFilePos BlockManager::WriteBlock(const CBlock& block, int nHeight)
 
     if (file.fclose() != 0) {
         LogError("Failed to close block file %s: %s", pos.ToString(), SysErrorString(errno));
+        statsClient.count("blocks.writeFailed", 1, 1.0f);
         m_opts.notifications.fatalError(_("Failed to close file when writing block."));
         return FlatFilePos();
     }
 
+    statsClient.timing("blocks.write_us", Ticks<std::chrono::microseconds>(MockableSteadyClock::now() - start), 1.0f);
+    statsClient.count("blocks.writeBytes", block_size, 1.0f);
     return pos;
 }
 

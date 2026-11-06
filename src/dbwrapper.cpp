@@ -17,6 +17,7 @@
 #include <random.h>
 #include <serialize.h>
 #include <span.h>
+#include <statsd_client.h>
 #include <streams.h>
 #include <util/byte_units.h>
 #include <util/fs.h>
@@ -311,6 +312,7 @@ CDBWrapper::~CDBWrapper()
 
 void CDBWrapper::WriteBatch(CDBBatch& batch, bool fSync)
 {
+    const auto start{MockableSteadyClock::now()};
     const bool log_memory = util::log::ShouldDebugLog(BCLog::LEVELDB);
     double mem_before = 0;
     if (log_memory) {
@@ -318,6 +320,15 @@ void CDBWrapper::WriteBatch(CDBBatch& batch, bool fSync)
     }
     leveldb::Status status = DBContext().pdb->Write(fSync ? DBContext().syncoptions : DBContext().writeoptions, &batch.m_impl_batch->batch);
     HandleError(status);
+    // Database name is caller-supplied but comes from our own code; sanitize
+    // anyway since it shapes the metric key.
+    const std::string db_key{statsd::SanitizeKeyPart(m_name)};
+    statsClient.timing("leveldb.writeBatch_us." + db_key,
+                       Ticks<std::chrono::microseconds>(MockableSteadyClock::now() - start), 1.0f);
+    statsClient.count("leveldb.writeBatch." + db_key, 1, 1.0f);
+    if (fSync) {
+        statsClient.count("leveldb.syncWrite." + db_key, 1, 1.0f);
+    }
     if (log_memory) {
         double mem_after{DynamicMemoryUsage() / double(1_MiB)};
         LogDebug(BCLog::LEVELDB, "WriteBatch memory usage: db=%s, before=%.1fMiB, after=%.1fMiB\n",
@@ -345,15 +356,22 @@ size_t CDBWrapper::DynamicMemoryUsage() const
 
 std::optional<std::string> CDBWrapper::ReadImpl(std::span<const std::byte> key) const
 {
+    const auto start{MockableSteadyClock::now()};
     leveldb::Slice slKey(CharCast(key.data()), key.size());
     std::string strValue;
     leveldb::Status status = DBContext().pdb->Get(DBContext().readoptions, slKey, &strValue);
     if (!status.ok()) {
-        if (status.IsNotFound())
+        if (status.IsNotFound()) {
+            statsClient.count("leveldb.readMiss." + statsd::SanitizeKeyPart(m_name), 1, 1.0f);
             return std::nullopt;
+        }
         LogError("LevelDB read failure: %s", status.ToString());
+        statsClient.count("leveldb.readFailed." + statsd::SanitizeKeyPart(m_name), 1, 1.0f);
         HandleError(status);
     }
+    statsClient.timing("leveldb.read_us." + statsd::SanitizeKeyPart(m_name),
+                       Ticks<std::chrono::microseconds>(MockableSteadyClock::now() - start), 1.0f);
+    statsClient.count("leveldb.readHit." + statsd::SanitizeKeyPart(m_name), 1, 1.0f);
     return strValue;
 }
 

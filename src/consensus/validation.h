@@ -56,6 +56,7 @@ enum class TxValidationResult {
     TX_UNKNOWN,               //!< transaction was not validated because package failed
 };
 
+
 /** A "reason" why a block was invalid, suitable for determining whether the
   * provider of the block should be banned/ignored/disconnected/etc.
   * These are much more granular than the rejection codes, which may be more
@@ -131,6 +132,26 @@ public:
 
 class TxValidationState : public ValidationState<TxValidationResult> {};
 class BlockValidationState : public ValidationState<BlockValidationResult> {};
+
+inline std::string TxValidationResultToString(const TxValidationResult& r)
+{
+    switch (r) {
+    case TxValidationResult::TX_RESULT_UNSET: return "unset";
+    case TxValidationResult::TX_CONSENSUS: return "consensus";
+    case TxValidationResult::TX_INPUTS_NOT_STANDARD: return "inputs_not_standard";
+    case TxValidationResult::TX_NOT_STANDARD: return "not_standard";
+    case TxValidationResult::TX_MISSING_INPUTS: return "missing_inputs";
+    case TxValidationResult::TX_PREMATURE_SPEND: return "premature_spend";
+    case TxValidationResult::TX_WITNESS_MUTATED: return "witness_mutated";
+    case TxValidationResult::TX_WITNESS_STRIPPED: return "witness_stripped";
+    case TxValidationResult::TX_CONFLICT: return "conflict";
+    case TxValidationResult::TX_MEMPOOL_POLICY: return "mempool_policy";
+    case TxValidationResult::TX_NO_MEMPOOL: return "no_mempool";
+    case TxValidationResult::TX_RECONSIDERABLE: return "reconsiderable";
+    case TxValidationResult::TX_UNKNOWN: return "unknown";
+    }
+    return "unknown";
+}
 
 // These implement the weight = (stripped_size * 4) + witness_size formula,
 // using only serialization with and without witness data. As witness_size

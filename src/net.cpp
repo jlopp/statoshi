@@ -2040,6 +2040,28 @@ void CConnman::EmitStats()
     int ipv4Nodes = 0;
     int ipv6Nodes = 0;
     int torNodes = 0;
+    // Per-ConnectionType and per-transport counts. The inbound/outbound split
+    // above conflates quite different roles (block-relay-only, feeler,
+    // addr-fetch, private broadcast), so a spike in one is invisible today.
+    // Seeded with every type so each series exists (as 0) before a peer of that
+    // type connects; a missing series is worse than a zero for alerting.
+    std::map<std::string, int> nodesByType;
+    for (const ConnectionType type : {ConnectionType::INBOUND,
+                                      ConnectionType::OUTBOUND_FULL_RELAY,
+                                      ConnectionType::MANUAL,
+                                      ConnectionType::FEELER,
+                                      ConnectionType::BLOCK_RELAY,
+                                      ConnectionType::ADDR_FETCH,
+                                      ConnectionType::PRIVATE_BROADCAST}) {
+        nodesByType[ConnectionTypeAsString(type)] = 0;
+    }
+    int v1Nodes = 0;
+    int v2Nodes = 0;
+    int detectingNodes = 0;
+    // Connection age, so peer churn shows up as a distribution rather than
+    // being invisible until the peer count happens to change.
+    int64_t oldestConnectionAge{0};
+    int64_t newestConnectionAge{-1};
     size_t nodes_size;
     mapMsgTypeSize mapRecvBytesMsgStats;
     mapMsgTypeSize mapSentBytesMsgStats;
@@ -2050,6 +2072,7 @@ void CConnman::EmitStats()
     }
     mapRecvBytesMsgStats[NET_MESSAGE_TYPE_OTHER] = 0;
     mapSentBytesMsgStats[NET_MESSAGE_TYPE_OTHER] = 0;
+    const auto now{NodeClock::now()};
     {
         LOCK(m_nodes_mutex);
         nodes_size = m_nodes.size();
@@ -2073,6 +2096,15 @@ void CConnman::EmitStats()
                 ipv6Nodes++;
             if(pnode->addr.IsTor())
                 torNodes++;
+            nodesByType[ConnectionTypeAsString(pnode->m_conn_type)]++;
+            switch (pnode->m_transport->GetInfo().transport_type) {
+            case TransportProtocolType::V1: v1Nodes++; break;
+            case TransportProtocolType::V2: v2Nodes++; break;
+            case TransportProtocolType::DETECTING: detectingNodes++; break;
+            }
+            const int64_t age{std::chrono::duration_cast<std::chrono::seconds>(now - pnode->m_connected).count()};
+            oldestConnectionAge = std::max(oldestConnectionAge, age);
+            newestConnectionAge = newestConnectionAge < 0 ? age : std::min(newestConnectionAge, age);
             const auto ping_time{pnode->m_last_ping_time.load()};
             if(ping_time.count() > 0)
                 statsClient.timing("peers.ping_us", static_cast<size_t>(ping_time.count()), 1.0f);
@@ -2094,6 +2126,18 @@ void CConnman::EmitStats()
     statsClient.gauge("peers.ipv4Connections", ipv4Nodes, 1.0f);
     statsClient.gauge("peers.ipv6Connections", ipv6Nodes, 1.0f);
     statsClient.gauge("peers.torConnections", torNodes, 1.0f);
+    for (const auto& [type, count] : nodesByType) {
+        statsClient.gauge("peers.connectionType." + type, count, 1.0f);
+    }
+    statsClient.gauge("peers.transport.v1", v1Nodes, 1.0f);
+    statsClient.gauge("peers.transport.v2", v2Nodes, 1.0f);
+    statsClient.gauge("peers.transport.detecting", detectingNodes, 1.0f);
+    statsClient.gauge("peers.inboundSlotsFree", std::max(0, m_max_inbound - inboundNodes), 1.0f);
+    statsClient.gauge("peers.maxInbound", std::max(0, m_max_inbound), 1.0f);
+    statsClient.gauge("peers.oldestConnectionAgeSeconds", oldestConnectionAge, 1.0f);
+    if (newestConnectionAge >= 0) {
+        statsClient.gauge("peers.newestConnectionAgeSeconds", newestConnectionAge, 1.0f);
+    }
 }
 
 void CConnman::NotifyNumConnectionsChanged()
@@ -2112,7 +2156,10 @@ void CConnman::NotifyNumConnectionsChanged()
         if (m_client_interface) {
             m_client_interface->NotifyNumConnectionsChanged(nodes_size);
         }
-        EmitStats();
+        // Peer gauges are emitted by the scheduler heartbeat (see
+        // EmitPeriodicStats in init.cpp) rather than here: emitting on every
+        // connect/disconnect made the gauges a function of churn and left them
+        // stale when the peer count was stable.
     }
 }
 
@@ -2507,7 +2554,10 @@ void CConnman::ThreadDNSAddressSeed()
                         found++;
                     }
                     addrman.get().Add(vAdd, resolveSource);
+                    statsClient.count("peers.dnsSeed.addressesFound", vAdd.size(), 1.0f);
+                    statsClient.count("peers.dnsSeed.queryOk", 1, 1.0f);
                 } else {
+                    statsClient.count("peers.dnsSeed.queryEmpty", 1, 1.0f);
                     // If the seed does not support a subdomain with our desired service bits,
                     // we make an ADDR_FETCH connection to the DNS resolved peer address for the
                     // base dns seed domain in chainparams

@@ -8,6 +8,7 @@
 #include <common/system.h>
 #include <netaddress.h>
 #include <node/interface_ui.h>
+#include <statsd_client.h>
 #include <sync.h>
 #include <util/log.h>
 #include <util/time.h>
@@ -125,6 +126,7 @@ void BanMan::Discourage(const CNetAddr& net_addr)
 {
     LOCK(m_banned_mutex);
     m_discouraged.insert(net_addr.GetAddrBytes());
+    statsClient.count("banman.discouraged", 1, 1.0f);
 }
 
 void BanMan::Ban(const CSubNet& sub_net, int64_t ban_time_offset, bool since_unix_epoch)
@@ -148,6 +150,7 @@ void BanMan::Ban(const CSubNet& sub_net, int64_t ban_time_offset, bool since_uni
             return;
     }
     if (m_client_interface) m_client_interface->BannedListChanged();
+    statsClient.count("banman.banned", 1, 1.0f);
 
     //store banlist to disk immediately
     DumpBanlist();

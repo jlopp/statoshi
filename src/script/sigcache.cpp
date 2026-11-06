@@ -9,6 +9,7 @@
 #include <pubkey.h>
 #include <random.h>
 #include <script/interpreter.h>
+#include <statsd_client.h>
 #include <uint256.h>
 #include <util/log.h>
 
@@ -64,8 +65,11 @@ bool CachingTransactionSignatureChecker::VerifyECDSASignature(const std::vector<
 {
     uint256 entry;
     m_signature_cache.ComputeEntryECDSA(entry, sighash, vchSig, pubkey);
-    if (m_signature_cache.Get(entry, !store))
+    if (m_signature_cache.Get(entry, !store)) {
+        statsClient.count("script.sigcache.hit.ecdsa", 1, 1.0f);
         return true;
+    }
+    statsClient.count("script.sigcache.miss.ecdsa", 1, 1.0f);
     if (!TransactionSignatureChecker::VerifyECDSASignature(vchSig, pubkey, sighash))
         return false;
     if (store)
@@ -77,7 +81,11 @@ bool CachingTransactionSignatureChecker::VerifySchnorrSignature(std::span<const 
 {
     uint256 entry;
     m_signature_cache.ComputeEntrySchnorr(entry, sighash, sig, pubkey);
-    if (m_signature_cache.Get(entry, !store)) return true;
+    if (m_signature_cache.Get(entry, !store)) {
+        statsClient.count("script.sigcache.hit.schnorr", 1, 1.0f);
+        return true;
+    }
+    statsClient.count("script.sigcache.miss.schnorr", 1, 1.0f);
     if (!TransactionSignatureChecker::VerifySchnorrSignature(sig, pubkey, sighash)) return false;
     if (store) m_signature_cache.Set(entry);
     return true;

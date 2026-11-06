@@ -33,6 +33,7 @@
 #include <util/log.h>
 #include <util/result.h>
 #include <util/time.h>
+#include <statsd_client.h>
 #include <util/translation.h>
 #include <validation.h>
 #include <versionbits.h>
@@ -239,6 +240,16 @@ std::unique_ptr<CBlockTemplate> BlockAssembler::CreateNewBlock()
              Ticks<MillisecondsDouble>(time_1 - time_start),
              Ticks<MillisecondsDouble>(time_2 - time_1),
              Ticks<MillisecondsDouble>(time_2 - time_start));
+
+    // Template assembly cost per category. This was previously only in bench
+    // logs, so slow template construction (which delays block announcements on
+    // a mining node) was invisible in metrics.
+    statsClient.timing("mining.createTemplateUs", Ticks<std::chrono::microseconds>(time_2 - time_start), 1.0f);
+    statsClient.timing("mining.assembleChunksUs", Ticks<std::chrono::microseconds>(time_1 - time_start), 1.0f);
+    statsClient.timing("mining.testValidityUs", Ticks<std::chrono::microseconds>(time_2 - time_1), 1.0f);
+    statsClient.gauge("mining.templateTxCount", nBlockTx, 1.0f);
+    statsClient.gauge("mining.templateWeight", GetBlockWeight(*pblock), 1.0f);
+    statsClient.gaugeSigned("mining.templateFees", nFees, 1.0f);
 
     return std::move(pblocktemplate);
 }

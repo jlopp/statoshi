@@ -15,6 +15,7 @@
 #include <protocol.h>
 #include <random.h>
 #include <serialize.h>
+#include <statsd_client.h>
 #include <streams.h>
 #include <tinyformat.h>
 #include <uint256.h>
@@ -532,8 +533,10 @@ bool AddrManImpl::AddSingle(const CAddress& addr, const CNetAddr& source, std::c
 {
     AssertLockHeld(cs);
 
-    if (!addr.IsRoutable())
+    if (!addr.IsRoutable()) {
+        statsClient.count("addrman.rejected.notRoutable", 1, 1.0f);
         return false;
+    }
 
     nid_type nId;
     AddrInfo* pinfo = Find(addr, &nId);
@@ -556,21 +559,29 @@ bool AddrManImpl::AddSingle(const CAddress& addr, const CNetAddr& source, std::c
 
         // do not update if no new information is present
         if (addr.nTime <= pinfo->nTime) {
+            statsClient.count("addrman.rejected.stale", 1, 1.0f);
             return false;
         }
 
         // do not update if the entry was already in the "tried" table
-        if (pinfo->fInTried)
+        if (pinfo->fInTried) {
+            statsClient.count("addrman.rejected.inTried", 1, 1.0f);
             return false;
+        }
 
         // do not update if the max reference count is reached
-        if (pinfo->nRefCount == ADDRMAN_NEW_BUCKETS_PER_ADDRESS)
+        if (pinfo->nRefCount == ADDRMAN_NEW_BUCKETS_PER_ADDRESS) {
+            statsClient.count("addrman.rejected.refCountMax", 1, 1.0f);
             return false;
+        }
 
         // stochastic test: previous nRefCount == N: 2^N times harder to increase it
         if (pinfo->nRefCount > 0) {
             const int nFactor{1 << pinfo->nRefCount};
-            if (insecure_rand.randrange(nFactor) != 0) return false;
+            if (insecure_rand.randrange(nFactor) != 0) {
+                statsClient.count("addrman.rejected.stochastic", 1, 1.0f);
+                return false;
+            }
         }
     } else {
         pinfo = Create(addr, source, &nId);
@@ -595,6 +606,7 @@ bool AddrManImpl::AddSingle(const CAddress& addr, const CNetAddr& source, std::c
             const auto mapped_as{m_netgroupman.GetMappedAS(addr)};
             LogDebug(BCLog::ADDRMAN, "Added %s%s to new[%i][%i]\n",
                      addr.ToStringAddrPort(), (mapped_as ? strprintf(" mapped to AS%i", mapped_as) : ""), nUBucket, nUBucketPos);
+            statsClient.count("addrman.added", 1, 1.0f);
         } else {
             if (pinfo->nRefCount == 0) {
                 Delete(nId);
@@ -714,8 +726,14 @@ std::pair<CAddress, NodeSeconds> AddrManImpl::Select_(bool new_only, const std::
         }
     }
 
-    if (new_only && new_count == 0) return {};
-    if (new_count + tried_count == 0) return {};
+    if (new_only && new_count == 0) {
+        statsClient.count("addrman.selectMiss.newTableEmpty", 1, 1.0f);
+        return {};
+    }
+    if (new_count + tried_count == 0) {
+        statsClient.count("addrman.selectMiss.noAddresses", 1, 1.0f);
+        return {};
+    }
 
     // Decide if we are going to search the new or tried table
     // If either option is viable, use a 50% chance to choose

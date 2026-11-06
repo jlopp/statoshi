@@ -39,12 +39,26 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <netinet/in.h>
 #include <common/args.h>
 #include <logging.h>
+#include <cinttypes>
+#include <cstdint>
 #include "statsd_client.h"
 #include <fcntl.h>
 #include <mutex>
 
 using namespace std;
 namespace statsd {
+
+std::string SanitizeKeyPart(const std::string& in)
+{
+    std::string out;
+    out.reserve(in.size());
+    for (const char c : in) {
+        const bool safe{(c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+                        (c >= '0' && c <= '9') || c == '_'};
+        out.push_back(safe ? c : '_');
+    }
+    return out;
+}
 
 inline bool fequal(float a, float b)
 {
@@ -182,9 +196,27 @@ int StatsdClient::count(const string& key, size_t value, float sample_rate)
     return send(key, value, "c", sample_rate);
 }
 
+int StatsdClient::countSigned(const string& key, int64_t value, float sample_rate)
+{
+    string message;
+    if (!formatSigned(message, std::move(key), value, "c", sample_rate)) {
+        return 0;
+    }
+    return send(message);
+}
+
 int StatsdClient::gauge(const string& key, size_t value, float sample_rate)
 {
     return send(key, value, "g", sample_rate);
+}
+
+int StatsdClient::gaugeSigned(const string& key, int64_t value, float sample_rate)
+{
+    string message;
+    if (!formatSigned(message, std::move(key), value, "g", sample_rate)) {
+        return 0;
+    }
+    return send(message);
 }
 
 int StatsdClient::gaugeDouble(const string& key, double value, float sample_rate)
@@ -195,6 +227,41 @@ int StatsdClient::gaugeDouble(const string& key, double value, float sample_rate
 int StatsdClient::timing(const string& key, size_t ms, float sample_rate)
 {
     return send(key, ms, "ms", sample_rate);
+}
+
+bool StatsdClient::formatSigned(string& out, string key, int64_t value, const string &type, float sample_rate)
+{
+    // Gauges are absolute values, not events: sampling them would make the
+    // backend drop updates and leave the gauge stale. Always send them.
+    if (type == "g") {
+        sample_rate = 1.0;
+    }
+
+    if (!should_send(sample_rate)) {
+        return false;
+    }
+
+    // partition stats by node name if set
+    if (!d->nodename.empty())
+        key = key + "." + d->nodename;
+
+    cleanup(key);
+
+    char buf[256];
+    if ( fequal( sample_rate, 1.0 ) )
+    {
+        snprintf(buf, sizeof(buf), "%s%s:%" PRId64 "|%s",
+                d->ns.c_str(), key.c_str(), value, type.c_str());
+    }
+    else
+    {
+        snprintf(buf, sizeof(buf), "%s%s:%" PRId64 "|%s|@%.2f",
+                d->ns.c_str(), key.c_str(), value, type.c_str(), sample_rate);
+    }
+
+    out += buf;
+    out += '\n';
+    return true;
 }
 
 bool StatsdClient::format(string& out, string key, size_t value, const string &type, float sample_rate)

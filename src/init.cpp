@@ -95,6 +95,7 @@
 #include <util/check.h>
 #include <util/fs.h>
 #include <util/fs_helpers.h>
+#include <util/procstats.h>
 #include <util/moneystr.h>
 #include <util/overflow.h>
 #include <util/result.h>
@@ -1532,21 +1533,39 @@ static ChainstateLoadResult InitAndLoadChainstate(
 //! Emit the node-wide state gauges. Cheap enough to run every minute, and
 //! keeps the gauges fresh on a node that is otherwise idle. Guards against
 //! components that are not initialized yet (or are already torn down).
+//
+// This is the single place gauges belong: anything emitted only on an event
+// (new block, peer connect, mempool change) goes stale the moment the event
+// stops happening, which makes it useless for alerting.
 static void EmitPeriodicStats(node::NodeContext& node)
 {
     if (node.connman) {
         node.connman->EmitStats();
+        if (node.addrman) {
+            statsClient.gauge("addrman.newSize", node.addrman->Size(std::nullopt, true), 1.0f);
+            statsClient.gauge("addrman.triedSize", node.addrman->Size(std::nullopt, false), 1.0f);
+        }
     }
 
     if (node.mempool) {
         CTxMemPool& pool = *node.mempool;
         LOCK(pool.cs);
+        const auto unbroadcast{pool.GetUnbroadcastTxs().size()};
         statsClient.gauge("transactions.txInMemoryPool", pool.size(), 1.0f);
         statsClient.gauge("transactions.mempool.totalTransactions", pool.size(), 1.0f);
-        statsClient.gauge("transactions.mempool.totalTxBytes", (int64_t)pool.GetTotalTxSize(), 1.0f);
-        statsClient.gauge("transactions.mempool.memoryUsageBytes", (int64_t)pool.DynamicMemoryUsage(), 1.0f);
+        statsClient.gauge("transactions.mempool.totalTxBytes", pool.GetTotalTxSize(), 1.0f);
+        statsClient.gauge("transactions.mempool.memoryUsageBytes", pool.DynamicMemoryUsage(), 1.0f);
         statsClient.gauge("transactions.mempool.minFeePerKb", pool.GetMinFee().GetFeePerK(), 1.0f);
+        statsClient.gauge("transactions.mempool.unbroadcast", unbroadcast, 1.0f);
+        statsClient.gauge("transactions.mempool.prioritised", pool.mapDeltas.size(), 1.0f);
     }
+
+    if (node.validation_signals) {
+        statsClient.gauge("validation.callbacksPending", node.validation_signals->CallbacksPending(), 1.0f);
+    }
+
+    statsClient.gauge("process.fdsOpen", GetNumFDs(), 1.0f);
+    statsClient.gauge("process.memoryUsedBytes", GetProcessMemoryUsed(), 1.0f);
 
     if (node.chainman) {
         ChainstateManager& chainman = *node.chainman;
@@ -1554,6 +1573,12 @@ static void EmitPeriodicStats(node::NodeContext& node)
         const CBlockIndex* tip = chainman.ActiveChain().Tip();
         if (tip == nullptr) return;
         statsClient.gauge("blocks.currentHeight", tip->nHeight, 1.0f);
+        statsClient.gauge("blocks.currentTxCount", tip->m_chain_tx_count, 1.0f);
+        statsClient.gauge("blocks.bestHeaderHeight", chainman.m_best_header ? chainman.m_best_header->nHeight : 0, 1.0f);
+        statsClient.gaugeDouble("blocks.verificationProgress", chainman.GuessVerificationProgress(tip), 1.0f);
+        statsClient.gauge("blocks.initialBlockDownload", chainman.IsInitialBlockDownload() ? 1 : 0, 1.0f);
+        statsClient.gauge("utxoset.cacheSize", chainman.ActiveChainstate().CoinsTip().GetCacheSize(), 1.0f);
+        statsClient.gauge("utxoset.cacheDirty", chainman.ActiveChainstate().CoinsTip().GetDirtyCount(), 1.0f);
         statsClient.gaugeDouble("network.difficulty", GetDifficulty(*tip), 1.0f);
         statsClient.gaugeDouble("network.exahashesPerSecond", GetNetworkHashPS(chainman.ActiveChain()) / 1e18, 1.0f);
     }

@@ -14,6 +14,7 @@
 #include <policy/policy.h>
 #include <policy/settings.h>
 #include <random.h>
+#include <statsd_client.h>
 #include <tinyformat.h>
 #include <util/check.h>
 #include <util/feefrac.h>
@@ -223,6 +224,7 @@ void CTxMemPool::Apply(ChangeSet* changeset)
     }
     if (!m_txgraph->DoWork(/*max_cost=*/POST_CHANGE_COST)) {
         LogDebug(BCLog::MEMPOOL, "Mempool in non-optimal ordering after addition(s).");
+        statsClient.count("transactions.mempool.txgraphBudgetExhausted.add", 1, 1.0f);
     }
 }
 
@@ -280,6 +282,23 @@ void CTxMemPool::removeUnchecked(txiter it, MemPoolRemovalReason reason)
         it->GetFee(),
         std::chrono::duration_cast<std::chrono::duration<std::uint64_t>>(it->GetTime()).count()
     );
+
+    // Mempool mass balance: accepted minus removed. Without this, removals
+    // (eviction, expiry, RBF, reorg) are completely invisible, so a mempool
+    // that is draining as fast as it fills looks identical to a stable one.
+    //
+    // Batched into a single datagram: this runs once per transaction of every
+    // connected block, under cs, so per-metric sendto() calls would be a
+    // measurable cost on a full block.
+    {
+        const std::string reason_name{RemovalReasonToString(reason)};
+        statsClient.countBatch({
+            {"transactions.removedFromMempool", 1},
+            {"transactions.removed." + reason_name, 1},
+            {"transactions.removed." + reason_name + ".vsize", it->GetTxSize()},
+            {"transactions.removed." + reason_name + ".fees", it->GetFee()},
+        });
+    }
 
     for (const CTxIn& txin : it->GetTx().vin)
         mapNextTx.erase(txin.prevout);
@@ -382,6 +401,7 @@ void CTxMemPool::removeForReorg(CChain& chain, std::function<bool(txiter)> check
     }
     if (!m_txgraph->DoWork(/*max_cost=*/POST_CHANGE_COST)) {
         LogDebug(BCLog::MEMPOOL, "Mempool in non-optimal ordering after reorg.");
+        statsClient.count("transactions.mempool.txgraphBudgetExhausted.reorg", 1, 1.0f);
     }
 }
 
@@ -424,6 +444,7 @@ std::vector<RemovedMempoolTransactionInfo> CTxMemPool::removeForBlock(const std:
     blockSinceLastRollingFeeBump = true;
     if (!m_txgraph->DoWork(/*max_cost=*/POST_CHANGE_COST)) {
         LogDebug(BCLog::MEMPOOL, "Mempool in non-optimal ordering after block.");
+        statsClient.count("transactions.mempool.txgraphBudgetExhausted.block", 1, 1.0f);
     }
     return txs_removed_for_block;
 }
@@ -955,6 +976,12 @@ void CTxMemPool::TrimToSize(size_t sizelimit, std::vector<COutPoint>* pvNoSpends
 
     if (maxFeeRateRemoved > CFeeRate(0)) {
         LogDebug(BCLog::MEMPOOL, "Removed %u txn, rolling minimum fee bumped to %s\n", nTxnRemoved, maxFeeRateRemoved.ToString());
+    }
+    // TrimToSize previously only logged, so mempool eviction was invisible in
+    // metrics even though it is the main way a full node loses transactions.
+    if (nTxnRemoved > 0) {
+        statsClient.count("transactions.evicted.sizelimit", nTxnRemoved, 1.0f);
+        statsClient.gauge("transactions.mempool.rollingMinFeePerKb", maxFeeRateRemoved.GetFeePerK(), 1.0f);
     }
 }
 

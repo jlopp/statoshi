@@ -7,6 +7,8 @@
 #include <string>
 #include <type_traits>
 #include <optional>
+#include <utility>
+#include <vector>
 
 class ArgsManager;
 
@@ -21,6 +23,17 @@ inline constexpr int DEFAULT_STATSD_PORT{8125};
 //! Payload size at which a metric batch is flushed, so that one datagram stays
 //! within a typical 1500-byte MTU instead of being IP-fragmented.
 inline constexpr size_t BATCH_FLUSH_BYTES{1400};
+
+/**
+ * Make @p in safe to use as one component of a metric key.
+ *
+ * Metric keys are embedded in a newline-delimited datagram, so a value
+ * containing a newline, space or statisticsd delimiter would corrupt the
+ * frame or split one metric into two. Only [A-Za-z0-9_] are preserved; every
+ * other character becomes '_'. Use this for any key component that is not a
+ * compile-time constant (reject reasons, RPC methods, database names).
+ */
+std::string SanitizeKeyPart(const std::string& in);
 
 class StatsdClient {
     public:
@@ -39,9 +52,14 @@ class StatsdClient {
         int inc(const std::string& key, float sample_rate = 1.0);
         int dec(const std::string& key, float sample_rate = 1.0);
         int count(const std::string& key, size_t value, float sample_rate = 1.0);
+        //! Signed counters, for values that can legitimately be negative
+        //! (e.g. a fee delta from prioritiseTransaction).
+        int countSigned(const std::string& key, int64_t value, float sample_rate = 1.0);
         //! Gauges are absolute values, so they are never sampled. The
         //! sample_rate argument is accepted for source compatibility only.
         int gauge(const std::string& key, size_t value, float sample_rate = 1.0);
+        //! Signed gauge, for values that can legitimately be negative.
+        int gaugeSigned(const std::string& key, int64_t value, float sample_rate = 1.0);
         //! Gauges are absolute values, so they are never sampled. The
         //! sample_rate argument is accepted for source compatibility only.
         int gaugeDouble(const std::string& key, double value, float sample_rate = 1.0);
@@ -92,6 +110,28 @@ class StatsdClient {
             return send(payload);
         }
 
+        /**
+         * Emit several counters in one datagram.
+         *
+         * Use this where the caller would otherwise perform many send() calls
+         * in a hot, lock-holding path (e.g. removing a transaction from the
+         * mempool, which happens for every tx of every block).
+         */
+        int countBatch(const std::vector<std::pair<std::string, int64_t>>& metrics)
+        {
+            std::string payload;
+            int ret{0};
+            for (const auto& [key, value] : metrics) {
+                formatSigned(payload, key, value, "c", 1.0f);
+                if (payload.size() >= BATCH_FLUSH_BYTES) {
+                    ret |= sendBatch(payload);
+                    payload.clear();
+                }
+            }
+            ret |= sendBatch(payload);
+            return ret;
+        }
+
     public:
         /**
          * (Low Level Api) manually send a message
@@ -114,6 +154,7 @@ class StatsdClient {
         //! Returns false when the sample was dropped.
         bool format(std::string& out, std::string key, size_t value, const std::string& type, float sample_rate);
         bool formatDouble(std::string& out, std::string key, double value, const std::string& type, float sample_rate);
+        bool formatSigned(std::string& out, std::string key, int64_t value, const std::string& type, float sample_rate);
 
     protected:
         struct _StatsdClientData* d;

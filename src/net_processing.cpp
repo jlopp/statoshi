@@ -2020,6 +2020,11 @@ void PeerManagerImpl::Misbehaving(Peer& peer, const std::string& message)
     peer.m_should_discourage = true;
     LogDebug(BCLog::NET, "Misbehaving: peer=%d%s\n", peer.m_id, message_prefixed);
     statsClient.inc("misbehavior.banned", 1.0f);
+    // The reason was previously dropped, so a single "banned" counter could not
+    // distinguish spam from invalid-block from protocol violations.
+    if (!message.empty()) {
+        statsClient.inc("misbehavior." + statsd::SanitizeKeyPart(message), 1.0f);
+    }
     TRACEPOINT(net, misbehaving_connection,
         peer.m_id,
         message.c_str()
@@ -3384,6 +3389,19 @@ std::optional<node::PackageToValidate> PeerManagerImpl::ProcessInvalidTx(NodeId 
 
     PeerRef peer{GetPeerRef(nodeid)};
 
+    // Reject composition is the best signal we have for spam/attack shape, and
+    // it was only ever written to the debug log. `state.GetResult()` is an enum
+    // so it is a safe metric key component.
+    {
+        const std::string result_key{TxValidationResultToString(state.GetResult())};
+        statsClient.count("transactions.rejected", 1, 1.0f);
+        statsClient.count("transactions.rejected." + statsd::SanitizeKeyPart(result_key), 1, 1.0f);
+        statsClient.count("transactions.rejected." + statsd::SanitizeKeyPart(result_key) + ".bytes", ::GetSerializeSize(TX_WITH_WITNESS(*ptx)), 1.0f);
+        if (!state.GetRejectReason().empty()) {
+            statsClient.count("transactions.rejected.reason." + statsd::SanitizeKeyPart(state.GetRejectReason()), 1, 1.0f);
+        }
+    }
+
     LogDebug(BCLog::MEMPOOLREJ, "%s (wtxid=%s) from peer=%d was not accepted: %s\n",
         ptx->GetHash().ToString(),
         ptx->GetWitnessHash().ToString(),
@@ -3431,6 +3449,15 @@ void PeerManagerImpl::ProcessPackageResult(const node::PackageToValidate& packag
 
     const auto& package = package_to_validate.m_txns;
     const auto& senders = package_to_validate.m_senders;
+
+    // Package relay is otherwise only visible when it succeeds, which hides
+    // whether package validation is actually working or just wasting work.
+    statsClient.count("transactions.package.received", 1, 1.0f);
+    statsClient.count("transactions.package.txCount", package.size(), 1.0f);
+    if (package_result.m_state.IsInvalid()) {
+        statsClient.count("transactions.package.rejected", 1, 1.0f);
+        statsClient.count("transactions.package.rejected." + statsd::SanitizeKeyPart(package_result.m_state.GetRejectReason()), 1, 1.0f);
+    }
 
     if (package_result.m_state.IsInvalid()) {
         m_txdownloadman.MempoolRejectedPackage(package);
@@ -3738,6 +3765,12 @@ void PeerManagerImpl::ProcessCompactBlockTxns(CNode& pfrom, Peer& peer, const Bl
         const CBlockIndex* prev_block{Assume(m_chainman.m_blockman.LookupBlockIndex(partialBlock.header.hashPrevBlock))};
         ReadStatus status = partialBlock.FillBlock(*pblock, block_transactions.txn,
                                                    /*segwit_active=*/DeploymentActiveAfter(prev_block, m_chainman, Consensus::DEPLOYMENT_SEGWIT));
+        // Compact-block reconstruction quality: this is the metric that shows
+        // whether the mempool/extrapool cache is actually useful.
+        statsClient.count("blocks.cmpctblock.reconstruct." +
+                          (status == READ_STATUS_OK ? std::string{"ok"} :
+                           status == READ_STATUS_INVALID ? std::string{"invalid"} : std::string{"failed"}), 1, 1.0f);
+        statsClient.count("blocks.cmpctblock.txnsRequested", block_transactions.txn.size(), 1.0f);
         if (status == READ_STATUS_INVALID) {
             RemoveBlockRequest(block_transactions.blockhash, pfrom.GetId()); // Reset in-flight state in case Misbehaving does not result in a disconnect
             Misbehaving(peer, "invalid compact block/non-matching block transactions");
@@ -6463,6 +6496,8 @@ bool PeerManagerImpl::SendMessages(CNode& node)
             int nOtherPeersWithValidatedDownloads = m_peers_downloading_from - 1;
             if (current_time > state.m_downloading_since + std::chrono::seconds{consensusParams.nPowTargetSpacing} * (BLOCK_DOWNLOAD_TIMEOUT_BASE + BLOCK_DOWNLOAD_TIMEOUT_PER_PEER * nOtherPeersWithValidatedDownloads)) {
                 LogInfo("Timeout downloading block %s, %s", queuedBlock.pindex->GetBlockHash().ToString(), node.DisconnectMsg());
+                statsClient.inc("blocks.downloadTimeout", 1.0f);
+                statsClient.gauge("blocks.downloadTimeoutHeight", queuedBlock.pindex->nHeight, 1.0f);
                 node.fDisconnect = true;
                 return true;
             }

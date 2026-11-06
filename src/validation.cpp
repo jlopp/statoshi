@@ -272,6 +272,7 @@ static void LimitMempoolSize(CTxMemPool& pool, CCoinsViewCache& coins_cache)
     int expired = pool.Expire(GetTime<std::chrono::seconds>() - pool.m_opts.expiry);
     if (expired != 0) {
         LogDebug(BCLog::MEMPOOL, "Expired %i transactions from the memory pool\n", expired);
+        statsClient.count("transactions.expired", expired, 1.0f);
     }
 
     std::vector<COutPoint> vNoSpendsRemaining;
@@ -2103,8 +2104,10 @@ bool CheckInputScripts(const CTransaction& tx, TxValidationState& state,
     hasher.Write(UCharCast(tx.GetWitnessHash().begin()), 32).Write((unsigned char*)&flags, sizeof(flags)).Finalize(hashCacheEntry.begin());
     AssertLockHeld(cs_main); //TODO: Remove this requirement by making CuckooCache not require external locks
     if (validation_cache.m_script_execution_cache.contains(hashCacheEntry, !cacheFullScriptStore)) {
+        statsClient.count("script.executionCache.hit", 1, 1.0f);
         return true;
     }
+    statsClient.count("script.executionCache.miss", 1, 1.0f);
 
     if (!txdata.m_spent_outputs_ready) {
         std::vector<CTxOut> spent_outputs;
@@ -2825,6 +2828,7 @@ bool Chainstate::FlushStateToDisk(
 {
     LOCK(cs_main);
     assert(this->CanFlushToDisk());
+    const auto flush_start{MockableSteadyClock::now()};
     std::set<int> setFilesToPrune;
     bool full_flush_completed = false;
 
@@ -2932,6 +2936,12 @@ bool Chainstate::FlushStateToDisk(
                 empty_cache ? CoinsTip().Flush() : CoinsTip().Sync();
                 m_last_flushed_block = m_blockman.LookupBlockIndex(CoinsTip().GetBestBlock());
                 full_flush_completed = true;
+                // Flush cost is the main chainstate I/O metric: it was only
+                // visible in bench logs before.
+                statsClient.timing("chainstate.flush_us", Ticks<std::chrono::microseconds>(MockableSteadyClock::now() - flush_start), 1.0f);
+                statsClient.gauge("chainstate.flushCoins", coins_count, 1.0f);
+                statsClient.gauge("chainstate.flushCoinsDirty", CoinsTip().GetDirtyCount(), 1.0f);
+                statsClient.gauge("chainstate.flushCoinsMemoryBytes", coins_mem_usage, 1.0f);
                 TRACEPOINT(utxocache, flush,
                     int64_t{Ticks<std::chrono::microseconds>(NodeClock::now() - nNow)},
                     (uint32_t)mode,

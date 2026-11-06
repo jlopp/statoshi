@@ -717,6 +717,14 @@ void CBlockPolicyEstimator::processBlock(const std::vector<RemovedMempoolTransac
                  countedTxs, txs_removed_for_block.size(), trackedTxs, trackedTxs + untrackedTxs, mapMemPoolTxs.size(),
                  MaxUsableEstimate(), HistoricalBlockSpan() > BlockSpan() ? "historical" : "current");
 
+        // Estimator health: a rising untracked share means estimates are
+        // degrading, which is otherwise only visible in a debug log.
+        statsClient.gauge("estimates.estimator.trackedTxs", trackedTxs, 1.0f);
+        statsClient.gauge("estimates.estimator.untrackedTxs", untrackedTxs, 1.0f);
+        statsClient.gauge("estimates.estimator.mapMemPoolTxs", mapMemPoolTxs.size(), 1.0f);
+        statsClient.gauge("estimates.estimator.countedTxs", countedTxs, 1.0f);
+        statsClient.gauge("estimates.estimator.maxUsableEstimate", MaxUsableEstimate(), 1.0f);
+
         trackedTxs = 0;
         untrackedTxs = 0;
     }
