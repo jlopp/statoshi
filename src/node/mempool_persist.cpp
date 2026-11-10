@@ -102,7 +102,10 @@ bool LoadMempool(CTxMemPool& pool, const fs::path& load_path, Chainstate& active
             }
             if (nTime > TicksSinceEpoch<std::chrono::seconds>(now - pool.m_opts.expiry)) {
                 LOCK(cs_main);
-                const auto& accepted = AcceptToMemoryPool(active_chainstate, tx, nTime, /*bypass_limits=*/false, /*test_accept=*/false);
+                // is_reload=true: this transaction came out of our own mempool dump, so it was
+                // already accepted in a previous run. Counting these as new acceptances would
+                // add the entire mempool size to the accepted counter on every restart.
+                const auto& accepted = AcceptToMemoryPool(active_chainstate, tx, nTime, /*bypass_limits=*/false, /*test_accept=*/false, /*is_reload=*/true);
                 if (accepted.m_result_type == MempoolAcceptResult::ResultType::VALID) {
                     ++count;
                 } else {

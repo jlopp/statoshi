@@ -313,10 +313,13 @@ void Chainstate::MaybeUpdateMempoolForReorg(
         const auto queuedTx = disconnectpool.take();
         auto it = queuedTx.rbegin();
         while (it != queuedTx.rend()) {
-            // ignore validation errors in resurrected transactions
+            // These transactions were confirmed in a block we are now disconnecting, so they
+            // were accepted long ago. Passing is_reload=true keeps them from being counted as
+            // new acceptances: otherwise every reorg inflates transactions.accepted by the
+            // size of every disconnected block.
             if (!fAddToMempool || (*it)->IsCoinBase() ||
                 AcceptToMemoryPool(*this, *it, GetTime(),
-                    /*bypass_limits=*/true, /*test_accept=*/false).m_result_type !=
+                    /*bypass_limits=*/true, /*test_accept=*/false, /*is_reload=*/true).m_result_type !=
                         MempoolAcceptResult::ResultType::VALID) {
                 // If the transaction doesn't make it in to the mempool, remove any
                 // transactions that depend on it (which would now be orphans).
@@ -481,14 +484,20 @@ public:
          */
         const std::optional<CFeeRate> m_client_maxfeerate;
 
+        /** When true, this transaction is being re-admitted after having been accepted
+         * before (reorg resurrection or reload of the on-disk mempool). Such a re-entry
+         * must not be counted as a new acceptance, or the accepted metric is inflated
+         * every time a block is disconnected or the node restarts. */
+        const bool m_is_readmission;
         /** Parameters for single transaction mempool validation. */
         static ATMPArgs SingleAccept(int64_t accept_time,
                                      bool bypass_limits, std::vector<COutPoint>& coins_to_uncache,
-                                     bool test_accept) {
+                                     bool test_accept, bool is_readmission = false) {
             return ATMPArgs{/*accept_time=*/ accept_time,
                             /*bypass_limits=*/ bypass_limits,
                             /*coins_to_uncache=*/ coins_to_uncache,
                             /*test_accept=*/ test_accept,
+                            /*is_readmission=*/ is_readmission,
                             /*allow_replacement=*/ true,
                             /*allow_sibling_eviction=*/ true,
                             /*package_submission=*/ false,
@@ -504,6 +513,7 @@ public:
                             /*bypass_limits=*/ false,
                             /*coins_to_uncache=*/ coins_to_uncache,
                             /*test_accept=*/ true,
+                            /*is_readmission=*/ false,
                             /*allow_replacement=*/ false,
                             /*allow_sibling_eviction=*/ false,
                             /*package_submission=*/ false, // not submitting to mempool
@@ -519,6 +529,7 @@ public:
                             /*bypass_limits=*/ false,
                             /*coins_to_uncache=*/ coins_to_uncache,
                             /*test_accept=*/ false,
+                            /*is_readmission=*/ false,
                             /*allow_replacement=*/ true,
                             /*allow_sibling_eviction=*/ false,
                             /*package_submission=*/ true,
@@ -533,6 +544,7 @@ public:
                             /*bypass_limits=*/ false,
                             /*coins_to_uncache=*/ package_args.m_coins_to_uncache,
                             /*test_accept=*/ package_args.m_test_accept,
+                            /*is_readmission=*/ package_args.m_is_readmission,
                             /*allow_replacement=*/ true,
                             /*allow_sibling_eviction=*/ true,
                             /*package_submission=*/ true, // trim at the end of AcceptPackage()
@@ -548,6 +560,7 @@ public:
                  bool bypass_limits,
                  std::vector<COutPoint>& coins_to_uncache,
                  bool test_accept,
+                 bool is_readmission,
                  bool allow_replacement,
                  bool allow_sibling_eviction,
                  bool package_submission,
@@ -557,6 +570,7 @@ public:
               m_bypass_limits{bypass_limits},
               m_coins_to_uncache{coins_to_uncache},
               m_test_accept{test_accept},
+              m_is_readmission{is_readmission},
               m_allow_replacement{allow_replacement},
               m_allow_sibling_eviction{allow_sibling_eviction},
               m_package_submission{package_submission},
@@ -1303,6 +1317,15 @@ bool MemPoolAccept::SubmitPackage(const ATMPArgs& args, std::vector<Workspace>& 
     for (Workspace& ws : workspaces) {
         auto iter = m_pool.GetIter(ws.m_ptx->GetHash());
         Assume(iter.has_value());
+        // Package submissions bypass AcceptSingleTransactionInternal(), so the per-transaction
+        // acceptance counter must be emitted here or packaged transactions would never be
+        // counted at all. (The size/fee counters are already emitted by PreChecks, which runs
+        // for every workspace on both paths.)
+        if (args.m_is_readmission) {
+            statsClient.inc("transactions.accepted.readmission", 1.0f);
+        } else {
+            statsClient.inc("transactions.accepted", 1.0f);
+        }
         const auto effective_feerate = args.m_package_feerates ? ws.m_package_feerate :
             CFeeRate{ws.m_modified_fees, static_cast<int32_t>(ws.m_vsize)};
         const auto effective_feerate_wtxids = args.m_package_feerates ? all_package_wtxids :
@@ -1430,7 +1453,17 @@ MempoolAcceptResult MemPoolAccept::AcceptSingleTransactionInternal(const CTransa
     const auto diff{MockableSteadyClock::now() - start};
     statsClient.timing("AcceptToMemoryPool_ms", Ticks<std::chrono::milliseconds>(diff), 1.0f);
     statsClient.gauge("transactions.txInMemoryPool", m_pool.size(), 1.0f);
-    statsClient.inc("transactions.accepted", 1.0f);
+    // Count only first-time admissions here. A re-admission (a transaction we already
+    // accepted, put back into the mempool by reorg resurrection or by reloading the
+    // on-disk mempool at startup) is not a new acceptance: counting it again is what
+    // made the accepted counter jump whenever a block was disconnected. Re-admissions
+    // get their own counter so that "transactions accepted" stays a measure of new
+    // transaction flow while the readmission rate remains observable.
+    if (args.m_is_readmission) {
+        statsClient.inc("transactions.accepted.readmission", 1.0f);
+    } else {
+        statsClient.inc("transactions.accepted", 1.0f);
+    }
 
     statsClient.gauge("transactions.mempool.totalTransactions", m_pool.size(), 1.0f);
     statsClient.gauge("transactions.mempool.totalTxBytes", (int64_t) m_pool.GetTotalTxSize(), 1.0f);
@@ -1793,7 +1826,8 @@ PackageMempoolAcceptResult MemPoolAccept::AcceptPackage(const Package& package, 
 } // anon namespace
 
 MempoolAcceptResult AcceptToMemoryPool(Chainstate& active_chainstate, const CTransactionRef& tx,
-                                       int64_t accept_time, bool bypass_limits, bool test_accept)
+                                       int64_t accept_time, bool bypass_limits, bool test_accept,
+                                       bool is_reload)
 {
     AssertLockHeld(::cs_main);
     assert(active_chainstate.GetMempool() != nullptr);
@@ -1801,7 +1835,7 @@ MempoolAcceptResult AcceptToMemoryPool(Chainstate& active_chainstate, const CTra
 
     std::vector<COutPoint> coins_to_uncache;
 
-    auto args = MemPoolAccept::ATMPArgs::SingleAccept(accept_time, bypass_limits, coins_to_uncache, test_accept);
+    auto args = MemPoolAccept::ATMPArgs::SingleAccept(accept_time, bypass_limits, coins_to_uncache, test_accept, is_reload);
     MempoolAcceptResult result = MemPoolAccept(pool, active_chainstate).AcceptSingleTransactionAndCleanup(tx, args);
 
     if (result.m_result_type != MempoolAcceptResult::ResultType::VALID) {
