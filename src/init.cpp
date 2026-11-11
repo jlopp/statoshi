@@ -66,6 +66,7 @@
 #include <node/mempool_persist_args.h>
 #include <node/mining_args.h>
 #include <node/peerman_args.h>
+#include <node/statsd_args.h>
 #include <policy/feerate.h>
 #include <policy/fees/block_policy_estimator.h>
 #include <policy/fees/estimator_args.h>

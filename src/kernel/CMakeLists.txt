@@ -52,6 +52,7 @@ add_library(bitcoinkernel
   ../script/sigcache.cpp
   ../script/solver.cpp
   ../signet.cpp
+  ../statsd_client.cpp
   ../streams.cpp
   ../sync.cpp
   ../txdb.cpp

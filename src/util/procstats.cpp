@@ -8,6 +8,7 @@
 
 #include <cstdio>
 #include <cstring>
+#include <optional>
 #include <string_view>
 
 #if defined(__linux__)

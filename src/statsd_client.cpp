@@ -38,10 +38,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <cstring>
 #include <ctime>
 
-#include <common/args.h>
-#include <logging.h>
 #include <tinyformat.h>
-#include <util/strencodings.h>
+#include <util/log.h>
 #include <util/syserror.h>
 #include <util/thread.h>
 
@@ -110,8 +108,26 @@ std::string SanitizeKeyPart(const std::string& in)
 
 inline bool fequal(float a, float b)
 {
-    const float epsilon = 0.0001;
-    return ( fabs(a - b) < epsilon );
+    // The literal must be a float: '0.0001' is a double, and MSVC rejects the
+    // implicit narrowing with -Werror (C4305).
+    constexpr float epsilon{0.0001f};
+    return ( std::fabs(a - b) < epsilon );
+}
+
+/**
+ * Describe a getaddrinfo() failure portably.
+ *
+ * gai_strerror() returns a narrow string on POSIX but a WCHAR* on Windows, and
+ * feeding that to tinyformat instantiates the unsupported-wchar path (C2039).
+ * Report the numeric code on Windows and keep the human-readable text elsewhere.
+ */
+static std::string GAIErrorString(int err)
+{
+#ifdef WIN32
+    return strprintf("code %d", err);
+#else
+    return gai_strerror(err);
+#endif
 }
 
 /**
@@ -409,7 +425,7 @@ int StatsdClient::init()
 
         ret = getaddrinfo(d->host.c_str(), NULL, &hints, &result);
         if ( ret ) {
-            d->SetError(strprintf("getaddrinfo fail, error=%d, msg=%s", ret, gai_strerror(ret)));
+            d->SetError(strprintf("getaddrinfo fail, error=%d, msg=%s", ret, GAIErrorString(ret)));
             CloseSock(d->sock);
             d->sock = INVALID_SOCKET;
             d->last_init_failure = now;
@@ -812,35 +828,3 @@ const char* StatsdClient::errmsg()
 } // namespace statsd
 
 statsd::StatsdClient statsClient{statsd::DEFAULT_STATSD_HOST, statsd::DEFAULT_STATSD_PORT, ""};
-
-std::optional<std::string> ConfigureStatsClient(statsd::StatsdClient& client, const ArgsManager& args)
-{
-    if (!args.GetBoolArg("-stats", statsd::DEFAULT_STATS)) {
-        client.SetEnabled(false);
-        LogInfo("Sending statsd metrics disabled (-nostats)");
-        return std::nullopt;
-    }
-
-    const std::string host{args.GetArg("-statshost", statsd::DEFAULT_STATSD_HOST)};
-    if (host.empty()) {
-        return "Invalid -statshost: may not be empty";
-    }
-
-    const int64_t port_arg{args.GetIntArg("-statsport", statsd::DEFAULT_STATSD_PORT)};
-    if (port_arg <= 0 || port_arg > 65535) {
-        return strprintf("Invalid -statsport: %d is not a valid UDP port (1-65535)", static_cast<int>(port_arg));
-    }
-
-    const std::string ns{args.GetArg("-statsnamespace", "")};
-    const std::string nodename{args.GetArg("-statshostname", "")};
-
-    client.config(host, static_cast<int>(port_arg), ns);
-    // The node name partitions every metric key, so it must be set after
-    // config() (which resets everything else) and before the first emission.
-    client.setNodeName(nodename);
-    client.SetEnabled(true);
-
-    LogInfo("Sending statsd metrics to %s:%d (namespace: '%s', node name: '%s')",
-            host, static_cast<int>(port_arg), ns, nodename);
-    return std::nullopt;
-}

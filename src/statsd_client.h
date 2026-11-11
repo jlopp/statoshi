@@ -36,14 +36,11 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
-#include <optional>
 #include <string>
 #include <string_view>
 #include <type_traits>
 #include <utility>
 #include <vector>
-
-class ArgsManager;
 
 namespace statsd {
 
@@ -294,15 +291,5 @@ class StatsdClient {
  * partitioned by the same -statshostname.
  */
 extern statsd::StatsdClient statsClient;
-
-/**
- * Apply the -stats, -statshost, -statsport, -statsnamespace and -statshostname
- * options to @p client. Call once during startup, before any metrics are
- * emitted, and call Start() on the client afterwards.
- *
- * @return std::nullopt on success, otherwise a description of the invalid
- *         option value.
- */
-std::optional<std::string> ConfigureStatsClient(statsd::StatsdClient& client, const ArgsManager& args);
 
 #endif // BITCOIN_STATSD_CLIENT_H
