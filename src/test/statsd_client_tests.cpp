@@ -2,13 +2,10 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include <compat/compat.h>
 #include <statsd_client.h>
 
 #include <util/threadnames.h>
-
-#include <arpa/inet.h>
-#include <netinet/in.h>
-#include <sys/socket.h>
 
 #include <atomic>
 #include <chrono>
@@ -32,10 +29,10 @@ public:
     explicit TestSink(int port)
     {
         m_fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-        BOOST_REQUIRE(m_fd >= 0);
+        BOOST_REQUIRE(m_fd != INVALID_SOCKET);
 
         int rcvbuf{4 * 1024 * 1024};
-        setsockopt(m_fd, SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof(rcvbuf));
+        setsockopt(m_fd, SOL_SOCKET, SO_RCVBUF, reinterpret_cast<const char*>(&rcvbuf), sizeof(rcvbuf));
 
         sockaddr_in addr{};
         addr.sin_family = AF_INET;
@@ -46,12 +43,18 @@ public:
         // A timeout turns "nothing arrived" into an empty read instead of a hang.
         timeval tv{};
         tv.tv_usec = 200'000;
-        setsockopt(m_fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+        setsockopt(m_fd, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<const char*>(&tv), sizeof(tv));
     }
 
     ~TestSink()
     {
-        if (m_fd >= 0) close(m_fd);
+        if (m_fd != INVALID_SOCKET) {
+#ifdef WIN32
+            closesocket(m_fd);
+#else
+            close(m_fd);
+#endif
+        }
     }
 
     TestSink(const TestSink&) = delete;
@@ -72,7 +75,7 @@ public:
     }
 
 private:
-    int m_fd{-1};
+    SOCKET m_fd{INVALID_SOCKET};
 };
 
 int CountLines(const std::string& payload)

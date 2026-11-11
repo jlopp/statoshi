@@ -104,6 +104,8 @@ target_link_libraries(bitcoinkernel
     kernel_warn_interface
     secp256k1_objs
     $<$<PLATFORM_ID:Windows>:bcrypt>
+    # statsd_client.cpp is part of the kernel and uses the Winsock API directly.
+    $<$<PLATFORM_ID:Windows>:ws2_32>
     $<TARGET_NAME_IF_EXISTS:USDT::headers>
     Boost::headers
 )

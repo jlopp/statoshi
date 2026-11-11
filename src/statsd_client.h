@@ -129,6 +129,10 @@ class StatsdClient {
         void setNodeName(const std::string& name);
         //! Turn emission off entirely (-nostats). Queued data is discarded.
         void SetEnabled(bool enabled);
+        //! Whether emission is currently on. Callers that must do real work to
+        //! compute a metric (e.g. the fee estimator's per-target loop) should
+        //! check this first, so no statistics cost is paid when turned off.
+        bool IsEnabled() const;
         const char* errmsg();
 
         /**

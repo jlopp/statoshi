@@ -183,26 +183,31 @@ inline bool should_send(float sample_rate)
     // random() serialises on a global lock, which costs ~9x more once several
     // threads sample concurrently. A per-thread xorshift keeps sampling local
     // to the emitting thread. Sampling decisions do not need a global stream.
+    //
+    // Deliberately multiply-free: wrapping unsigned multiplication is flagged
+    // by the integer sanitizer, and masking it with a suppression would hide
+    // real overflow bugs elsewhere. Shifts and xors cannot overflow.
     thread_local uint64_t state{[] {
-        // splitmix64 of a per-thread address and a clock read, so two threads
-        // started in the same tick do not get identical streams.
+        // Mix a per-thread address with a clock read, so two threads started
+        // in the same tick do not get identical streams.
         uint64_t x{static_cast<uint64_t>(reinterpret_cast<uintptr_t>(&state)) ^
                    static_cast<uint64_t>(std::chrono::steady_clock::now().time_since_epoch().count())};
-        x += 0x9e3779b97f4a7c15ULL;
-        x = (x ^ (x >> 30)) * 0xbf58476d1ce4e5b9ULL;
-        x = (x ^ (x >> 27)) * 0x94d049bb133111ebULL;
-        return x ^ (x >> 31);
+        // Scramble the seed; xorshift requires a non-zero state.
+        x ^= x >> 33;
+        x ^= x << 17;
+        x ^= x >> 29;
+        return x == 0 ? 0x9e3779b97f4a7c15ULL : x;
     }()};
 
-    // xorshift64*
+    // xorshift64
     state ^= state >> 12;
     state ^= state << 25;
     state ^= state >> 27;
-    const uint64_t r{state * 0x2545f4914f6cdd1dULL};
 
     // Map to [0, 1) and compare, so behaviour matches the documented meaning of
-    // a sample rate: the fraction of events that survive.
-    const double p{static_cast<double>(r >> 11) * (1.0 / 9007199254740992.0)};
+    // a sample rate: the fraction of events that survive. The top 53 bits are
+    // the well-mixed ones, and 2^-53 is exact in a double.
+    const double p{static_cast<double>(state >> 11) * (1.0 / 9007199254740992.0)};
     return sample_rate > p;
 }
 
@@ -318,6 +323,11 @@ void StatsdClient::SetEnabled(bool enabled)
     }
 }
 
+bool StatsdClient::IsEnabled() const
+{
+    return d->enabled;
+}
+
 void StatsdClient::Start()
 {
     std::lock_guard<std::mutex> lock(d->mutex);
@@ -418,12 +428,12 @@ int StatsdClient::init()
     if ( ret == 0 )
     {
         // host must be a domain, get it from internet
-        struct addrinfo hints, *result = NULL;
+        struct addrinfo hints, *result = nullptr;
         memset(&hints, 0, sizeof(hints));
         hints.ai_family = AF_INET;
         hints.ai_socktype = SOCK_DGRAM;
 
-        ret = getaddrinfo(d->host.c_str(), NULL, &hints, &result);
+        ret = getaddrinfo(d->host.c_str(), nullptr, &hints, &result);
         if ( ret ) {
             d->SetError(strprintf("getaddrinfo fail, error=%d, msg=%s", ret, GAIErrorString(ret)));
             CloseSock(d->sock);
@@ -643,7 +653,9 @@ int StatsdClient::countSigned(const string& key, int64_t value, float sample_rat
     if (!d->enabled) return 0;
     // Reused across calls on this thread: the formatted line is longer than the
     // small-string buffer, so a fresh std::string would allocate per metric.
-    thread_local string message;
+    // Only used as scratch and never read after the enqueue() copy, so the
+    // thread-exit destruction order the check guards against cannot matter.
+    thread_local string message; // NOLINT(bitcoin-nontrivial-threadlocal)
     message.clear();
     if (!formatSigned(message, key, value, "c", sample_rate)) {
         return 0;
@@ -659,7 +671,7 @@ int StatsdClient::gauge(const string& key, size_t value, float sample_rate)
 int StatsdClient::gaugeSigned(const string& key, int64_t value, float sample_rate)
 {
     if (!d->enabled) return 0;
-    thread_local string message;
+    thread_local string message; // NOLINT(bitcoin-nontrivial-threadlocal)
     message.clear();
     if (!formatSigned(message, key, value, "g", sample_rate)) {
         return 0;
@@ -677,29 +689,37 @@ int StatsdClient::timing(const string& key, size_t ms, float sample_rate)
     return send(key, ms, "ms", sample_rate);
 }
 
-//! Apply the -statshostname suffix and escape the StatsD delimiters.
-//!
-//! Both are no-ops in the common case (no node name, literals at the call site
-//! with no ':' '|' '@'), so the copy is skipped and the caller's string is
-//! returned unchanged. @p storage backs the result only when a copy is needed;
-//! it is thread-local because formatting happens on the emitting thread.
-static const std::string& PrepareKey(const std::string& nodename, const std::string& key_in, std::string& storage)
+//! Append @p in to @p out, replacing the StatsD delimiters that would corrupt
+//! the frame.
+static void AppendEscaped(std::string& out, const std::string& in)
 {
-    const bool needs_suffix{!nodename.empty()};
-    const bool needs_escape{key_in.find_first_of(":|@") != std::string::npos};
-    if (!needs_suffix && !needs_escape) return key_in;
+    for (const char c : in) {
+        out += (c == ':' || c == '|' || c == '@') ? '_' : c;
+    }
+}
 
+//! Append @p key_in to @p out, suffixed with the node name and with the StatsD
+//! delimiters escaped when necessary.
+//!
+//! Both transformations are no-ops in the common case (no node name, and
+//! compile-time literal keys with no ':' '|' '@'), so the copy is skipped and
+//! the key is appended straight from the caller's string. Appending (rather
+//! than returning a reference to one of two buffers) keeps this allocation-free
+//! without a thread_local scratch string.
+static void AppendKey(std::string& out, const std::string& nodename, const std::string& key_in)
+{
+    const bool needs_escape{key_in.find_first_of(":|@") != std::string::npos};
+    const bool needs_suffix{!nodename.empty()};
+    if (!needs_escape && !needs_suffix) {
+        out += key_in;
+        return;
+    }
+
+    AppendEscaped(out, key_in);
     if (needs_suffix) {
-        storage.assign(key_in);
-        storage += '.';
-        storage += nodename;
-    } else {
-        storage.assign(key_in);
+        out += '.';
+        AppendEscaped(out, nodename);
     }
-    for (char& c : storage) {
-        if (c == ':' || c == '|' || c == '@') c = '_';
-    }
-    return storage;
 }
 
 bool StatsdClient::formatSigned(string& out, const string& key_in, int64_t value, const string &type, float sample_rate)
@@ -714,11 +734,8 @@ bool StatsdClient::formatSigned(string& out, const string& key_in, int64_t value
         return false;
     }
 
-    thread_local string storage;
-    const string& key{PrepareKey(d->nodename, key_in, storage)};
-
     out += d->ns;
-    out += key;
+    AppendKey(out, d->nodename, key_in);
     out += ':';
     AppendInt(out, value);
     out += '|';
@@ -743,11 +760,8 @@ bool StatsdClient::format(string& out, const string& key_in, size_t value, const
         return false;
     }
 
-    thread_local string storage;
-    const string& key{PrepareKey(d->nodename, key_in, storage)};
-
     out += d->ns;
-    out += key;
+    AppendKey(out, d->nodename, key_in);
     out += ':';
     AppendInt(out, static_cast<int64_t>(value));
     out += '|';
@@ -772,11 +786,8 @@ bool StatsdClient::formatDouble(string& out, const string& key_in, double value,
         return false;
     }
 
-    thread_local string storage;
-    const string& key{PrepareKey(d->nodename, key_in, storage)};
-
     out += d->ns;
-    out += key;
+    AppendKey(out, d->nodename, key_in);
     out += ':';
     // Use %.17g so small values (e.g. regtest difficulty ~4.7e-10) are not
     // rounded down to zero, while integers stay free of trailing decimals.
@@ -796,7 +807,9 @@ int StatsdClient::send(const string& key, size_t value, const string &type, floa
     if (!d->enabled) return 0;
     // Reused across calls on this thread: the formatted line is longer than the
     // small-string buffer, so a fresh std::string would allocate per metric.
-    thread_local string message;
+    // Only used as scratch and never read after the enqueue() copy, so the
+    // thread-exit destruction order the check guards against cannot matter.
+    thread_local string message; // NOLINT(bitcoin-nontrivial-threadlocal)
     message.clear();
     if (!format(message, key, value, type, sample_rate)) {
         return 0;
@@ -807,7 +820,7 @@ int StatsdClient::send(const string& key, size_t value, const string &type, floa
 int StatsdClient::sendDouble(const string& key, double value, const string &type, float sample_rate)
 {
     if (!d->enabled) return 0;
-    thread_local string message;
+    thread_local string message; // NOLINT(bitcoin-nontrivial-threadlocal)
     message.clear();
     if (!formatDouble(message, key, value, type, sample_rate)) {
         return 0;

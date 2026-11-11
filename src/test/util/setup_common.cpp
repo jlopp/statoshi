@@ -52,6 +52,7 @@
 #include <script/signingprovider.h>
 #include <serialize.h>
 #include <span.h>
+#include <statsd_client.h>
 #include <streams.h>
 #include <sync.h>
 #include <test/util/coverage.h>
@@ -173,6 +174,11 @@ BasicTestingSetup::BasicTestingSetup(const ChainType chainType, TestOpts opts)
         arguments = Cat(arguments, G_TEST_COMMAND_LINE_ARGUMENTS());
     }
     util::ThreadRename("test");
+    // Metrics are a production concern: emitting them in unit tests only costs
+    // time (and the fee estimator's per-target loop is a hot spot there), so
+    // turn the global emitter off. Tests that exercise the client construct
+    // their own StatsdClient instances.
+    statsClient.SetEnabled(false);
     gArgs.ClearPathCache();
     {
         SetupServerArgs(*m_node.args);

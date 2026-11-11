@@ -738,20 +738,27 @@ void CBlockPolicyEstimator::processBlock(const std::vector<RemovedMempoolTransac
     // NOTE: this must happen *after* releasing m_cs_fee_estimator, because
     // estimateSmartFee() now acquires it (it is a non-recursive Mutex).
     //
-    // There are up to 1008 confirm targets. Emitting one datagram per target
-    // cost ~1000 syscalls per block, which dominated the cost of every other
-    // metric combined, so the values are collected first and then sent as a
-    // few large multi-line datagrams (StatsD allows several lines per packet).
-    static constexpr unsigned int MAX_TARGET{1008};
-    std::vector<int64_t> fee_estimates;
-    fee_estimates.reserve(MAX_TARGET);
-    for (unsigned int i = 1; i <= MAX_TARGET; i++) {
-        const CFeeRate feeEstimate = estimateSmartFee(i, nullptr, true);
-        // "No estimate" (and any negative rate) is reported as 0, matching the
-        // behaviour of the previous per-metric loop.
-        fee_estimates.push_back(std::max<int64_t>(0, feeEstimate.GetFeePerK()));
+    // The loop below is the most expensive part of processBlock - up to 1008
+    // estimateSmartFee() calls, each taking the fee estimator lock. With
+    // emission off there is nothing to report, so skip it entirely rather than
+    // paying for metrics nobody will receive.
+    if (statsClient.IsEnabled()) {
+        // There are up to 1008 confirm targets. Emitting one datagram per
+        // target cost ~1000 syscalls per block, which dominated the cost of
+        // every other metric combined, so the values are collected first and
+        // then sent as a few large multi-line datagrams (StatsD allows several
+        // lines per packet).
+        static constexpr unsigned int MAX_TARGET{1008};
+        std::vector<int64_t> fee_estimates;
+        fee_estimates.reserve(MAX_TARGET);
+        for (unsigned int i = 1; i <= MAX_TARGET; i++) {
+            const CFeeRate feeEstimate = estimateSmartFee(i, nullptr, true);
+            // "No estimate" (and any negative rate) is reported as 0, matching
+            // the behaviour of the previous per-metric loop.
+            fee_estimates.push_back(std::max<int64_t>(0, feeEstimate.GetFeePerK()));
+        }
+        statsClient.gaugeBatch("estimates.fee.block", fee_estimates, /*first_index=*/1);
     }
-    statsClient.gaugeBatch("estimates.fee.block", fee_estimates, /*first_index=*/1);
     statsClient.timing("estimates.processBlock_us",
                        Ticks<std::chrono::microseconds>(MockableSteadyClock::now() - estimator_start), 1.0f);
 }
