@@ -428,6 +428,11 @@ void Shutdown(NodeContext& node)
     if (node.validation_signals) {
         node.validation_signals->UnregisterAllValidationInterfaces();
     }
+
+    // Emit the last metrics of this run and stop the flusher before the
+    // objects that produce them are destroyed.
+    statsClient.Stop();
+
     node.fee_estimator_man.reset();
     node.block_template_manager.reset();
     node.mempool.reset();
@@ -507,6 +512,7 @@ void SetupServerArgs(ArgsManager& argsman, bool can_listen_ipc)
         "-choosedatadir", "-lang=<lang>", "-min", "-resetguisettings", "-splash", "-uiplatform"};
 
     argsman.AddArg("-version", "Print version and exit", ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-stats", strprintf("Emit StatsD metrics (default: %u)", statsd::DEFAULT_STATS), ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-statshost=<host>", strprintf("Hostname or IP address of the StatsD/Graphite server metrics are sent to (default: %s)", statsd::DEFAULT_STATSD_HOST), ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-statsport=<port>", strprintf("UDP port of the StatsD/Graphite server metrics are sent to (default: %d)", statsd::DEFAULT_STATSD_PORT), ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-statsnamespace=<prefix>", "Prefix prepended to every emitted metric name (default: none)", ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
@@ -1609,6 +1615,10 @@ bool AppInitMain(NodeContext& node, interfaces::BlockAndHeaderTipInfo* tip_info)
     if (stats_error) {
         return InitError(Untranslated(*stats_error));
     }
+    // Emission is buffered: producers only append text, and a background thread
+    // owns the socket. Start it here so it is running for the whole node
+    // lifetime, and stop it in Shutdown() after the last metric is emitted.
+    statsClient.Start();
 
     LogInfo("Using at most %i automatic connections (%i file descriptors available)", num_p2p_max_connections, available_fds);
 

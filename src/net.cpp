@@ -711,12 +711,18 @@ bool CNode::ReceiveMsgBytes(std::span<const uint8_t> msg_bytes, bool& complete)
             // Store received bytes per message type.
             // To prevent a memory DOS, only allow known message types.
             auto i = mapRecvBytesPerMsgType.find(msg.m_type);
-            if (i == mapRecvBytesPerMsgType.end()) {
+            // The metric key must be drawn from the same closed set as the byte
+            // counters. msg.m_type comes straight off the wire, so using it
+            // directly would let any peer mint unlimited series -- a memory DoS
+            // in statsd, a series explosion in the backend, and unbounded
+            // billing on a hosted one. Unknown types fold into *other*.
+            const bool known{i != mapRecvBytesPerMsgType.end()};
+            if (!known) {
                 i = mapRecvBytesPerMsgType.find(NET_MESSAGE_TYPE_OTHER);
             }
             assert(i != mapRecvBytesPerMsgType.end());
             i->second += msg.m_raw_message_size;
-            statsClient.count("bandwidth.message." + std::string(msg.m_type) + ".bytesReceived", msg.m_raw_message_size, 1.0f);
+            statsClient.count("bandwidth.message." + (known ? msg.m_type : NET_MESSAGE_TYPE_OTHER) + ".bytesReceived", msg.m_raw_message_size, 1.0f);
 
             // push the message to the process queue,
             vRecvMsg.push_back(std::move(msg));
