@@ -223,5 +223,6 @@
   },
   "timezone": "browser",
   "title": "Home",
-  "version": 2
+  "version": 2,
+  "uid": "statoshi-home"
 }
