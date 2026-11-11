@@ -75,7 +75,7 @@
       "fieldConfig": {
         "defaults": {
           "custom": {
-            "axisLabel": "Messages Received per sec",
+            "axisLabel": "messages per second",
             "fillOpacity": 10,
             "lineWidth": 2,
             "axisBorderShow": false,
@@ -124,9 +124,12 @@
                 "value": 80
               }
             ]
-          }
-        }
-      }
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "description": "All message types received, smoothed with a 10-point moving average. Note the receive path keys on the raw protocol type, so junk or unexpected type bytes show up as extra series; see the bandwidth board for that count."
     },
     {
       "datasource": {
@@ -169,7 +172,7 @@
       "fieldConfig": {
         "defaults": {
           "custom": {
-            "axisLabel": "Messages Sent per sec",
+            "axisLabel": "messages per second",
             "fillOpacity": 10,
             "lineWidth": 2,
             "axisBorderShow": false,
@@ -218,9 +221,12 @@
                 "value": 80
               }
             ]
-          }
-        }
-      }
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "description": "All message types sent, smoothed with a 10-point moving average."
     },
     {
       "collapsed": false,
@@ -248,7 +254,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "Messages Per Second",
+            "axisLabel": "messages per second",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -291,7 +297,8 @@
               }
             ]
           },
-          "min": 0
+          "min": 0,
+          "unit": "short"
         },
         "overrides": [
           {
@@ -353,7 +360,8 @@
         }
       ],
       "title": "getData",
-      "type": "timeseries"
+      "type": "timeseries",
+      "description": "Block and transaction download requests. Received tracks inbound block/tx announcements; sent tracks what this node asked its peers for."
     },
     {
       "datasource": {
@@ -369,7 +377,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "Messages Per Second",
+            "axisLabel": "messages per second",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -412,7 +420,8 @@
               }
             ]
           },
-          "min": 0
+          "min": 0,
+          "unit": "short"
         },
         "overrides": [
           {
@@ -474,7 +483,8 @@
         }
       ],
       "title": "addr",
-      "type": "timeseries"
+      "type": "timeseries",
+      "description": "Peer address gossip. Both directions are a live trickle of background traffic."
     },
     {
       "datasource": {
@@ -490,7 +500,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "Messages Per Second",
+            "axisLabel": "messages per second",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -533,7 +543,8 @@
               }
             ]
           },
-          "min": 0
+          "min": 0,
+          "unit": "short"
         },
         "overrides": [
           {
@@ -595,7 +606,8 @@
         }
       ],
       "title": "ping",
-      "type": "timeseries"
+      "type": "timeseries",
+      "description": "Keepalive pings. Sent outpaces received because this node also pings to measure latency; the round-trip time is on the peers board."
     },
     {
       "datasource": {
@@ -611,7 +623,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "Messages Per Second",
+            "axisLabel": "messages per second",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -654,39 +666,10 @@
               }
             ]
           },
-          "min": 0
+          "min": 0,
+          "unit": "short"
         },
         "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Ratio of tx sent:received"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "#CFFAFF"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "getData messages sent"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "#890F02"
-                }
-              }
-            ]
-          },
           {
             "matcher": {
               "id": "byName",
@@ -699,6 +682,30 @@
                   "mode": "fixed",
                   "fixedColor": "#890F02"
                 }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "tx messages received"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "tx messages sent"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
               }
             ]
           }
@@ -755,7 +762,8 @@
         }
       ],
       "title": "tx",
-      "type": "timeseries"
+      "type": "timeseries",
+      "description": "Transaction relay. Sent can run far above received when this node is well connected and other nodes are pulling from it. Note the third series is a ratio, not a rate. Series on the right axis use a different scale from the left."
     },
     {
       "datasource": {
@@ -771,7 +779,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "Messages Per Second",
+            "axisLabel": "messages per second",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -814,58 +822,14 @@
               }
             ]
           },
-          "min": 0
+          "min": 0,
+          "unit": "short"
         },
         "overrides": [
           {
             "matcher": {
               "id": "byName",
-              "options": "Ratio of tx sent:received"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "#CFFAFF"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "getData messages sent"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "#890F02"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
               "options": "inv messages sent"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "#890F02"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "tx messages sent"
             },
             "properties": [
               {
@@ -922,7 +886,8 @@
         }
       ],
       "title": "inv",
-      "type": "timeseries"
+      "type": "timeseries",
+      "description": "Inventory announcements, the dominant message type on the wire. Received is driven by peers announcing new transactions and blocks."
     },
     {
       "datasource": {
@@ -938,7 +903,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "Messages Per Second",
+            "axisLabel": "messages per second",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -981,24 +946,10 @@
               }
             ]
           },
-          "min": 0
+          "min": 0,
+          "unit": "short"
         },
         "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "ping messages sent"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "#890F02"
-                }
-              }
-            ]
-          },
           {
             "matcher": {
               "id": "byName",
@@ -1058,7 +1009,8 @@
         }
       ],
       "title": "pong",
-      "type": "timeseries"
+      "type": "timeseries",
+      "description": "Keepalive replies. Received should roughly track pings sent; a gap means peers are not answering."
     }
   ],
   "preload": false,

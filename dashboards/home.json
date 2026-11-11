@@ -56,7 +56,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "",
+            "axisLabel": "tx/s (left), height (right)",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -105,7 +105,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "stats.gauges.blocks.currentHeight"
+              "options": "Block Height"
             },
             "properties": [
               {
@@ -121,8 +121,26 @@
             },
             "properties": [
               {
-                "id": "custom.axisPlacement",
-                "value": "right"
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#8AB8FF"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Transactions Per Second"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#73BF69"
+                }
               }
             ]
           }
@@ -138,9 +156,9 @@
       "options": {
         "legend": {
           "calcs": [
-            "mean"
+            "lastNotNull"
           ],
-          "displayMode": "list",
+          "displayMode": "table",
           "placement": "bottom",
           "showLegend": true
         },
@@ -170,7 +188,8 @@
         }
       ],
       "title": "Blocks & Transactions",
-      "type": "timeseries"
+      "type": "timeseries",
+      "description": "Block height on the right axis and transactions per second on the left. They differ by six orders of magnitude, so each needs its own scale."
     },
     {
       "gridPos": {

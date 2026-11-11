@@ -35,7 +35,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "",
+            "axisLabel": "transactions",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -77,8 +77,10 @@
                 "value": 80
               }
             ]
-          }
-        }
+          },
+          "unit": "short"
+        },
+        "overrides": []
       },
       "gridPos": {
         "h": 7,
@@ -114,7 +116,8 @@
         }
       ],
       "title": "Total Transactions With Unspent Outputs",
-      "type": "timeseries"
+      "type": "timeseries",
+      "description": "Transactions that still have at least one unspent output, about 113 million. This is a subset of the 1.48 billion historical transactions."
     },
     {
       "datasource": {
@@ -130,7 +133,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "",
+            "axisLabel": "outputs",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -172,8 +175,10 @@
                 "value": 80
               }
             ]
-          }
-        }
+          },
+          "unit": "short"
+        },
+        "overrides": []
       },
       "gridPos": {
         "h": 7,
@@ -209,7 +214,8 @@
         }
       ],
       "title": "Unspent Transaction Outputs",
-      "type": "timeseries"
+      "type": "timeseries",
+      "description": "Total unspent outputs, about 163 million."
     },
     {
       "datasource": {
@@ -225,7 +231,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "",
+            "axisLabel": "bytes",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -289,18 +295,6 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "stats.gauges.utxoset.dbSizeBytes"
-            },
-            "properties": [
-              {
-                "id": "custom.axisPlacement",
-                "value": "right"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
               "options": "dbSizeBytes"
             },
             "properties": [
@@ -350,7 +344,8 @@
         }
       ],
       "title": "Size of Serialized UTXO Set",
-      "type": "timeseries"
+      "type": "timeseries",
+      "description": "Serialized size of the UTXO set on disk, about 11.3 GB."
     },
     {
       "datasource": {
@@ -366,7 +361,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "",
+            "axisLabel": "BTC",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -408,7 +403,8 @@
                 "value": 80
               }
             ]
-          }
+          },
+          "unit": "none"
         },
         "overrides": [
           {
@@ -462,14 +458,15 @@
         }
       ],
       "title": "Total Bitcoins in Existence",
-      "type": "timeseries"
+      "type": "timeseries",
+      "description": "Sum of all unspent output values, about 20.11 million BTC. Includes coins that are provably unspendable, so it drifts slightly above the circulating supply."
     },
     {
       "datasource": {
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Cache occupancy and dirty entries drive flush behaviour; the other UTXO gauges all describe the on-disk set.",
+      "description": "Cache occupancy and dirty entries drive flush behaviour; the other UTXO gauges all describe the on-disk set. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
       "fieldConfig": {
         "defaults": {
           "color": {

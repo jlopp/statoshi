@@ -35,7 +35,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "",
+            "axisLabel": "transactions",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -77,37 +77,11 @@
                 "value": 80
               }
             ]
-          }
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "memoryUsageBytes"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#FCE2DE",
-                  "mode": "fixed"
-                }
-              }
-            ]
           },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "totalTransactions"
-            },
-            "properties": [
-              {
-                "id": "custom.axisPlacement",
-                "value": "right"
-              }
-            ]
-          }
-        ]
+          "unit": "short",
+          "min": 0
+        },
+        "overrides": []
       },
       "gridPos": {
         "h": 7,
@@ -137,19 +111,12 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByMetric(stats.gauges.transactions.mempool.totalTxBytes)"
-        },
-        {
-          "datasource": {
-            "type": "graphite",
-            "uid": "000000001"
-          },
-          "refId": "B",
           "target": "aliasByMetric(stats.gauges.transactions.mempool.totalTransactions)"
         }
       ],
-      "title": "Mempool Transactions",
-      "type": "timeseries"
+      "title": "Mempool Occupancy",
+      "type": "timeseries",
+      "description": "Transactions currently in the mempool. The byte total used to share this axis and flattened the count; it is on the Mempool Size panel on this board."
     },
     {
       "datasource": {
@@ -165,7 +132,104 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "",
+            "axisLabel": "bytes",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "decbytes",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 24,
+        "x": 0,
+        "y": 7
+      },
+      "id": 32,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "13.3.1",
+      "targets": [
+        {
+          "datasource": {
+            "type": "graphite",
+            "uid": "000000001"
+          },
+          "refId": "A",
+          "target": "aliasByMetric(stats.gauges.transactions.mempool.totalTxBytes)"
+        }
+      ],
+      "title": "Mempool Size",
+      "type": "timeseries",
+      "description": "Serialized size of everything in the mempool. Kept separate from the count panel because bytes and transaction counts differ by three orders of magnitude."
+    },
+    {
+      "datasource": {
+        "type": "graphite",
+        "uid": "000000001"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "bytes",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -232,7 +296,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 7
+        "y": 14
       },
       "id": 1,
       "options": {
@@ -260,7 +324,8 @@
         }
       ],
       "title": "Mempool Dynamic Memory Usage",
-      "type": "timeseries"
+      "type": "timeseries",
+      "description": "Dynamic memory used by the mempool, including per-entry overhead. Larger than the raw serialized size."
     },
     {
       "datasource": {
@@ -276,7 +341,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "",
+            "axisLabel": "satoshis per kvB",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -318,24 +383,10 @@
                 "value": 80
               }
             ]
-          }
+          },
+          "unit": "none"
         },
         "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "memoryUsageBytes"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#FCE2DE",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
           {
             "matcher": {
               "id": "byName",
@@ -357,7 +408,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 14
+        "y": 21
       },
       "id": 3,
       "options": {
@@ -385,7 +436,8 @@
         }
       ],
       "title": "Minimum Mempool Transaction Fee",
-      "type": "timeseries"
+      "type": "timeseries",
+      "description": "Rolling minimum fee rate a transaction must beat to enter the mempool. Reads zero in the live store, meaning the floor is currently unset and admission is limited by other policy rather than by fee."
     },
     {
       "collapsed": false,
@@ -393,7 +445,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 21
+        "y": 28
       },
       "id": 21,
       "panels": [],
@@ -405,7 +457,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Why the mempool drained. Before this, a block, a reorg and a mass eviction were indistinguishable.",
+      "description": "Why the mempool drained. Before this, a block, a reorg and a mass eviction were indistinguishable. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -466,7 +518,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 22
+        "y": 29
       },
       "id": 22,
       "options": {
@@ -543,7 +595,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": null,
+      "description": "Total fees of transactions leaving the mempool, per second, in satoshis. This was labelled as a transaction count; it is a value rate, so the unit is now satoshis and it reads in the millions. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -596,7 +648,7 @@
               }
             ]
           },
-          "unit": "short"
+          "unit": "none"
         },
         "overrides": []
       },
@@ -604,7 +656,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 29
+        "y": 36
       },
       "id": 23,
       "options": {
@@ -657,7 +709,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Average time a transaction waited before leaving, per exit reason. Normalised per transaction by dividing by that reason's own count.",
+      "description": "Average time a transaction waited before leaving, per exit reason. Normalised per transaction by dividing by that reason's own count. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -718,7 +770,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 36
+        "y": 43
       },
       "id": 24,
       "options": {
@@ -771,7 +823,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Forced removals plus the fee floor driving them. rollingMinFeePerKb updates on each size-limit trim.",
+      "description": "Forced removals plus the fee floor driving them. rollingMinFeePerKb updates on each size-limit trim. Series on the right axis use a different scale from the left. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -826,13 +878,26 @@
           },
           "unit": "short"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "rolling min fee (sat/kvB)"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 43
+        "y": 50
       },
       "id": 25,
       "options": {
@@ -885,7 +950,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Orphan transactions awaiting a missing parent. A standing pool of thousands with zero churn means those parents are never arriving.",
+      "description": "Orphan transactions awaiting a missing parent. A standing pool of thousands with zero churn means those parents are never arriving. Series on the right axis use a different scale from the left.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -940,13 +1005,26 @@
           },
           "unit": "short"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "orphans held"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 50
+        "y": 57
       },
       "id": 26,
       "options": {
@@ -999,7 +1077,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": null,
+      "description": "Cache-style counters against a timing. The consistency check is in microseconds while the other two are counts, so only the counts are comparable. Series on the right axis use a different scale from the left. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1054,13 +1132,26 @@
           },
           "unit": "short"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "consistency check"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 57
+        "y": 64
       },
       "id": 27,
       "options": {
@@ -1113,7 +1204,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Cluster-mempool bookkeeping, which had no visibility. Trim() runs on every block disconnect, making it a hidden cost of reorgs.",
+      "description": "Cluster-mempool bookkeeping, which had no visibility. Trim() runs on every block disconnect, making it a hidden cost of reorgs. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1174,7 +1265,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 64
+        "y": 71
       },
       "id": 28,
       "options": {
@@ -1235,7 +1326,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Non-zero budget exhaustion means the graph stopped tracking dependencies, so cluster limits become approximate.",
+      "description": "Non-zero budget exhaustion means the graph stopped tracking dependencies, so cluster limits become approximate. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1296,7 +1387,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 71
+        "y": 78
       },
       "id": 29,
       "options": {
@@ -1358,7 +1449,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 78
+        "y": 85
       },
       "id": 30,
       "panels": [],
@@ -1370,7 +1461,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "feeDelta is a signed counter (replacement fee minus replaced fee). The rate series are instantaneous ratios, so read them from the tooltip.",
+      "description": "Fee delta is a rate in satoshis per second; the two fee rates are in satoshis per vbyte. Different units share this axis, so compare shapes rather than heights. Series on the right axis use a different scale from the left. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1408,7 +1499,7 @@
             "thresholdsStyle": {
               "mode": "off"
             },
-            "axisLabel": "fee delta and sat/vB"
+            "axisLabel": "sat/s vs sat/vB"
           },
           "thresholds": {
             "mode": "absolute",
@@ -1423,15 +1514,40 @@
               }
             ]
           },
-          "unit": "short"
+          "unit": "none"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "replacement fee rate (sat/vB)"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "replaced fee rate (sat/vB)"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 79
+        "y": 86
       },
       "id": 31,
       "options": {

@@ -35,7 +35,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "",
+            "axisLabel": "microseconds",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -84,21 +84,6 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "lower"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#0A437C",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
               "options": "mean"
             },
             "properties": [
@@ -106,21 +91,6 @@
                 "id": "color",
                 "value": {
                   "fixedColor": "#3F6833",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "upper"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#E0F9D7",
                   "mode": "fixed"
                 }
               }
@@ -162,7 +132,8 @@
         }
       ],
       "title": "AcceptBlock",
-      "type": "timeseries"
+      "type": "timeseries",
+      "description": "Time to accept and validate a block, mean per block in microseconds. Includes reading from disk and checking its header and transactions."
     },
     {
       "datasource": {
@@ -178,7 +149,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "",
+            "axisLabel": "microseconds",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -227,21 +198,6 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "lower"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#0A437C",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
               "options": "mean"
             },
             "properties": [
@@ -249,21 +205,6 @@
                 "id": "color",
                 "value": {
                   "fixedColor": "#EAB839",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "upper"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#E0F9D7",
                   "mode": "fixed"
                 }
               }
@@ -305,7 +246,8 @@
         }
       ],
       "title": "CheckBlock",
-      "type": "timeseries"
+      "type": "timeseries",
+      "description": "Header and basic context-free validation, mean in microseconds. Runs before the more expensive connection step."
     },
     {
       "datasource": {
@@ -321,7 +263,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "",
+            "axisLabel": "milliseconds",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -370,21 +312,6 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "lower"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#0A437C",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
               "options": "mean"
             },
             "properties": [
@@ -392,21 +319,6 @@
                 "id": "color",
                 "value": {
                   "fixedColor": "#F9E2D2",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "upper"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#E0F9D7",
                   "mode": "fixed"
                 }
               }
@@ -448,7 +360,8 @@
         }
       ],
       "title": "ConnectBlock",
-      "type": "timeseries"
+      "type": "timeseries",
+      "description": "Full connection of a block to the UTXO set, mean in milliseconds. The stage breakdown below shows where the time goes."
     },
     {
       "datasource": {
@@ -464,7 +377,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "",
+            "axisLabel": "milliseconds",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -513,21 +426,6 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "lower"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#0A437C",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
               "options": "mean"
             },
             "properties": [
@@ -535,21 +433,6 @@
                 "id": "color",
                 "value": {
                   "fixedColor": "#82B5D8",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "upper"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#E0F9D7",
                   "mode": "fixed"
                 }
               }
@@ -591,7 +474,8 @@
         }
       ],
       "title": "ConnectTip",
-      "type": "timeseries"
+      "type": "timeseries",
+      "description": "End-to-end chain tip update including connection, flush and post-connect steps, mean in milliseconds."
     },
     {
       "datasource": {
@@ -607,7 +491,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "",
+            "axisLabel": "milliseconds",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -653,21 +537,6 @@
           "unit": "ms"
         },
         "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "stats.timers.AcceptToMemoryPool_ms.upper"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#BF1B00",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
           {
             "matcher": {
               "id": "byName",
@@ -735,7 +604,8 @@
         }
       ],
       "title": "AcceptToMemoryPool",
-      "type": "timeseries"
+      "type": "timeseries",
+      "description": "Mempool admission time. Lower, median and upper are the rollup percentiles; lower reading zero is normal for the cheapest transactions."
     },
     {
       "datasource": {
@@ -751,7 +621,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "",
+            "axisLabel": "milliseconds",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -864,7 +734,8 @@
         }
       ],
       "title": "CheckInputs",
-      "type": "timeseries"
+      "type": "timeseries",
+      "description": "Input and script validation for mempool admission, in milliseconds. Lower and median both read zero because most transactions validate almost instantly."
     },
     {
       "datasource": {
@@ -880,7 +751,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "",
+            "axisLabel": "microseconds",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -993,7 +864,8 @@
         }
       ],
       "title": "CheckTransaction",
-      "type": "timeseries"
+      "type": "timeseries",
+      "description": "Context-free transaction checks in microseconds. Upper is the 90th percentile and tracks the largest transactions."
     },
     {
       "collapsed": false,
@@ -1013,7 +885,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Six non-overlapping intervals that sum to ConnectBlock. Emitted as counters (accumulated microseconds), so each is divided by blocks.connected to recover microseconds per block. This turns the single ConnectBlock number into an attribution.",
+      "description": "Six non-overlapping intervals that sum to ConnectBlock. Emitted as counters (accumulated microseconds), so each is divided by blocks.connected to recover microseconds per block. This turns the single ConnectBlock number into an attribution. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1051,7 +923,7 @@
             "thresholdsStyle": {
               "mode": "off"
             },
-            "axisLabel": "microseconds per block"
+            "axisLabel": "microseconds"
           },
           "thresholds": {
             "mode": "absolute",
@@ -1151,7 +1023,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Stage breakdown of ConnectTip, normalised per block by dividing by blocks.connected.",
+      "description": "Stage breakdown of ConnectTip, normalised per block by dividing by blocks.connected. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1189,7 +1061,7 @@
             "thresholdsStyle": {
               "mode": "off"
             },
-            "axisLabel": "microseconds per block"
+            "axisLabel": "microseconds"
           },
           "thresholds": {
             "mode": "absolute",
@@ -1408,7 +1280,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Per-database read latency (chainstate, blockindex, and any indexes).",
+      "description": "Per-database read latency (chainstate, blockindex, and any indexes). Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1506,7 +1378,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Per-database write-batch latency. A chainstate write spike here explains a stall no validation timer accounts for.",
+      "description": "Per-database write-batch latency. A chainstate write spike here explains a stall no validation timer accounts for. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1604,7 +1476,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": null,
+      "description": "LevelDB read hit rate per column family, as a fraction. A falling rate means the working set no longer fits in the block cache. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1712,7 +1584,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Per-method request latency, already emitted for every RPC call.",
+      "description": "Per-method request latency, already emitted for every RPC call. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1810,7 +1682,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": null,
+      "description": "Calls per second broken out by RPC method. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1908,7 +1780,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": null,
+      "description": "RPC errors per second, split into typed and untyped. Should be flat at zero. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -2014,7 +1886,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Rare but expensive operations. These explain otherwise unexplained pauses around assumeutxo and fee-estimator updates.",
+      "description": "Rare but expensive operations. These explain otherwise unexplained pauses around assumeutxo and fee-estimator updates. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
       "fieldConfig": {
         "defaults": {
           "color": {

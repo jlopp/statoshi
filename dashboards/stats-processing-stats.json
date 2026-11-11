@@ -35,7 +35,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "",
+            "axisLabel": "packets per second",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -80,38 +80,7 @@
           },
           "unit": "short"
         },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "scaleToSeconds(stats_counts.statsd.packets_received,1)"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "#1F78C1"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "stats_counts.statsd.packets_received"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "#1F78C1"
-                }
-              }
-            ]
-          }
-        ]
+        "overrides": []
       },
       "gridPos": {
         "h": 7,
@@ -145,7 +114,8 @@
         }
       ],
       "title": "Stats Processed per Second By StatsD",
-      "type": "timeseries"
+      "type": "timeseries",
+      "description": "Packets per second arriving at StatsD, about 220-700."
     },
     {
       "datasource": {
@@ -161,7 +131,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "",
+            "axisLabel": "bytes",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -204,22 +174,9 @@
               }
             ]
           },
-          "unit": "bytes"
+          "unit": "decbytes"
         },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "carbon.agents.statoshi-a.cache.queries"
-            },
-            "properties": [
-              {
-                "id": "custom.axisPlacement",
-                "value": "right"
-              }
-            ]
-          }
-        ]
+        "overrides": []
       },
       "gridPos": {
         "h": 7,
@@ -250,18 +207,11 @@
           },
           "refId": "A",
           "target": "carbon.agents.statoshi-a.memUsage"
-        },
-        {
-          "datasource": {
-            "type": "graphite",
-            "uid": "000000001"
-          },
-          "refId": "B",
-          "target": "carbon.agents.statoshi-a.cache.queries"
         }
       ],
-      "title": "Carbon Usage",
-      "type": "timeseries"
+      "title": "Carbon Memory Usage",
+      "type": "timeseries",
+      "description": "Resident memory of the Carbon collector, about 31-33 MB. Cache query counts used to share this axis and sat on the baseline; they are on Carbon Cache Efficiency."
     },
     {
       "datasource": {
@@ -277,7 +227,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "",
+            "axisLabel": "milliseconds",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -320,22 +270,9 @@
               }
             ]
           },
-          "unit": "short"
+          "unit": "ms"
         },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "stats.statsd.graphiteStats.flush_length"
-            },
-            "properties": [
-              {
-                "id": "custom.axisPlacement",
-                "value": "right"
-              }
-            ]
-          }
-        ]
+        "overrides": []
       },
       "gridPos": {
         "h": 7,
@@ -374,18 +311,11 @@
           },
           "refId": "B",
           "target": "stats.statsd.graphiteStats.flush_time"
-        },
-        {
-          "datasource": {
-            "type": "graphite",
-            "uid": "000000001"
-          },
-          "refId": "C",
-          "target": "stats.statsd.graphiteStats.flush_length"
         }
       ],
-      "title": "Graphite Stats",
-      "type": "timeseries"
+      "title": "Graphite Flush Timing",
+      "type": "timeseries",
+      "description": "StatsD calculation and flush time, single-digit milliseconds."
     },
     {
       "collapsed": false,
@@ -556,7 +486,8 @@
               }
             ]
           },
-          "unit": "short"
+          "unit": "short",
+          "min": 0
         },
         "overrides": []
       },
@@ -617,7 +548,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "timestamp_lag is how far behind real time the data is - the one number that says whether these graphs are trustworthy.",
+      "description": "Timestamp lag is how far behind real time the pipeline is; both series read zero, which is the healthy state.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -723,7 +654,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": null,
+      "description": "Time StatsD spends flushing to Graphite. Sub-millisecond in the live store, which is healthy. Payload size is on the panel below. Series on the right axis use a different scale from the left.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -761,7 +692,7 @@
             "thresholdsStyle": {
               "mode": "off"
             },
-            "axisLabel": "ms and bytes"
+            "axisLabel": "milliseconds"
           },
           "thresholds": {
             "mode": "absolute",
@@ -776,7 +707,7 @@
               }
             ]
           },
-          "unit": "short"
+          "unit": "ms"
         },
         "overrides": []
       },
@@ -811,17 +742,107 @@
           },
           "refId": "A",
           "target": "alias(stats.statsd.graphiteStats.flush_time, 'flush time')"
+        }
+      ],
+      "title": "Graphite Flush Health",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "graphite",
+        "uid": "000000001"
+      },
+      "description": "Bytes handed to Carbon on each flush, roughly 80 KB. Split off from flush timing: 0.4 ms and 80,000 bytes on one axis made the timing series invisible.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "showValues": false,
+            "spanNulls": true,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            },
+            "axisLabel": "bytes per flush"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "decbytes"
         },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 24,
+        "x": 0,
+        "y": 50
+      },
+      "id": 16,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "13.3.1",
+      "targets": [
         {
           "datasource": {
             "type": "graphite",
             "uid": "000000001"
           },
-          "refId": "B",
+          "refId": "A",
           "target": "alias(stats.statsd.graphiteStats.flush_length, 'flush payload')"
         }
       ],
-      "title": "Graphite Flush Health",
+      "title": "Graphite Flush Payload",
       "type": "timeseries"
     },
     {
@@ -830,7 +851,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 50
+        "y": 57
       },
       "id": 10,
       "panels": [],
@@ -842,7 +863,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Writes Carbon refused. Previously only memUsage and cache.queries were plotted, so silent data loss was invisible.",
+      "description": "Dropped creates, errors and blacklist matches. All three read zero, which is the healthy state.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -895,7 +916,8 @@
               }
             ]
           },
-          "unit": "short"
+          "unit": "short",
+          "min": 0
         },
         "overrides": []
       },
@@ -903,7 +925,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 51
+        "y": 58
       },
       "id": 11,
       "options": {
@@ -956,7 +978,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "If metricsReceived outruns committedPoints, Carbon is falling behind.",
+      "description": "Metrics arriving at Carbon against points committed to disk and cache queries. Received and committed track each other closely.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -994,7 +1016,7 @@
             "thresholdsStyle": {
               "mode": "off"
             },
-            "axisLabel": "per second"
+            "axisLabel": "points per second"
           },
           "thresholds": {
             "mode": "absolute",
@@ -1009,7 +1031,8 @@
               }
             ]
           },
-          "unit": "short"
+          "unit": "short",
+          "min": 0
         },
         "overrides": []
       },
@@ -1017,7 +1040,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 58
+        "y": 65
       },
       "id": 12,
       "options": {
@@ -1070,7 +1093,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": null,
+      "description": "cpuUsage is a percentage (5-7). avgUpdateTime is seconds per update (about 0.0003). pointsPerUpdate is a fixed count of 1. Three different units on one axis; read values from the legend. Series on the right axis use a different scale from the left.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1108,7 +1131,7 @@
             "thresholdsStyle": {
               "mode": "off"
             },
-            "axisLabel": "mixed"
+            "axisLabel": "percent, seconds, and ratio"
           },
           "thresholds": {
             "mode": "absolute",
@@ -1125,13 +1148,26 @@
           },
           "unit": "short"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "avg update time"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 65
+        "y": 72
       },
       "id": 13,
       "options": {
@@ -1178,6 +1214,239 @@
       ],
       "title": "Carbon Load",
       "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "graphite",
+        "uid": "000000001"
+      },
+      "description": "Receipt against commit. metricsReceived persistently above committedPoints (currently ~9,120 vs ~9,138) would mean Carbon is falling behind its input; pointsPerUpdate stays at 1, so update operations and committed points track together.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "per second",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "showValues": false,
+            "spanNulls": true,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 24,
+        "x": 0,
+        "y": 79
+      },
+      "id": 14,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "13.3.1",
+      "targets": [
+        {
+          "datasource": {
+            "type": "graphite",
+            "uid": "000000001"
+          },
+          "refId": "A",
+          "target": "alias(carbon.agents.statoshi-a.metricsReceived, 'metrics received/s')"
+        },
+        {
+          "datasource": {
+            "type": "graphite",
+            "uid": "000000001"
+          },
+          "refId": "B",
+          "target": "alias(carbon.agents.statoshi-a.committedPoints, 'committed points/s')"
+        },
+        {
+          "datasource": {
+            "type": "graphite",
+            "uid": "000000001"
+          },
+          "refId": "C",
+          "target": "alias(carbon.agents.statoshi-a.updateOperations, 'update operations/s')"
+        }
+      ],
+      "title": "Carbon Ingestion vs Commit Rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "graphite",
+        "uid": "000000001"
+      },
+      "description": "Cache query rate against the hit ratio for those queries. The ratio is a fraction, not a percentage, so it reads 0-0.11. Series on the right axis use a different scale from the left.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "queries/s and ratio",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "showValues": false,
+            "spanNulls": true,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "cache queries/s"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 86
+      },
+      "id": 15,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "13.3.1",
+      "targets": [
+        {
+          "datasource": {
+            "type": "graphite",
+            "uid": "000000001"
+          },
+          "refId": "A",
+          "target": "alias(carbon.agents.statoshi-a.cache.queries, 'cache queries/s')"
+        },
+        {
+          "datasource": {
+            "type": "graphite",
+            "uid": "000000001"
+          },
+          "refId": "B",
+          "target": "alias(divideSeries(carbon.agents.statoshi-a.cache.queries, carbon.agents.statoshi-a.metricsReceived), 'cache hits per metric')"
+        }
+      ],
+      "title": "Carbon Cache Efficiency",
+      "type": "timeseries"
     }
   ],
   "preload": false,
@@ -1202,7 +1471,7 @@
     ]
   },
   "timezone": "browser",
-  "title": "Stats Processing Stats",
+  "title": "Telemetry Pipeline",
   "uid": "000000004",
   "version": 2
 }

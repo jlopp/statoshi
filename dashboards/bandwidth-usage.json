@@ -35,7 +35,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "",
+            "axisLabel": "bytes per second",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -110,36 +110,6 @@
                 }
               }
             ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "stats.bandwidth.bytesReceived"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#508642",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "stats.bandwidth.bytesSent"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#BF1B00",
-                  "mode": "fixed"
-                }
-              }
-            ]
           }
         ]
       },
@@ -156,7 +126,7 @@
             "mean",
             "max"
           ],
-          "displayMode": "list",
+          "displayMode": "table",
           "placement": "bottom",
           "showLegend": true
         },
@@ -186,7 +156,8 @@
         }
       ],
       "title": "Incoming & Outgoing Bandwidth Usage per second",
-      "type": "timeseries"
+      "type": "timeseries",
+      "description": "Both series come from the sampled counters in CConnman::RecordBytesRecv/Sent. Receive is emitted with sample_rate 0.1 and send with 0.01, so their absolute levels are not directly comparable. Use the reconciliation panel on this board to see the per-message sums, which are unsampled."
     },
     {
       "datasource": {
@@ -202,7 +173,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "",
+            "axisLabel": "cumulative bytes",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -251,51 +222,6 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "TotalBandwidth"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#6ED0E0",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "stats.gauges.bandwidth.totalBytesSent"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#BF1B00",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "sumSeries(stats.gauges.bandwidth.*)"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#65C5DB",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
               "options": "totalBytesReceived"
             },
             "properties": [
@@ -322,30 +248,6 @@
                 }
               }
             ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "stats.gauges.bandwidth.totalBytesSent"
-            },
-            "properties": [
-              {
-                "id": "custom.axisPlacement",
-                "value": "right"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "totalBytesSent"
-            },
-            "properties": [
-              {
-                "id": "custom.axisPlacement",
-                "value": "right"
-              }
-            ]
           }
         ]
       },
@@ -361,7 +263,7 @@
           "calcs": [
             "lastNotNull"
           ],
-          "displayMode": "list",
+          "displayMode": "table",
           "placement": "bottom",
           "showLegend": true
         },
@@ -391,7 +293,8 @@
         }
       ],
       "title": "Total Bandwidth Used Since Last Restart",
-      "type": "timeseries"
+      "type": "timeseries",
+      "description": "Cumulative bytes since the node started, from the sampled connection counters. Because receive and send use different sample rates (0.1 and 0.01), these totals under-report the two directions by different factors."
     },
     {
       "datasource": {
@@ -407,7 +310,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "",
+            "axisLabel": "bytes per second",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -452,68 +355,7 @@
           },
           "unit": "Bps"
         },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "bytesReceived"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#508642",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "bytesSent"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#BF1B00",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "stats.bandwidth.bytesReceived"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#508642",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "stats.bandwidth.bytesSent"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#BF1B00",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          }
-        ]
+        "overrides": []
       },
       "gridPos": {
         "h": 12,
@@ -550,7 +392,8 @@
         }
       ],
       "title": "Incoming Bandwidth Usage by Message",
-      "type": "timeseries"
+      "type": "timeseries",
+      "description": "Per message type, received. Event-driven types (block, cmpctblock) are almost always zero between blocks, so they read as spikes rather than a continuous rate."
     },
     {
       "datasource": {
@@ -566,7 +409,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "",
+            "axisLabel": "bytes per second",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -611,68 +454,7 @@
           },
           "unit": "Bps"
         },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "bytesReceived"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#508642",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "bytesSent"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#BF1B00",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "stats.bandwidth.bytesReceived"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#508642",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "stats.bandwidth.bytesSent"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#BF1B00",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          }
-        ]
+        "overrides": []
       },
       "gridPos": {
         "h": 12,
@@ -709,7 +491,8 @@
         }
       ],
       "title": "Outgoing Bandwidth Usage by Message",
-      "type": "timeseries"
+      "type": "timeseries",
+      "description": "Per message type, sent. tx and inv dominate; the leading edge of the y axis is set by the busiest type, so quieter messages sit near the floor."
     },
     {
       "datasource": {
@@ -725,7 +508,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "",
+            "axisLabel": "cumulative bytes per message",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -771,66 +554,6 @@
           "unit": "decbytes"
         },
         "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "bytesReceived"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#508642",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "bytesSent"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#BF1B00",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "stats.bandwidth.bytesReceived"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#508642",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "stats.bandwidth.bytesSent"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#BF1B00",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
           {
             "matcher": {
               "id": "byValue",
@@ -887,7 +610,8 @@
         }
       ],
       "title": "Total Incoming Bandwidth Usage by Message (currently connected peers)",
-      "type": "timeseries"
+      "type": "timeseries",
+      "description": "Cumulative bytes received per message type since start. The leading series is usually addrv2 or inv; quieter types are pinned to the baseline."
     },
     {
       "datasource": {
@@ -903,7 +627,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "",
+            "axisLabel": "cumulative bytes per message",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -949,66 +673,6 @@
           "unit": "decbytes"
         },
         "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "bytesReceived"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#508642",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "bytesSent"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#BF1B00",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "stats.bandwidth.bytesReceived"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#508642",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "stats.bandwidth.bytesSent"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#BF1B00",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
           {
             "matcher": {
               "id": "byValue",
@@ -1065,7 +729,8 @@
         }
       ],
       "title": "Total Outgoing Bandwidth Usage by Message (currently connected peers)",
-      "type": "timeseries"
+      "type": "timeseries",
+      "description": "Cumulative bytes sent per message type since start. tx and inv dominate by a wide margin."
     },
     {
       "datasource": {
@@ -1081,7 +746,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "",
+            "axisLabel": "bytes per second",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -1126,53 +791,7 @@
           },
           "unit": "Bps"
         },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Top 5% Bandwidth Spikes"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#BF1B00",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "removeBelowPercentile(sumSeries(stats.bandwidth.*), 90)"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#447EBC",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "removeBelowPercentile(sumSeries(stats.bandwidth.*), 95)"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#1F78C1",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          }
-        ]
+        "overrides": []
       },
       "gridPos": {
         "h": 8,
@@ -1206,7 +825,8 @@
         }
       ],
       "title": "95th Percentile Bandwidth Usage",
-      "type": "timeseries"
+      "type": "timeseries",
+      "description": "Top 5% of bandwidth series by value, summed. Reads as a stress indicator rather than a true percentile of total throughput."
     },
     {
       "datasource": {
@@ -1335,7 +955,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "The receive path builds its key from the raw msg.m_type while the send path runs SanitizeString() over it, so garbage or truncated types produce extra keys. Bitcoin's message set is around 30 types; a count noticeably above that means junk keys are being created.",
+      "description": "Bitcoin has roughly 30 message types. The receive path keys on the raw msg.m_type while the send path sanitizes it, so junk keys inflate the received count. Currently 45 received against 25 sent.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1388,7 +1008,8 @@
               }
             ]
           },
-          "unit": "short"
+          "unit": "short",
+          "min": 0
         },
         "overrides": []
       },

@@ -35,7 +35,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "Satoshis per virtual byte",
+            "axisLabel": "satoshis per virtual byte",
             "axisPlacement": "left",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -77,8 +77,10 @@
                 "value": 80
               }
             ]
-          }
-        }
+          },
+          "unit": "none"
+        },
+        "overrides": []
       },
       "gridPos": {
         "h": 7,
@@ -90,9 +92,10 @@
       "options": {
         "legend": {
           "calcs": [
-            "lastNotNull"
+            "lastNotNull",
+            "max"
           ],
-          "displayMode": "list",
+          "displayMode": "table",
           "placement": "bottom",
           "showLegend": true
         },
@@ -110,7 +113,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByNode(scale(stats.gauges.estimates.fee.block1, 0.001), 4)"
+          "target": "alias(aliasByNode(scale(stats.gauges.estimates.fee.block1, 0.001), 4), 'within 1 blocks')"
         },
         {
           "datasource": {
@@ -118,7 +121,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "aliasByNode(scale(stats.gauges.estimates.fee.block2, 0.001), 4)"
+          "target": "alias(aliasByNode(scale(stats.gauges.estimates.fee.block2, 0.001), 4), 'within 2 blocks')"
         },
         {
           "datasource": {
@@ -126,7 +129,7 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "aliasByNode(scale(stats.gauges.estimates.fee.block3, 0.001), 4)"
+          "target": "alias(aliasByNode(scale(stats.gauges.estimates.fee.block3, 0.001), 4), 'within 3 blocks')"
         },
         {
           "datasource": {
@@ -134,7 +137,7 @@
             "uid": "000000001"
           },
           "refId": "D",
-          "target": "aliasByNode(scale(stats.gauges.estimates.fee.block4, 0.001), 4)"
+          "target": "alias(aliasByNode(scale(stats.gauges.estimates.fee.block4, 0.001), 4), 'within 4 blocks')"
         },
         {
           "datasource": {
@@ -142,7 +145,7 @@
             "uid": "000000001"
           },
           "refId": "E",
-          "target": "aliasByNode(scale(stats.gauges.estimates.fee.block5, 0.001), 4)"
+          "target": "alias(aliasByNode(scale(stats.gauges.estimates.fee.block5, 0.001), 4), 'within 5 blocks')"
         },
         {
           "datasource": {
@@ -150,7 +153,7 @@
             "uid": "000000001"
           },
           "refId": "F",
-          "target": "aliasByNode(scale(stats.gauges.estimates.fee.block10, 0.001), 4)"
+          "target": "alias(aliasByNode(scale(stats.gauges.estimates.fee.block10, 0.001), 4), 'within 10 blocks')"
         },
         {
           "datasource": {
@@ -158,7 +161,7 @@
             "uid": "000000001"
           },
           "refId": "G",
-          "target": "aliasByNode(scale(stats.gauges.estimates.fee.block20, 0.001), 4)"
+          "target": "alias(aliasByNode(scale(stats.gauges.estimates.fee.block20, 0.001), 4), 'within 20 blocks')"
         },
         {
           "datasource": {
@@ -166,7 +169,7 @@
             "uid": "000000001"
           },
           "refId": "H",
-          "target": "aliasByNode(scale(stats.gauges.estimates.fee.block100, 0.001), 4)"
+          "target": "alias(aliasByNode(scale(stats.gauges.estimates.fee.block100, 0.001), 4), 'within 100 blocks')"
         },
         {
           "datasource": {
@@ -174,11 +177,12 @@
             "uid": "000000001"
           },
           "refId": "I",
-          "target": "aliasByNode(scale(stats.gauges.estimates.fee.block1000, 0.001), 4)"
+          "target": "alias(aliasByNode(scale(stats.gauges.estimates.fee.block1000, 0.001), 4), 'within 1000 blocks')"
         }
       ],
       "title": "Recommended Transaction Fee for Target Confirmation in X Blocks",
-      "type": "timeseries"
+      "type": "timeseries",
+      "description": "Estimated fee rate to be confirmed within N blocks, in satoshis per vbyte. Each series is a confirmation target. The estimator only produces about 10 distinct rates across all 1008 targets, so neighbouring targets overlap exactly."
     },
     {
       "datasource": {
@@ -194,7 +198,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "Satoshis per virtual byte",
+            "axisLabel": "satoshis per vbyte",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -236,40 +240,10 @@
                 "value": 80
               }
             ]
-          }
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Fee per KB"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#65C5DB",
-                  "mode": "fixed"
-                }
-              }
-            ]
           },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Fee per byte"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#6ED0E0",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          }
-        ]
+          "unit": "none"
+        },
+        "overrides": []
       },
       "gridPos": {
         "h": 7,
@@ -281,10 +255,10 @@
       "options": {
         "legend": {
           "calcs": [
-            "mean",
-            "lastNotNull"
+            "lastNotNull",
+            "max"
           ],
-          "displayMode": "list",
+          "displayMode": "table",
           "placement": "bottom",
           "showLegend": true
         },
@@ -315,7 +289,8 @@
         }
       ],
       "title": "Average Network Transaction Fees per Byte",
-      "type": "timeseries"
+      "type": "timeseries",
+      "description": "What the network actually paid on average, in satoshis per vbyte. The transaction-size series is still queried because the fee rate is derived from it, but it is hidden: it is not a fee rate and would distort the axis."
     },
     {
       "datasource": {
@@ -331,7 +306,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "Satoshis per virtual byte",
+            "axisLabel": "satoshis per vbyte",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -373,130 +348,10 @@
                 "value": 80
               }
             ]
-          }
+          },
+          "unit": "none"
         },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Fee per KB"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#65C5DB",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Fee per byte"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#629E51",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Highest 5th percentile fee rate"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#890F02",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Highest percentile fee rate"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#890F02",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Fee per KB"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#65C5DB",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Fee per byte"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#629E51",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Highest 5th percentile fee rate"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#890F02",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Highest percentile fee rate"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#890F02",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          }
-        ]
+        "overrides": []
       },
       "gridPos": {
         "h": 7,
@@ -508,10 +363,10 @@
       "options": {
         "legend": {
           "calcs": [
-            "max",
-            "min"
+            "lastNotNull",
+            "max"
           ],
-          "displayMode": "list",
+          "displayMode": "table",
           "placement": "bottom",
           "showLegend": true
         },
@@ -550,14 +405,15 @@
         }
       ],
       "title": "Network Transaction Fees per Byte Range",
-      "type": "timeseries"
+      "type": "timeseries",
+      "description": "The 1st and 99th percentile fee rates paid by the network, in satoshis per vbyte. Together they bracket the spread of real fee rates. The size series is queried but hidden, since it is not a fee rate."
     },
     {
       "datasource": {
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "The store holds 1008 fee buckets; only 9 were graphed. These six fill the gap between 5 and 1000, where the fee curve has its knee.",
+      "description": "The same estimates at 6, 12, 25, 50, 144 and 1008 blocks. These six plus the nine on the panel above cover the entire bucket range the node publishes.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -595,7 +451,7 @@
             "thresholdsStyle": {
               "mode": "off"
             },
-            "axisLabel": "Satoshis per virtual byte"
+            "axisLabel": "satoshis per virtual byte"
           },
           "thresholds": {
             "mode": "absolute",
@@ -624,7 +480,8 @@
       "options": {
         "legend": {
           "calcs": [
-            "lastNotNull"
+            "lastNotNull",
+            "max"
           ],
           "displayMode": "table",
           "placement": "bottom",
@@ -644,7 +501,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByNode(scale(stats.gauges.estimates.fee.block6, 0.001), 4)"
+          "target": "alias(aliasByNode(scale(stats.gauges.estimates.fee.block6, 0.001), 4), 'within 6 blocks')"
         },
         {
           "datasource": {
@@ -652,7 +509,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "aliasByNode(scale(stats.gauges.estimates.fee.block12, 0.001), 4)"
+          "target": "alias(aliasByNode(scale(stats.gauges.estimates.fee.block12, 0.001), 4), 'within 12 blocks')"
         },
         {
           "datasource": {
@@ -660,7 +517,7 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "aliasByNode(scale(stats.gauges.estimates.fee.block25, 0.001), 4)"
+          "target": "alias(aliasByNode(scale(stats.gauges.estimates.fee.block25, 0.001), 4), 'within 25 blocks')"
         },
         {
           "datasource": {
@@ -668,7 +525,7 @@
             "uid": "000000001"
           },
           "refId": "D",
-          "target": "aliasByNode(scale(stats.gauges.estimates.fee.block50, 0.001), 4)"
+          "target": "alias(aliasByNode(scale(stats.gauges.estimates.fee.block50, 0.001), 4), 'within 50 blocks')"
         },
         {
           "datasource": {
@@ -676,7 +533,7 @@
             "uid": "000000001"
           },
           "refId": "E",
-          "target": "aliasByNode(scale(stats.gauges.estimates.fee.block144, 0.001), 4)"
+          "target": "alias(aliasByNode(scale(stats.gauges.estimates.fee.block144, 0.001), 4), 'within 144 blocks')"
         },
         {
           "datasource": {
@@ -684,7 +541,7 @@
             "uid": "000000001"
           },
           "refId": "F",
-          "target": "aliasByNode(scale(stats.gauges.estimates.fee.block1008, 0.001), 4)"
+          "target": "alias(aliasByNode(scale(stats.gauges.estimates.fee.block1008, 0.001), 4), 'within 1008 blocks')"
         }
       ],
       "title": "Recommended Fee Across Wider Confirmation Targets",
@@ -708,7 +565,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "A rising untracked share means estimates are degrading. Previously only visible in a debug log.",
+      "description": "How many confirmed transactions the fee estimator is retaining for its statistics, and how many it could not place in any fee bucket. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -761,7 +618,8 @@
               }
             ]
           },
-          "unit": "short"
+          "unit": "short",
+          "min": 0
         },
         "overrides": []
       },
@@ -775,9 +633,10 @@
       "options": {
         "legend": {
           "calcs": [
-            "lastNotNull"
+            "lastNotNull",
+            "max"
           ],
-          "displayMode": "list",
+          "displayMode": "table",
           "placement": "bottom",
           "showLegend": true
         },
@@ -822,7 +681,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "countedTxs is how many of the last block's transactions fed the estimator; maxUsableEstimate is the longest confirmation target it can answer for.",
+      "description": "countedTxs is a transaction count from the last block; maxUsableEstimate is a confirmation target in blocks. They share an axis but measure different things. Series on the right axis use a different scale from the left. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -860,7 +719,7 @@
             "thresholdsStyle": {
               "mode": "off"
             },
-            "axisLabel": "count and blocks"
+            "axisLabel": "count / blocks"
           },
           "thresholds": {
             "mode": "absolute",
@@ -877,7 +736,20 @@
           },
           "unit": "short"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "max usable target (blocks)"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 7,
@@ -889,9 +761,10 @@
       "options": {
         "legend": {
           "calcs": [
-            "lastNotNull"
+            "lastNotNull",
+            "max"
           ],
-          "displayMode": "list",
+          "displayMode": "table",
           "placement": "bottom",
           "showLegend": true
         },
