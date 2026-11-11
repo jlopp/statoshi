@@ -577,6 +577,20 @@ void CNode::CloseSocketDisconnect()
             ConnectionTypeAsString().c_str(),
             ConnectedThroughNetwork(),
             TicksSinceEpoch<std::chrono::seconds>(m_connected));
+
+        // peers.disconnect counts closes but says nothing about how long the
+        // connection lasted or what it was. A flood of 1-second block-relay
+        // closes is a very different event from a long-lived inbound peer
+        // leaving, and peers.oldest/newestConnectionAgeSeconds only describes
+        // the peers still connected, so short-lived churn never shows up.
+        {
+            const std::string type_name{ConnectionTypeAsString()};
+            statsClient.countBatch({
+                {"peers.closed." + type_name, 1},
+                {"peers.closed." + type_name + ".lifetimeSeconds",
+                 Ticks<std::chrono::seconds>(NodeClock::now() - m_connected)},
+            });
+        }
     }
     m_i2p_sam_session.reset();
 }
@@ -1752,6 +1766,14 @@ bool CConnman::AttemptToEvictConnection(bool evict_tx_relay_peer_only, std::opti
                 pnode->ConnectedThroughNetwork(),
                 TicksSinceEpoch<std::chrono::seconds>(pnode->m_connected));
             statsClient.inc("peers.disconnect", 1.0f);
+            // Eviction increments peers.disconnect like any other close, so a
+            // node under inbound pressure looked like ordinary peer churn. The
+            // connection age at eviction is the useful part: evicting young
+            // peers means we are turning away real demand.
+            statsClient.countBatch({
+                {"peers.evicted.inbound", 1},
+                {"peers.evicted.inbound.ageSeconds", Ticks<std::chrono::seconds>(NodeClock::now() - pnode->m_connected)},
+            });
             pnode->fDisconnect = true;
             return true;
         }
@@ -1896,6 +1918,18 @@ void CConnman::CreateNodeFromAcceptedSocket(std::unique_ptr<Sock>&& sock,
         pnode->ConnectionTypeAsString().c_str(),
         pnode->ConnectedThroughNetwork(),
         GetNodeCount(ConnectionDirection::In));
+
+    // peers.connect is only emitted for connections we initiate, so inbound
+    // accepts had no counter at all (only the gauge of current peers). The
+    // network split matters because an eclipse attempt shows up as a flood of
+    // inbound connections from one network.
+    {
+        const std::string net_name{GetNetworkName(pnode->ConnectedThroughNetwork())};
+        statsClient.countBatch({
+            {"peers.inbound.accepted", 1},
+            {"peers.inbound.network." + net_name, 1},
+        });
+    }
 
     // We received a new connection, harvest entropy from the time (and our peer count)
     RandAddEvent((uint32_t)id);
@@ -3293,6 +3327,19 @@ bool CConnman::OpenNetworkConnection(const CAddress& addrConnect,
         pnode->ConnectionTypeAsString().c_str(),
         pnode->ConnectedThroughNetwork(),
         GetNodeCount(ConnectionDirection::Out));
+
+    // peers.connect counts every attempt that produced a node, but it does not
+    // say which of the seven connection roles was established or over which
+    // network. Only the tracepoint had that, and tracing is off in production
+    // builds, so feeler/block-relay/private-broadcast churn was unobservable.
+    {
+        const std::string type_name{pnode->ConnectionTypeAsString()};
+        const std::string net_name{GetNetworkName(pnode->ConnectedThroughNetwork())};
+        statsClient.countBatch({
+            {"peers.outbound.connected." + type_name, 1},
+            {"peers.outbound.connected." + type_name + ".network." + net_name, 1},
+        });
+    }
 
     return true;
 }

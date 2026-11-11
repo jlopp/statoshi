@@ -543,7 +543,14 @@ void BlockManager::WriteBlockIndexDB()
         m_dirty_blockindex.erase(it++);
     }
     int max_blockfile{this->MaxBlockfileNum()};
+    // WriteBatchSync() also fsyncs the block index DB, so this is a real disk
+    // stall. It ran with no timer, which made it look like an unexplained
+    // ConnectTip_ms spike whenever the dirty set was large.
+    const auto start{MockableSteadyClock::now()};
     m_block_tree_db->WriteBatchSync(vFiles, max_blockfile, vBlocks);
+    statsClient.timing("blocks.indexWrite_us", Ticks<std::chrono::microseconds>(MockableSteadyClock::now() - start), 1.0f);
+    statsClient.count("blocks.indexWriteEntries", vBlocks.size(), 1.0f);
+    statsClient.count("blocks.indexWriteFiles", vFiles.size(), 1.0f);
 }
 
 bool BlockManager::LoadBlockIndexDB(const std::optional<uint256>& snapshot_blockhash)

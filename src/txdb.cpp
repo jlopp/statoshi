@@ -11,6 +11,7 @@
 #include <primitives/transaction.h>
 #include <random.h>
 #include <serialize.h>
+#include <statsd_client.h>
 #include <uint256.h>
 #include <util/byte_units.h>
 #include <util/log.h>
@@ -153,6 +154,11 @@ void CCoinsViewDB::BatchWrite(CoinsViewCacheCursor& cursor, const uint256& block
     }
 
     if (dirty_count > WARN_FLUSH_COINS_COUNT) LogWarning("Flushing large (%d entries) UTXO set to disk, it may take several minutes", dirty_count);
+    // This is the largest single write in the process: up to WARN_FLUSH_COINS_COUNT
+    // entries, with an explicit warning that it can take minutes. It was only ever
+    // measurable indirectly, as chainstate.flush_us minus its component parts, so
+    // make the coins-cache write its own first-class series.
+    const auto coins_write_start{MockableSteadyClock::now()};
     LOG_TIME_MILLIS_WITH_CATEGORY(strprintf("write coins cache to disk (%d out of %d cached coins)",
         dirty_count, cursor.GetTotalCount()), BCLog::BENCH);
 
@@ -196,6 +202,10 @@ void CCoinsViewDB::BatchWrite(CoinsViewCacheCursor& cursor, const uint256& block
     LogDebug(BCLog::COINDB, "Writing final batch of %.2f MiB\n", batch.ApproximateSize() / double(1_MiB));
     m_db->WriteBatch(batch);
     LogDebug(BCLog::COINDB, "Committed %u changed transaction outputs (out of %u) to coin database...", (unsigned int)dirty_count, (unsigned int)count);
+    statsClient.timing("chainstate.writeCoinsCache_us",
+                       Ticks<std::chrono::microseconds>(MockableSteadyClock::now() - coins_write_start), 1.0f);
+    statsClient.count("chainstate.writeCoinsCacheEntries", static_cast<int64_t>(dirty_count), 1.0f);
+    statsClient.count("chainstate.writeCoinsCacheCached", static_cast<int64_t>(cursor.GetTotalCount()), 1.0f);
 }
 
 size_t CCoinsViewDB::EstimateSize() const

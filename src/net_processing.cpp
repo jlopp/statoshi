@@ -5507,6 +5507,14 @@ bool PeerManagerImpl::ProcessMessages(CNode& node, std::atomic<bool>& interruptM
         msg.m_recv.data()
     );
 
+    // Inbound bytes were only ever exposed as a cumulative per-type gauge built
+    // from mapRecvBytesPerMsgType, which cannot show a burst in progress. The
+    // message count itself was counted in ProcessMessage() further down, so
+    // only the byte accounting belongs here -- and it has to happen before
+    // ProcessMessage() consumes the message.
+    statsClient.count("bandwidth.message." + SanitizeString(msg.m_type) + ".bytesReceived",
+                      msg.m_recv.size(), 1.0f);
+
     if (m_opts.capture_messages) {
         CaptureMessage(node.addr, msg.m_type, MakeUCharSpan(msg.m_recv), /*is_incoming=*/true);
     }

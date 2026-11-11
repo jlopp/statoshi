@@ -164,6 +164,11 @@ static void MaybeDispatchRequestToWorker(std::shared_ptr<HTTPRequest> hreq)
 
     // Dispatch to worker thread
     if (i != iend) {
+        // The rejection counter below only fires once the queue is already full,
+        // so the ramp-up toward saturation was invisible. Emit the depth itself,
+        // which is what tells you whether a burst was absorbed or nearly dropped.
+        statsClient.gauge("http.workQueueDepth", g_threadpool_http.WorkQueueSize(), 1.0f);
+        statsClient.gauge("http.maxQueueDepth", g_max_queue_depth, 1.0f);
         if (static_cast<int>(g_threadpool_http.WorkQueueSize()) >= g_max_queue_depth) {
             LogWarning("Request rejected because http work queue depth exceeded, it can be increased with the -rpcworkqueue= setting");
             statsClient.count("http.queueDepthRejected", 1, 1.0f);

@@ -7,6 +7,7 @@
 
 #include <chain.h>
 #include <consensus/validation.h>
+#include <statsd_client.h>
 #include <txmempool.h>
 #include <util/log.h>
 #include <validation.h>
@@ -272,6 +273,23 @@ std::vector<GenTxid> TxDownloadManagerImpl::GetRequestsToSend(NodeId nodeid, std
     for (const auto& [expired_nodeid, gtxid] : expired) {
         LogDebug(BCLog::NET, "timeout of inflight %s %s from peer=%d\n", gtxid.IsWtxid() ? "wtx" : "tx",
                  gtxid.ToUint256().ToString(), expired_nodeid);
+    }
+    // An inflight request that times out is the clearest signal that an announced
+    // transaction was never delivered: the peer either could not or would not
+    // serve it. This was debug-log only, so a peer that announces transactions
+    // and then silently drops every getdata was indistinguishable from ordinary
+    // network latency.
+    if (!expired.empty()) {
+        statsClient.count("transactions.download.timedOut", expired.size(), 1.0f);
+        // Split by txid vs wtxid, since a peer that only fails wtxid requests is
+        // a different (and much more specific) fault than one failing both.
+        int64_t n_wtxid{0};
+        int64_t n_txid{0};
+        for (const auto& [_, gtxid] : expired) {
+            gtxid.IsWtxid() ? ++n_wtxid : ++n_txid;
+        }
+        if (n_wtxid > 0) statsClient.count("transactions.download.timedOut.wtx", n_wtxid, 1.0f);
+        if (n_txid > 0) statsClient.count("transactions.download.timedOut.tx", n_txid, 1.0f);
     }
     for (const GenTxid& gtxid : requestable) {
         if (!AlreadyHaveTx(gtxid, /*include_reconsiderable=*/false)) {

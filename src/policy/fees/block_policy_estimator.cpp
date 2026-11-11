@@ -674,6 +674,11 @@ bool CBlockPolicyEstimator::processBlockTx(unsigned int nBlockHeight, const Remo
 void CBlockPolicyEstimator::processBlock(const std::vector<RemovedMempoolTransactionInfo>& txs_removed_for_block,
                                          unsigned int nBlockHeight)
 {
+    // Fee estimation runs synchronously inside block connection, and its three
+    // exponentials are decayed for every tracked target. That cost was never
+    // measured, so an estimator-induced ConnectTip_ms regression was
+    // indistinguishable from disk or script-verification cost.
+    const auto estimator_start{MockableSteadyClock::now()};
     {
         LOCK(m_cs_fee_estimator);
 
@@ -747,6 +752,8 @@ void CBlockPolicyEstimator::processBlock(const std::vector<RemovedMempoolTransac
         fee_estimates.push_back(std::max<int64_t>(0, feeEstimate.GetFeePerK()));
     }
     statsClient.gaugeBatch("estimates.fee.block", fee_estimates, /*first_index=*/1);
+    statsClient.timing("estimates.processBlock_us",
+                       Ticks<std::chrono::microseconds>(MockableSteadyClock::now() - estimator_start), 1.0f);
 }
 
 CFeeRate CBlockPolicyEstimator::estimateFee(int confTarget) const

@@ -570,12 +570,12 @@ public:
               m_bypass_limits{bypass_limits},
               m_coins_to_uncache{coins_to_uncache},
               m_test_accept{test_accept},
-              m_is_readmission{is_readmission},
               m_allow_replacement{allow_replacement},
               m_allow_sibling_eviction{allow_sibling_eviction},
               m_package_submission{package_submission},
               m_package_feerates{package_feerates},
-              m_client_maxfeerate{client_maxfeerate}
+              m_client_maxfeerate{client_maxfeerate},
+              m_is_readmission{is_readmission}
         {
             // If we are using package feerates, we must be doing package submission.
             // It also means sibling eviction is not permitted.
@@ -1253,6 +1253,19 @@ void MemPoolAccept::FinalizeSubpackage(const ATMPArgs& args)
                 feerate.fee,
                 replaced_with_tx
         );
+        // RBF was a bare occurrence count (transactions.replaced) even though
+        // the replacement's economics are what decides whether evicting the old
+        // transaction was correct. The delta also distinguishes a genuine
+        // fee-bump from an attacker cycling the same transaction through the
+        // mempool for free.
+        statsClient.countBatch({
+            {"transactions.rbf.replaced.vsize", it->GetTxSize()},
+            {"transactions.rbf.replaced.fees", it->GetFee()},
+            {"transactions.rbf.replacement.vsize", feerate.size},
+            {"transactions.rbf.replacement.fees", feerate.fee},
+            {"transactions.rbf.feeDelta", feerate.fee - it->GetFee()},
+            {"transactions.rbf.residencySeconds", GetTime() - it->GetTime().count()},
+        });
         m_subpackage.m_replaced_transactions.push_back(it->GetSharedTx());
     }
     m_subpackage.m_changeset->Apply();
@@ -2824,6 +2837,36 @@ bool Chainstate::ConnectBlock(const CBlock& block, BlockValidationState& state, 
 
     const auto diff{MockableSteadyClock::now() - start};
     statsClient.timing("ConnectBlock_ms", Ticks<std::chrono::milliseconds>(diff), 1.0f);
+    // Everything below is already computed for the tracepoint above, so this
+    // adds no work beyond building one datagram. The block-level aggregates
+    // were only visible as gauges of the *latest* block (blocks.current*) or as
+    // per-transaction counts during mempool acceptance
+    // (transactions.inputs/sigOps); neither says how much work a given
+    // connected block actually represented.
+    statsClient.countBatch({
+        {"blocks.connected", 1},
+        {"blocks.connected.transactions", static_cast<int64_t>(block.vtx.size())},
+        {"blocks.connected.inputs", nInputs},
+        {"blocks.connected.sigOpsCost", nSigOpsCost},
+        // Stage breakdown of ConnectBlock. Every one of these six intervals was
+        // already measured for -debug=bench and consumed only by LogDebug, so a
+        // ConnectBlock_ms spike could only be attributed to script verification
+        // (via CheckInputs_ms); the other five had no series at all. They are
+        // merged into this batch rather than emitted separately so that adding
+        // them costs no additional datagram.
+        {"validation.connectBlock.sanityChecks_us", Ticks<std::chrono::microseconds>(time_1 - time_start)},
+        {"validation.connectBlock.forkChecks_us", Ticks<std::chrono::microseconds>(time_2 - time_1)},
+        {"validation.connectBlock.connect_us", Ticks<std::chrono::microseconds>(time_3 - time_2)},
+        // Note: the -debug=bench "Verify N txins" line reports time_4 - time_2,
+        // which overlaps the connect stage above (script checks are queued to the
+        // checkqueue during the connect loop and awaited after it). Using
+        // time_4 - time_3 here instead keeps the six stages non-overlapping so
+        // they sum to the block total. When the checkqueue is inactive the
+        // checks run inline and this interval is simply ~0, which is accurate.
+        {"validation.connectBlock.scriptVerify_us", Ticks<std::chrono::microseconds>(time_4 - time_3)},
+        {"validation.connectBlock.undoWrite_us", Ticks<std::chrono::microseconds>(time_5 - time_4)},
+        {"validation.connectBlock.indexWrite_us", Ticks<std::chrono::microseconds>(time_6 - time_5)},
+    });
 
     return true;
 }
@@ -2897,16 +2940,26 @@ bool Chainstate::FlushStateToDisk(
             if (nManualPruneHeight > 0) {
                 LOG_TIME_MILLIS_WITH_CATEGORY("find files to prune (manual)", BCLog::BENCH);
 
+                const auto prune_scan_start{MockableSteadyClock::now()};
                 m_blockman.FindFilesToPruneManual(
                     setFilesToPrune,
                     std::min(last_prune, nManualPruneHeight),
                     *this);
+                statsClient.timing("blocks.findFilesToPrune_us.manual",
+                                   Ticks<std::chrono::microseconds>(MockableSteadyClock::now() - prune_scan_start), 1.0f);
             } else {
                 LOG_TIME_MILLIS_WITH_CATEGORY("find files to prune", BCLog::BENCH);
 
+                // Walk of the whole block index; only its result (blocks.prunedFiles)
+                // was counted, never its duration, so a prune-induced flush stall was
+                // indistinguishable from a chainstate write stall.
+                const auto prune_scan_start{MockableSteadyClock::now()};
                 m_blockman.FindFilesToPrune(setFilesToPrune, last_prune, *this, m_chainman);
+                statsClient.timing("blocks.findFilesToPrune_us",
+                                   Ticks<std::chrono::microseconds>(MockableSteadyClock::now() - prune_scan_start), 1.0f);
                 m_blockman.m_check_for_pruning = false;
             }
+            statsClient.gauge("blocks.pruneCandidates", setFilesToPrune.size(), 1.0f);
             if (!setFilesToPrune.empty()) {
                 fFlushForPrune = true;
                 if (!m_blockman.m_have_pruned) {
@@ -2954,7 +3007,12 @@ bool Chainstate::FlushStateToDisk(
             if (fFlushForPrune) {
                 LOG_TIME_MILLIS_WITH_CATEGORY("unlink pruned files", BCLog::BENCH);
 
+                // Unlinking is filesystem I/O inside the flush critical section and
+                // was only ever logged.
+                const auto unlink_start{MockableSteadyClock::now()};
                 m_blockman.UnlinkPrunedFiles(setFilesToPrune);
+                statsClient.timing("blocks.unlinkPrunedFiles_us",
+                                   Ticks<std::chrono::microseconds>(MockableSteadyClock::now() - unlink_start), 1.0f);
             }
 
             if (!CoinsTip().GetBestBlock().IsNull()) {
@@ -2976,6 +3034,15 @@ bool Chainstate::FlushStateToDisk(
                 statsClient.gauge("chainstate.flushCoins", coins_count, 1.0f);
                 statsClient.gauge("chainstate.flushCoinsDirty", CoinsTip().GetDirtyCount(), 1.0f);
                 statsClient.gauge("chainstate.flushCoinsMemoryBytes", coins_mem_usage, 1.0f);
+                // The flush mode and the prune flag decide whether the cost above
+                // is a routine background write or an emergency sync, and only the
+                // tracepoint carried them. A FORCE_SYNC from `savemempool`/shutdown
+                // looks identical to a periodic write without them.
+                statsClient.countBatch({
+                    {"chainstate.flush", 1},
+                    {"chainstate.flush.mode." + std::string{FlushStateModeNames[size_t(mode)]}, 1},
+                    {"chainstate.flush.forPrune", fFlushForPrune ? 1 : 0},
+                });
                 TRACEPOINT(utxocache, flush,
                     int64_t{Ticks<std::chrono::microseconds>(NodeClock::now() - nNow)},
                     (uint32_t)mode,
@@ -3126,6 +3193,11 @@ bool Chainstate::DisconnectTip(BlockValidationState& state, DisconnectedBlockTra
     }
     LogDebug(BCLog::BENCH, "- Disconnect block: %.2fms\n",
              Ticks<MillisecondsDouble>(SteadyClock::now() - time_start));
+    // DisconnectBlock itself has its own timer, but this interval additionally
+    // covers the coins view and its flush, so it is the tip-level cost of losing
+    // a block. It was log-only, making it the one reorg phase with no statsd
+    // series to compare against ConnectTip_ms.
+    statsClient.timing("DisconnectTip_ms", Ticks<std::chrono::milliseconds>(SteadyClock::now() - time_start), 1.0f);
 
     {
         // Prune locks that began at or after the tip should be moved backward so they get a chance to reorg
@@ -3283,6 +3355,17 @@ bool Chainstate::ConnectTip(
 
     const auto diff{MockableSteadyClock::now() - start};
     statsClient.timing("ConnectTip_ms", Ticks<std::chrono::milliseconds>(diff), 1.0f);
+    // Phase breakdown of ConnectTip. All six intervals were already measured for
+    // -debug=bench, but only the total reached statsd, so a ConnectTip_ms spike
+    // could not be attributed to disk read, script verification, the coins
+    // flush, or the chainstate write without turning on bench logging.
+    statsClient.countBatch({
+        {"validation.connectTip.loadBlock_us", Ticks<std::chrono::microseconds>(time_2 - time_1)},
+        {"validation.connectTip.connect_us", Ticks<std::chrono::microseconds>(time_3 - time_2)},
+        {"validation.connectTip.coinsFlush_us", Ticks<std::chrono::microseconds>(time_4 - time_3)},
+        {"validation.connectTip.chainstateWrite_us", Ticks<std::chrono::microseconds>(time_5 - time_4)},
+        {"validation.connectTip.postConnect_us", Ticks<std::chrono::microseconds>(time_6 - time_5)},
+    });
     connected_blocks.emplace_back(pindexNew, std::move(block_to_connect));
     return true;
 }
@@ -3374,6 +3457,8 @@ bool Chainstate::ActivateBestChainStep(BlockValidationState& state, CBlockIndex&
 
     // Disconnect active blocks which are no longer in the best chain.
     bool fBlocksDisconnected = false;
+    const int nOldTipHeight{pindexOldTip ? pindexOldTip->nHeight : -1};
+    const int nForkHeight{pindexFork ? pindexFork->nHeight : -1};
     DisconnectedBlockTransactions disconnectpool{MAX_DISCONNECTED_TX_POOL_BYTES};
     while (m_chain.Tip() && m_chain.Tip() != pindexFork) {
         if (!DisconnectTip(state, &disconnectpool)) {
@@ -3437,10 +3522,27 @@ bool Chainstate::ActivateBestChainStep(BlockValidationState& state, CBlockIndex&
         }
     }
 
+    // Sample the reconnect pool before it is drained below: this is the number
+    // of transactions a reorganization forces back into the mempool.
+    const int64_t nDisconnectedTxs{static_cast<int64_t>(disconnectpool.size())};
+
     if (fBlocksDisconnected) {
         // If any blocks were disconnected, disconnectpool may be non empty.  Add
         // any disconnected transactions back to the mempool.
         MaybeUpdateMempoolForReorg(disconnectpool, true);
+    }
+
+    // Depth and churn of this step. These are counters, so they sum correctly if
+    // ActivateBestChain() has to re-enter this function partway through a reorg.
+    // The chain.reorg event itself is emitted once, from ActivateBestChain().
+    // Only the losing side is reported: the winning branch may be connected over
+    // several subsequent calls, so a "connectedBlocks" series here would report
+    // a truncated count rather than the length of the new chain.
+    if (fBlocksDisconnected) {
+        statsClient.countBatch({
+            {"chain.reorg.disconnectedBlocks", nOldTipHeight - nForkHeight},
+            {"chain.reorg.disconnectedTxs", nDisconnectedTxs},
+        });
     }
     if (m_mempool) m_mempool->check(this->CoinsTip(), this->m_chain.Height() + 1);
 
@@ -3523,6 +3625,10 @@ bool Chainstate::ActivateBestChain(BlockValidationState& state, std::shared_ptr<
     CBlockIndex *pindexMostWork = nullptr;
     CBlockIndex *pindexNewTip = nullptr;
     bool exited_ibd{false};
+    // Whether any block was disconnected during this call, i.e. whether the tip
+    // moved sideways or backwards rather than simply extending. Recorded once
+    // per call so that a multi-step reorg counts as a single event.
+    bool any_blocks_disconnected{false};
     do {
         // Block until the validation queue drains. This should largely
         // never happen in normal operation, however may happen during
@@ -3565,6 +3671,12 @@ bool Chainstate::ActivateBestChain(BlockValidationState& state, std::shared_ptr<
                     return false;
                 }
                 blocks_connected = true;
+                // A fork point below the tip we started this iteration from means
+                // at least one block was disconnected from the active chain.
+                if (const CBlockIndex* fork{starting_tip ? m_chain.FindFork(*starting_tip) : nullptr};
+                    fork && fork != starting_tip) {
+                    any_blocks_disconnected = true;
+                }
 
                 if (fInvalidFound) {
                     // Wipe cache, we may need another branch now.
@@ -3663,6 +3775,12 @@ bool Chainstate::ActivateBestChain(BlockValidationState& state, std::shared_ptr<
 
     const auto diff{MockableSteadyClock::now() - start};
     statsClient.timing("ActivateBestChain_ms", Ticks<std::chrono::milliseconds>(diff), 1.0f);
+    // Emit the reorg event once for the whole call. The depth/churn counters are
+    // emitted per step inside ActivateBestChainStep and sum across steps, so this
+    // is the only series that says "a reorg happened" exactly once.
+    if (any_blocks_disconnected) {
+        statsClient.count("chain.reorg", 1, 1.0f);
+    }
 
     return true;
 }
@@ -5954,7 +6072,17 @@ static void FlushSnapshotToDisk(CCoinsViewCache& coins_cache, bool snapshot_load
                   coins_cache.DynamicMemoryUsage() / (1000 * 1000)),
         BCLog::LogFlags::ALL);
 
+    // AssumeUTXO load and validation were entirely uninstrumented: the log line
+    // above is MSG_ONCE, so only the first flush in the process was ever
+    // reported, and its duration never reached metrics at all. Snapshot
+    // population is minutes of I/O in production, so give it a real series.
+    const auto snapshot_flush_start{MockableSteadyClock::now()};
+    const int64_t memory_bytes{static_cast<int64_t>(coins_cache.DynamicMemoryUsage())};
     coins_cache.Flush();
+    statsClient.timing("snapshot.flush_us",
+                       Ticks<std::chrono::microseconds>(MockableSteadyClock::now() - snapshot_flush_start), 1.0f);
+    statsClient.count("snapshot.flush.memoryBytes", memory_bytes, 1.0f);
+    statsClient.count(std::string{"snapshot.flush."} + (snapshot_loaded ? "save" : "populate"), 1, 1.0f);
 }
 
 struct StopHashingException : public std::exception
@@ -6251,6 +6379,9 @@ SnapshotCompletionResult ChainstateManager::MaybeValidateSnapshot(Chainstate& va
     std::optional<CCoinsStats> validated_cs_stats;
     LogInfo("[snapshot] computing UTXO stats for background chainstate to validate "
         "snapshot - this could take a few minutes");
+    // This holds cs_main for potentially minutes and was only announced in a log
+    // line, with no measure of how long it actually took.
+    const auto utxo_stats_start{MockableSteadyClock::now()};
     try {
         validated_cs_stats = ComputeUTXOStats(
             CoinStatsHashType::HASH_SERIALIZED,
@@ -6258,8 +6389,11 @@ SnapshotCompletionResult ChainstateManager::MaybeValidateSnapshot(Chainstate& va
             m_blockman,
             [&interrupt = m_interrupt] { SnapshotUTXOHashBreakpoint(interrupt); });
     } catch (StopHashingException const&) {
+        statsClient.count("snapshot.validation.statsAborted", 1, 1.0f);
         return SnapshotCompletionResult::STATS_FAILED;
     }
+    statsClient.timing("snapshot.validation.computeStats_us",
+                       Ticks<std::chrono::microseconds>(MockableSteadyClock::now() - utxo_stats_start), 1.0f);
 
     // XXX note that this function is slow and will hold cs_main for potentially minutes.
     if (!validated_cs_stats) {
