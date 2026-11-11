@@ -95,7 +95,7 @@
             "lastNotNull",
             "max"
           ],
-          "displayMode": "table",
+          "displayMode": "list",
           "placement": "bottom",
           "showLegend": true
         },
@@ -279,7 +279,7 @@
             "lastNotNull",
             "max"
           ],
-          "displayMode": "table",
+          "displayMode": "list",
           "placement": "bottom",
           "showLegend": true
         },
@@ -297,7 +297,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(divideSeries(stats.transactions.fees, #B), 'fee rate (sat/vB)')"
+          "target": "alias(divideSeries(stats.transactions.fees, scale(stats.transactions.sizeBytes, 0.976563)), 'fee rate (sat/vB)')"
         },
         {
           "datasource": {
@@ -408,7 +408,7 @@
             "lastNotNull",
             "max"
           ],
-          "displayMode": "table",
+          "displayMode": "list",
           "placement": "bottom",
           "showLegend": true
         },
@@ -426,7 +426,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(removeAbovePercentile(divideSeries(stats.transactions.fees, #B), 1), 'lowest percentile fee rate')"
+          "target": "alias(removeAbovePercentile(divideSeries(stats.transactions.fees, scale(stats.transactions.sizeBytes, 0.976563)), 1), 'lowest percentile fee rate')"
         },
         {
           "datasource": {
@@ -443,7 +443,7 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "alias(removeBelowPercentile(divideSeries(stats.transactions.fees, #B), 99), 'highest percentile fee rate')"
+          "target": "alias(removeBelowPercentile(divideSeries(stats.transactions.fees, scale(stats.transactions.sizeBytes, 0.976563)), 99), 'highest percentile fee rate')"
         }
       ],
       "title": "Network Transaction Fees per Byte Range",
@@ -525,7 +525,7 @@
             "lastNotNull",
             "max"
           ],
-          "displayMode": "table",
+          "displayMode": "list",
           "placement": "bottom",
           "showLegend": true
         },
@@ -678,7 +678,7 @@
             "lastNotNull",
             "max"
           ],
-          "displayMode": "table",
+          "displayMode": "list",
           "placement": "bottom",
           "showLegend": true
         },
@@ -822,7 +822,7 @@
             "lastNotNull",
             "max"
           ],
-          "displayMode": "table",
+          "displayMode": "list",
           "placement": "bottom",
           "showLegend": true
         },

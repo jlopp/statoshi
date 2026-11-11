@@ -38,7 +38,7 @@
             "axisLabel": "microseconds",
             "axisPlacement": "auto",
             "barAlignment": 0,
-            "barWidthFactor": 0.6,
+            "barWidthFactor": 1.0,
             "drawStyle": "bars",
             "fillOpacity": 100,
             "gradientMode": "none",
@@ -50,7 +50,7 @@
             "insertNulls": false,
             "lineInterpolation": "linear",
             "lineWidth": 0,
-            "pointSize": 12,
+            "pointSize": 14,
             "scaleDistribution": {
               "type": "linear"
             },
@@ -152,7 +152,7 @@
             "axisLabel": "microseconds",
             "axisPlacement": "auto",
             "barAlignment": 0,
-            "barWidthFactor": 0.6,
+            "barWidthFactor": 1.0,
             "drawStyle": "bars",
             "fillOpacity": 100,
             "gradientMode": "none",
@@ -164,7 +164,7 @@
             "insertNulls": false,
             "lineInterpolation": "linear",
             "lineWidth": 0,
-            "pointSize": 12,
+            "pointSize": 14,
             "scaleDistribution": {
               "type": "linear"
             },
@@ -266,7 +266,7 @@
             "axisLabel": "milliseconds",
             "axisPlacement": "auto",
             "barAlignment": 0,
-            "barWidthFactor": 0.6,
+            "barWidthFactor": 1.0,
             "drawStyle": "bars",
             "fillOpacity": 100,
             "gradientMode": "none",
@@ -278,7 +278,7 @@
             "insertNulls": false,
             "lineInterpolation": "linear",
             "lineWidth": 4,
-            "pointSize": 12,
+            "pointSize": 14,
             "scaleDistribution": {
               "type": "linear"
             },
@@ -380,7 +380,7 @@
             "axisLabel": "milliseconds",
             "axisPlacement": "auto",
             "barAlignment": 0,
-            "barWidthFactor": 0.6,
+            "barWidthFactor": 1.0,
             "drawStyle": "bars",
             "fillOpacity": 100,
             "gradientMode": "none",
@@ -392,7 +392,7 @@
             "insertNulls": false,
             "lineInterpolation": "linear",
             "lineWidth": 0,
-            "pointSize": 12,
+            "pointSize": 14,
             "scaleDistribution": {
               "type": "linear"
             },
@@ -954,7 +954,7 @@
           "calcs": [
             "lastNotNull"
           ],
-          "displayMode": "table",
+          "displayMode": "list",
           "placement": "bottom",
           "showLegend": true
         },
@@ -1092,7 +1092,7 @@
           "calcs": [
             "lastNotNull"
           ],
-          "displayMode": "table",
+          "displayMode": "list",
           "placement": "bottom",
           "showLegend": true
         },
@@ -1292,7 +1292,7 @@
             "axisLabel": "microseconds",
             "axisPlacement": "auto",
             "barAlignment": 0,
-            "barWidthFactor": 0.6,
+            "barWidthFactor": 1.0,
             "drawStyle": "bars",
             "fillOpacity": 100,
             "gradientMode": "none",
@@ -1304,7 +1304,7 @@
             "insertNulls": false,
             "lineInterpolation": "linear",
             "lineWidth": 4,
-            "pointSize": 12,
+            "pointSize": 14,
             "scaleDistribution": {
               "type": "linear"
             },

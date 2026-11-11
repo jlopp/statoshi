@@ -126,7 +126,7 @@
             "mean",
             "max"
           ],
-          "displayMode": "table",
+          "displayMode": "list",
           "placement": "bottom",
           "showLegend": true
         },
@@ -337,7 +337,7 @@
             "mean",
             "max"
           ],
-          "displayMode": "table",
+          "displayMode": "list",
           "placement": "right",
           "showLegend": true
         },
@@ -436,7 +436,7 @@
             "mean",
             "max"
           ],
-          "displayMode": "table",
+          "displayMode": "list",
           "placement": "right",
           "showLegend": true
         },
@@ -799,7 +799,7 @@
           "calcs": [
             "lastNotNull"
           ],
-          "displayMode": "table",
+          "displayMode": "list",
           "placement": "bottom",
           "showLegend": true
         },

@@ -436,7 +436,7 @@
           "calcs": [
             "lastNotNull"
           ],
-          "displayMode": "table",
+          "displayMode": "list",
           "placement": "right",
           "showLegend": true
         },
@@ -542,7 +542,7 @@
           "calcs": [
             "lastNotNull"
           ],
-          "displayMode": "table",
+          "displayMode": "list",
           "placement": "right",
           "showLegend": true
         },

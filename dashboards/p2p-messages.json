@@ -49,7 +49,7 @@
       "options": {
         "legend": {
           "calcs": [],
-          "displayMode": "table",
+          "displayMode": "list",
           "placement": "right",
           "showLegend": true
         },
@@ -146,7 +146,7 @@
       "options": {
         "legend": {
           "calcs": [],
-          "displayMode": "table",
+          "displayMode": "list",
           "placement": "right",
           "showLegend": true
         },
@@ -778,7 +778,7 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "alias(divideSeries(stats.message.sent.tx, #A), 'ratio of tx sent:received')"
+          "target": "alias(divideSeries(stats.message.sent.tx, stats.message.received.tx), 'ratio of tx sent:received')"
         }
       ],
       "title": "tx",
