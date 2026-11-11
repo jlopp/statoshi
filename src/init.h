@@ -7,7 +7,6 @@
 #define BITCOIN_INIT_H
 
 #include <atomic>
-#include <statsd_client.h>
 
 //! Default value for -daemon option
 inline constexpr bool DEFAULT_DAEMON = false;
@@ -15,6 +14,7 @@ inline constexpr bool DEFAULT_DAEMON = false;
 inline constexpr bool DEFAULT_DAEMONWAIT = false;
 
 class ArgsManager;
+
 namespace interfaces {
 struct BlockAndHeaderTipInfo;
 }

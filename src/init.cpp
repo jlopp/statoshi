@@ -15,6 +15,7 @@
 #include <chainparams.h>
 #include <chainparamsbase.h>
 #include <clientversion.h>
+#include <coins.h>
 #include <common/args.h>
 #include <common/messages.h>
 #include <common/system.h>
@@ -74,8 +75,8 @@
 #include <protocol.h>
 #include <random.h>
 #include <rpc/blockchain.h>
-#include <rpc/register.h>
 #include <rpc/mining.h>
+#include <rpc/register.h>
 #include <rpc/server.h>
 #include <rpc/util.h>
 #include <scheduler.h>
@@ -95,9 +96,9 @@
 #include <util/check.h>
 #include <util/fs.h>
 #include <util/fs_helpers.h>
-#include <util/procstats.h>
 #include <util/moneystr.h>
 #include <util/overflow.h>
+#include <util/procstats.h>
 #include <util/result.h>
 #include <util/signalinterrupt.h>
 #include <util/strencodings.h>
@@ -122,6 +123,7 @@
 #include <functional>
 #include <limits>
 #include <list>
+#include <map>
 #include <memory>
 #include <new>
 #include <optional>

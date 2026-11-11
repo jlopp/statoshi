@@ -10,8 +10,6 @@
 #include <rpc/util.h>
 #include <univalue.h>
 
-#include <statsd_client.h>
-
 #include <cstdint>
 #include <functional>
 #include <map>
@@ -19,8 +17,6 @@
 #include <string_view>
 #include <utility>
 #include <vector>
-
-class CRPCCommand;
 
 /** Query whether RPC is running */
 bool IsRPCRunning();

@@ -4,7 +4,6 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <rpc/blockchain.h>
-#include <rpc/register.h> // IWYU pragma: associated
 
 #include <arith_uint256.h>
 #include <blockfilter.h>
@@ -42,6 +41,7 @@
 #include <protocol.h>
 #include <rpc/protocol.h>
 #include <rpc/rawtransaction_util.h>
+#include <rpc/register.h> // IWYU pragma: associated
 #include <rpc/request.h>
 #include <rpc/server.h>
 #include <rpc/server_util.h>
@@ -52,6 +52,7 @@
 #include <script/signingprovider.h>
 #include <serialize.h>
 #include <span.h>
+#include <statsd_client.h>
 #include <streams.h>
 #include <sync.h>
 #include <tinyformat.h>
