@@ -10,7 +10,7 @@
 #include <rpc/util.h>
 #include <univalue.h>
 
-#include "statsd_client.h"
+#include <statsd_client.h>
 
 #include <cstdint>
 #include <functional>

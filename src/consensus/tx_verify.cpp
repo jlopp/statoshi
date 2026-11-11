@@ -15,7 +15,6 @@
 #include <tinyformat.h>
 #include <util/check.h>
 #include <util/moneystr.h>
-#include <boost/thread.hpp>
 
 #include <algorithm>
 #include <cstddef>

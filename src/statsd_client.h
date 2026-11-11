@@ -28,14 +28,11 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 **/
 
-#ifndef STATSD_CLIENT_H
-#define STATSD_CLIENT_H
-
-#include <sys/types.h>
-#include <arpa/inet.h>
-#include <sys/socket.h>
+#ifndef BITCOIN_STATSD_CLIENT_H
+#define BITCOIN_STATSD_CLIENT_H
 
 #include <atomic>
+#include <charconv>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -51,6 +48,21 @@ class ArgsManager;
 namespace statsd {
 
 struct _StatsdClientData;
+
+/**
+ * Append @p value to @p out as a decimal integer.
+ *
+ * std::to_string follows the C locale's LC_NUMERIC, so under a process locale
+ * that enables digit grouping it can emit thousands separators, which makes the
+ * value unparseable by statsd. std::to_chars is locale-independent by
+ * definition, and this lives in the header because gaugeBatch() needs it.
+ */
+inline void AppendIndex(std::string& out, size_t value)
+{
+    char buf[32];
+    const auto res{std::to_chars(buf, buf + sizeof(buf), value)};
+    out.append(buf, static_cast<size_t>(res.ptr - buf));
+}
 
 //! Default host metrics are sent to when -statshost is not set.
 inline constexpr const char* DEFAULT_STATSD_HOST{"127.0.0.1"};
@@ -164,21 +176,24 @@ class StatsdClient {
          *
          * @param prefix prepended to the numeric suffix of each key
          * @param values one gauge per element; element i is emitted as
-         *               @p prefix + std::to_string(first_index + i)
+         *               @p prefix + the decimal index (first_index + i)
          */
         template <typename Container>
         int gaugeBatch(const std::string& prefix, const Container& values, size_t first_index = 0)
         {
             std::string payload;
             std::string line;
+            std::string key;
             size_t index{first_index};
             int ret{0};
             for (const auto& value : values) {
                 line.clear();
+                key = prefix;
+                AppendIndex(key, index);
                 if constexpr (std::is_floating_point_v<typename Container::value_type>) {
-                    formatDouble(line, prefix + std::to_string(index), value, "g", 1.0);
+                    formatDouble(line, key, value, "g", 1.0);
                 } else {
-                    format(line, prefix + std::to_string(index), value, "g", 1.0);
+                    format(line, key, value, "g", 1.0);
                 }
                 // Measure the line *before* appending. Checking size() >= limit
                 // after the append (as this used to) lets a long line push the
@@ -290,4 +305,4 @@ extern statsd::StatsdClient statsClient;
  */
 std::optional<std::string> ConfigureStatsClient(statsd::StatsdClient& client, const ArgsManager& args);
 
-#endif
+#endif // BITCOIN_STATSD_CLIENT_H

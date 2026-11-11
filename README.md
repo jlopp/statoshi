@@ -4,9 +4,9 @@ Statoshi: Bitcoin Core + statistics logging
 What is Statoshi?
 ----------------
 
-Statoshi's objective is to protect Bitcoin by bringing transparency to the activity 
-occurring on the node network. By making this data available, Bitcoin developers can 
-learn more about node performance, gain operational insight about the network, and 
+Statoshi's objective is to protect Bitcoin by bringing transparency to the activity
+occurring on the node network. By making this data available, Bitcoin developers can
+learn more about node performance, gain operational insight about the network, and
 the community can be informed about attacks and aberrant behavior in a timely fashion.
 
 There is a live Grafana dashboard at [statoshi.info](https://statoshi.info)
@@ -31,8 +31,8 @@ Other Notes
 -------
 A system metrics daemon is available [here](https://github.com/jlopp/bitcoin-utils/blob/master/systemMetricsDaemon.py)
 
-Statoshi also supports running multiple nodes that emit metrics to a single graphite instance. 
-In order to facilitate this, you can add a line to bitcoin.conf that will partition each 
+Statoshi also supports running multiple nodes that emit metrics to a single graphite instance.
+In order to facilitate this, you can add a line to bitcoin.conf that will partition each
 metric by the name of the host: statshostname=yourNodeName
 
 Other StatsD options:

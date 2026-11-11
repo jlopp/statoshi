@@ -2116,12 +2116,22 @@ void CConnman::EmitStats()
     {
         LOCK(m_nodes_mutex);
         nodes_size = m_nodes.size();
-        for (const CNode* pnode : m_nodes)
+        for (CNode* pnode : m_nodes)
         {
-            for (const mapMsgTypeSize::value_type &i : pnode->mapRecvBytesPerMsgType)
-                mapRecvBytesMsgStats[i.first] += i.second;
-            for (const mapMsgTypeSize::value_type &i : pnode->mapSendBytesPerMsgType)
-                mapSentBytesMsgStats[i.first] += i.second;
+            // The byte maps are guarded by the per-node send/recv mutexes, and
+            // m_nodes_mutex does not cover them. Copy under the owning lock so
+            // the accumulation above is not a data race with the send/recv
+            // threads.
+            {
+                LOCK(pnode->cs_vRecv);
+                for (const mapMsgTypeSize::value_type &i : pnode->mapRecvBytesPerMsgType)
+                    mapRecvBytesMsgStats[i.first] += i.second;
+            }
+            {
+                LOCK(pnode->cs_vSend);
+                for (const mapMsgTypeSize::value_type &i : pnode->mapSendBytesPerMsgType)
+                    mapSentBytesMsgStats[i.first] += i.second;
+            }
             if(pnode->m_bloom_filter_loaded)
                 spvNodes++;
             else

@@ -4,8 +4,11 @@
 
 #include <util/procstats.h>
 
+#include <util/strencodings.h>
+
 #include <cstdio>
 #include <cstring>
+#include <string_view>
 
 #if defined(__linux__)
 #include <dirent.h>
@@ -18,14 +21,20 @@ size_t GetProcessMemoryUsed()
     // /proc/self/statm field 2 is the resident set size in pages.
     FILE* f{std::fopen("/proc/self/statm", "r")};
     if (f == nullptr) return 0;
-    unsigned long total{0};
-    unsigned long resident{0};
-    const int matched{std::fscanf(f, "%lu %lu", &total, &resident)};
+    char buf[256];
+    const size_t n_read{std::fread(buf, 1, sizeof(buf) - 1, f)};
     std::fclose(f);
-    if (matched != 2) return 0;
+    // Both fields are plain decimal integers, so parse them by hand instead of
+    // with a locale-dependent scanf conversion.
+    const std::string_view text{buf, n_read};
+    const size_t first_sep{text.find(' ')};
+    if (first_sep == std::string_view::npos) return 0;
+    const std::string_view rest{text.substr(first_sep + 1)};
+    const auto resident{ToIntegral<unsigned long>(rest.substr(0, rest.find(' ')))};
+    if (!resident) return 0;
     const long page_size{::sysconf(_SC_PAGESIZE)};
     if (page_size <= 0) return 0;
-    return static_cast<size_t>(resident) * static_cast<size_t>(page_size);
+    return static_cast<size_t>(*resident) * static_cast<size_t>(page_size);
 #else
     return 0;
 #endif
