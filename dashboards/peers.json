@@ -694,7 +694,7 @@
       ],
       "title": "Reject Messages Sent",
       "type": "timeseries",
-      "description": "P2P reject messages (BIP61) this node sent to peers, broken out by reason. Most nodes no longer send rejects, so this normally reads zero; the non-zero series that do appear come from peer misbehaviour enforcement. Genuine misbehaviour scoring is on the Misbehavior by Reason panel below."
+      "description": "P2P reject messages (BIP61) this node sent to peers, broken out by reason. Most nodes no longer send rejects, so this normally reads zero; the non-zero series that do appear come from peer misbehaviour enforcement. Genuine misbehaviour scoring is on the Misbehavior by Reason panel below. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree."
     },
     {
       "collapsed": false,
@@ -714,7 +714,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "peers.connect only fires for connections we initiate; peers.disconnect fires for every socket close including inbound. Plot all three, or the ratio is an artifact.",
+      "description": "Outbound connects and disconnects per second. Inbound accepted is also plotted but that counter is not in the current build; the two outbound series carry the churn signal. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1199,7 +1199,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Inbound slot usage against the configured maximum. At the cap, new peers are refused; see Inbound Evictions.",
+      "description": "Inbound slot usage against the configured maximum, with total connections for context. The slot gauges are not in the current build, so only total connections plots today. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
       "fieldConfig": {
         "defaults": {
           "color": {

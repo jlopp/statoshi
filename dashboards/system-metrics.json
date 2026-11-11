@@ -373,118 +373,6 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "bytes",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "showValues": false,
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "decbytes"
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "stats.gauges.system.disk.size.used"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#890F02",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "gridPos": {
-        "h": 7,
-        "w": 24,
-        "x": 0,
-        "y": 21
-      },
-      "id": 3,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "multi",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "13.3.1",
-      "targets": [
-        {
-          "datasource": {
-            "type": "graphite",
-            "uid": "000000001"
-          },
-          "refId": "A",
-          "target": "stats.gauges.system.disk.size.used"
-        }
-      ],
-      "title": "Disk Space Used",
-      "type": "timeseries",
-      "description": "Space consumed on the data volume, about 933 GB. Throughput series used to share this axis and were invisible against it; they are on Disk Saturation and Disk Operations."
-    },
-    {
-      "datasource": {
-        "type": "graphite",
-        "uid": "000000001"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
             "axisLabel": "bytes per second",
             "axisPlacement": "auto",
             "barAlignment": 0,
@@ -536,7 +424,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 28
+        "y": 21
       },
       "id": 27,
       "options": {
@@ -581,7 +469,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 35
+        "y": 28
       },
       "id": 6,
       "panels": [],
@@ -654,7 +542,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 36
+        "y": 29
       },
       "id": 7,
       "options": {
@@ -776,7 +664,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 43
+        "y": 36
       },
       "id": 8,
       "options": {
@@ -830,7 +718,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 50
+        "y": 43
       },
       "id": 9,
       "panels": [],
@@ -903,7 +791,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 51
+        "y": 44
       },
       "id": 10,
       "options": {
@@ -1027,7 +915,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 58
+        "y": 51
       },
       "id": 11,
       "options": {
@@ -1125,7 +1013,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 65
+        "y": 58
       },
       "id": 12,
       "options": {
@@ -1233,7 +1121,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 72
+        "y": 65
       },
       "id": 13,
       "options": {
@@ -1331,7 +1219,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 79
+        "y": 72
       },
       "id": 14,
       "options": {
@@ -1377,7 +1265,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 86
+        "y": 79
       },
       "id": 15,
       "panels": [],
@@ -1450,7 +1338,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 87
+        "y": 80
       },
       "id": 16,
       "options": {
@@ -1564,7 +1452,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 94
+        "y": 87
       },
       "id": 17,
       "options": {
@@ -1602,212 +1490,6 @@
         }
       ],
       "title": "Disk Operations",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "graphite",
-        "uid": "000000001"
-      },
-      "description": "Free and used space on the data volume. Free is the mirror image of used, so the two lines move in opposite directions.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "showValues": false,
-            "spanNulls": true,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            },
-            "axisLabel": "bytes"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "decbytes"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 7,
-        "w": 24,
-        "x": 0,
-        "y": 101
-      },
-      "id": 18,
-      "options": {
-        "legend": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "multi",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "13.3.1",
-      "targets": [
-        {
-          "datasource": {
-            "type": "graphite",
-            "uid": "000000001"
-          },
-          "refId": "A",
-          "target": "alias(stats.gauges.system.disk.size.free, 'free')"
-        },
-        {
-          "datasource": {
-            "type": "graphite",
-            "uid": "000000001"
-          },
-          "refId": "B",
-          "target": "alias(stats.gauges.system.disk.size.used, 'used')"
-        }
-      ],
-      "title": "Disk Free Space",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "graphite",
-        "uid": "000000001"
-      },
-      "description": "Filesystem utilisation, about 84%.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "showValues": false,
-            "spanNulls": true,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            },
-            "axisLabel": "percent"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "percent",
-          "min": 0,
-          "max": 100
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 7,
-        "w": 24,
-        "x": 0,
-        "y": 108
-      },
-      "id": 19,
-      "options": {
-        "legend": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "multi",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "13.3.1",
-      "targets": [
-        {
-          "datasource": {
-            "type": "graphite",
-            "uid": "000000001"
-          },
-          "refId": "A",
-          "target": "alias(stats.gauges.system.disk.size.percent, 'disk used %')"
-        }
-      ],
-      "title": "Disk Used Percent",
       "type": "timeseries"
     },
     {
@@ -1876,7 +1558,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 115
+        "y": 94
       },
       "id": 20,
       "options": {
@@ -1983,7 +1665,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 122
+        "y": 101
       },
       "id": 21,
       "options": {
@@ -2045,7 +1727,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 129
+        "y": 108
       },
       "id": 22,
       "panels": [],
@@ -2118,7 +1800,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 130
+        "y": 109
       },
       "id": 23,
       "options": {
@@ -2217,7 +1899,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 137
+        "y": 116
       },
       "id": 24,
       "options": {
@@ -2247,120 +1929,6 @@
         }
       ],
       "title": "Open File Descriptors",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "graphite",
-        "uid": "000000001"
-      },
-      "description": "RPC threadpool pressure. Any queueDepthRejected means requests were refused outright. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "showValues": false,
-            "spanNulls": true,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            },
-            "axisLabel": "requests"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 7,
-        "w": 24,
-        "x": 0,
-        "y": 144
-      },
-      "id": 25,
-      "options": {
-        "legend": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "multi",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "13.3.1",
-      "targets": [
-        {
-          "datasource": {
-            "type": "graphite",
-            "uid": "000000001"
-          },
-          "refId": "A",
-          "target": "alias(stats.gauges.http.workQueueDepth, 'queue depth')"
-        },
-        {
-          "datasource": {
-            "type": "graphite",
-            "uid": "000000001"
-          },
-          "refId": "B",
-          "target": "alias(stats.gauges.http.maxQueueDepth, 'max depth seen')"
-        },
-        {
-          "datasource": {
-            "type": "graphite",
-            "uid": "000000001"
-          },
-          "refId": "C",
-          "target": "alias(stats.http.queueDepthRejected, 'rejected/s')"
-        }
-      ],
-      "title": "HTTP Work Queue",
       "type": "timeseries"
     },
     {
@@ -2429,7 +1997,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 151
+        "y": 123
       },
       "id": 26,
       "options": {
