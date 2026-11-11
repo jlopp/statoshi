@@ -40,7 +40,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Used and free space on the data volume: about 933 GB used against 181 GB free, so utilisation sits near 84%. The two lines are mirror images, so watch the gap closing rather than the absolute level of either. Capacity lives here rather than on System Metrics because running out of space aborts the chainstate flush.",
+      "description": "Disk space used and free, stacked so the total volume size is visible as the height of the band.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -55,7 +55,7 @@
             "barAlignment": 0,
             "barWidthFactor": 0.6,
             "drawStyle": "line",
-            "fillOpacity": 10,
+            "fillOpacity": 100,
             "gradientMode": "none",
             "hideFrom": {
               "legend": false,
@@ -64,7 +64,7 @@
             },
             "insertNulls": false,
             "lineInterpolation": "linear",
-            "lineWidth": 2,
+            "lineWidth": 0,
             "pointSize": 5,
             "scaleDistribution": {
               "type": "linear"
@@ -74,7 +74,7 @@
             "spanNulls": true,
             "stacking": {
               "group": "A",
-              "mode": "none"
+              "mode": "normal"
             },
             "thresholdsStyle": {
               "mode": "off"
@@ -94,10 +94,10 @@
         "overrides": []
       },
       "gridPos": {
-        "w": 24,
+        "h": 7,
+        "w": 16,
         "x": 0,
-        "y": 1,
-        "h": 7
+        "y": 1
       },
       "id": 101,
       "options": {
@@ -142,52 +142,26 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Filesystem utilisation, about 84%. The chainstate flush path checks available space before every write and refuses once it is exhausted, so this is the panel that predicts a fatal disk-space abort.",
+      "description": "Disk usage as a percentage of the volume. A gauge with thresholds answers 'how much headroom is left' at a glance; a flat line at 50% over seven days does not.",
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "percent",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "showValues": false,
-            "spanNulls": true,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
+            "mode": "thresholds"
           },
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
+              },
+              {
+                "color": "yellow",
+                "value": 80
+              },
+              {
+                "color": "red",
+                "value": 90
               }
             ]
           },
@@ -198,26 +172,26 @@
         "overrides": []
       },
       "gridPos": {
-        "w": 24,
-        "x": 0,
-        "y": 8,
-        "h": 7
+        "h": 7,
+        "w": 8,
+        "x": 16,
+        "y": 1
       },
       "id": 103,
       "options": {
-        "legend": {
+        "minVizHeight": 75,
+        "minVizWidth": 75,
+        "orientation": "auto",
+        "reduceOptions": {
           "calcs": [
             "lastNotNull"
           ],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
+          "fields": "",
+          "values": false
         },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "multi",
-          "sort": "desc"
-        }
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true,
+        "sizing": "auto"
       },
       "pluginVersion": "13.3.1",
       "targets": [
@@ -231,7 +205,7 @@
         }
       ],
       "title": "Volume Used Percent",
-      "type": "timeseries"
+      "type": "gauge"
     },
     {
       "collapsed": false,
@@ -239,7 +213,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 15
+        "y": 8
       },
       "id": 120,
       "panels": [],
@@ -305,10 +279,10 @@
         "overrides": []
       },
       "gridPos": {
+        "h": 7,
         "w": 24,
         "x": 0,
-        "y": 16,
-        "h": 7
+        "y": 9
       },
       "id": 121,
       "options": {
@@ -415,10 +389,10 @@
         "overrides": []
       },
       "gridPos": {
+        "h": 7,
         "w": 24,
         "x": 0,
-        "y": 23,
-        "h": 7
+        "y": 16
       },
       "id": 122,
       "options": {
@@ -526,10 +500,10 @@
         "overrides": []
       },
       "gridPos": {
+        "h": 7,
         "w": 12,
         "x": 0,
-        "y": 30,
-        "h": 7
+        "y": 23
       },
       "id": 123,
       "options": {
@@ -637,10 +611,10 @@
         "overrides": []
       },
       "gridPos": {
+        "h": 7,
         "w": 12,
         "x": 12,
-        "y": 30,
-        "h": 7
+        "y": 23
       },
       "id": 124,
       "options": {
@@ -695,7 +669,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 37
+        "y": 30
       },
       "id": 130,
       "panels": [],
@@ -761,10 +735,10 @@
         "overrides": []
       },
       "gridPos": {
+        "h": 7,
         "w": 24,
         "x": 0,
-        "y": 38,
-        "h": 7
+        "y": 31
       },
       "id": 131,
       "options": {
@@ -809,7 +783,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Which condition triggered each flush. PERIODIC is routine background writing, IF_NEEDED means the cache exceeded its share, and FORCE_SYNC is an emergency or shutdown write. The mix tells you whether flushes are routine or forced. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Why the chainstate was flushed, stacked by trigger mode. The modes are mutually exclusive and the stack height is the total flush rate. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -823,8 +797,8 @@
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 10,
+            "drawStyle": "bars",
+            "fillOpacity": 100,
             "gradientMode": "none",
             "hideFrom": {
               "legend": false,
@@ -833,7 +807,7 @@
             },
             "insertNulls": false,
             "lineInterpolation": "linear",
-            "lineWidth": 2,
+            "lineWidth": 1,
             "pointSize": 5,
             "scaleDistribution": {
               "type": "linear"
@@ -843,7 +817,7 @@
             "spanNulls": true,
             "stacking": {
               "group": "A",
-              "mode": "none"
+              "mode": "normal"
             },
             "thresholdsStyle": {
               "mode": "off"
@@ -864,10 +838,10 @@
         "overrides": []
       },
       "gridPos": {
+        "h": 7,
         "w": 12,
         "x": 0,
-        "y": 45,
-        "h": 7
+        "y": 38
       },
       "id": 132,
       "options": {
@@ -984,10 +958,10 @@
         "overrides": []
       },
       "gridPos": {
+        "h": 7,
         "w": 12,
         "x": 12,
-        "y": 45,
-        "h": 7
+        "y": 38
       },
       "id": 133,
       "options": {
@@ -1087,10 +1061,10 @@
         "overrides": []
       },
       "gridPos": {
-        "w": 24,
+        "h": 7,
+        "w": 12,
         "x": 0,
-        "y": 52,
-        "h": 7
+        "y": 45
       },
       "id": 155,
       "options": {
@@ -1129,7 +1103,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 59
+        "y": 52
       },
       "id": 140,
       "panels": [],
@@ -1195,10 +1169,10 @@
         "overrides": []
       },
       "gridPos": {
+        "h": 7,
         "w": 12,
         "x": 0,
-        "y": 60,
-        "h": 7
+        "y": 53
       },
       "id": 141,
       "options": {
@@ -1297,10 +1271,10 @@
         "overrides": []
       },
       "gridPos": {
+        "h": 7,
         "w": 12,
         "x": 12,
-        "y": 60,
-        "h": 7
+        "y": 53
       },
       "id": 142,
       "options": {
@@ -1399,10 +1373,10 @@
         "overrides": []
       },
       "gridPos": {
+        "h": 7,
         "w": 12,
         "x": 0,
-        "y": 67,
-        "h": 7
+        "y": 60
       },
       "id": 143,
       "options": {
@@ -1502,10 +1476,10 @@
         "overrides": []
       },
       "gridPos": {
+        "h": 7,
         "w": 12,
         "x": 12,
-        "y": 67,
-        "h": 7
+        "y": 60
       },
       "id": 144,
       "options": {
@@ -1551,7 +1525,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Index entries and block files touched per second, plus undo bytes written. Undo bytes scale with how many inputs the block spends, so a large block shows up here. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Index entries and block files written per second, with undo bytes on the right axis. A byte rate on a count axis was invisible. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1602,13 +1576,34 @@
           },
           "unit": "short"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "undo bytes/s"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "custom.axisLabel",
+                "value": "bytes per second"
+              },
+              {
+                "id": "unit",
+                "value": "Bps"
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
+        "h": 7,
         "w": 12,
         "x": 0,
-        "y": 74,
-        "h": 7
+        "y": 67
       },
       "id": 145,
       "options": {
@@ -1717,10 +1712,10 @@
         "overrides": []
       },
       "gridPos": {
+        "h": 7,
         "w": 12,
         "x": 12,
-        "y": 74,
-        "h": 7
+        "y": 67
       },
       "id": 156,
       "options": {
@@ -1821,10 +1816,10 @@
         "overrides": []
       },
       "gridPos": {
+        "h": 7,
         "w": 24,
         "x": 0,
-        "y": 81,
-        "h": 7
+        "y": 74
       },
       "id": 157,
       "options": {
@@ -1879,7 +1874,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 88
+        "y": 81
       },
       "id": 150,
       "panels": [],
@@ -1945,10 +1940,10 @@
         "overrides": []
       },
       "gridPos": {
+        "h": 7,
         "w": 12,
         "x": 0,
-        "y": 89,
-        "h": 7
+        "y": 82
       },
       "id": 151,
       "options": {
@@ -1985,7 +1980,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Cost of recomputing UTXO statistics during snapshot validation, plus the abort rate. An abort means the snapshot did not match the assumed chain state. The abort counter is a count sharing a microsecond axis, so read it from the legend rather than the plot height. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Cost of computing snapshot statistics, in microseconds, with the aborted-snapshot rate on the right axis. The abort rate is almost always zero and was pinned flat against a microsecond-scale cost. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -2036,13 +2031,34 @@
           },
           "unit": "\u00b5s"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "aborted/s"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "custom.axisLabel",
+                "value": "aborts per second"
+              },
+              {
+                "id": "unit",
+                "value": "short"
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
+        "h": 7,
         "w": 12,
         "x": 12,
-        "y": 89,
-        "h": 7
+        "y": 82
       },
       "id": 152,
       "options": {
@@ -2142,10 +2158,10 @@
         "overrides": []
       },
       "gridPos": {
+        "h": 7,
         "w": 12,
         "x": 0,
-        "y": 96,
-        "h": 7
+        "y": 89
       },
       "id": 153,
       "options": {
@@ -2190,7 +2206,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Per-block indexing cost against reorg rewind activity. A rewind means an index had to roll back because the chain reorganised, which is normal but should be rare. The rewind counter shares the microsecond axis only for context. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Per-block cost of updating the txindex, in microseconds, with the reorg rewind rate on the right axis. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -2241,13 +2257,34 @@
           },
           "unit": "\u00b5s"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "reorg rewinds/s"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "custom.axisLabel",
+                "value": "rewinds per second"
+              },
+              {
+                "id": "unit",
+                "value": "short"
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
+        "h": 7,
         "w": 12,
         "x": 12,
-        "y": 96,
-        "h": 7
+        "y": 89
       },
       "id": 154,
       "options": {

@@ -341,7 +341,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "satoshis per kvB",
+            "axisLabel": "satoshis per vbyte",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -384,7 +384,7 @@
               }
             ]
           },
-          "unit": "none"
+          "unit": "short"
         },
         "overrides": [
           {
@@ -432,12 +432,12 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByMetric(stats.gauges.transactions.mempool.minFeePerKb)"
+          "target": "alias(scale(stats.gauges.transactions.mempool.minFeePerKb, 0.001), 'min fee (sat/vB)')"
         }
       ],
       "title": "Minimum Mempool Transaction Fee",
       "type": "timeseries",
-      "description": "Rolling minimum fee rate a transaction must beat to enter the mempool. Reads zero in the live store, meaning the floor is currently unset and admission is limited by other policy rather than by fee."
+      "description": "Minimum fee rate the mempool will accept, converted from satoshis per kvB to the satoshis-per-vbyte figure operators actually reason in."
     },
     {
       "collapsed": false,
@@ -457,7 +457,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Why the mempool drained. Before this, a block, a reorg and a mass eviction were indistinguishable. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Transactions leaving the mempool per second, by reason. Stacked bars, because the reasons are mutually exclusive and the stack height is the total exit rate. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -470,8 +470,8 @@
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 10,
+            "drawStyle": "bars",
+            "fillOpacity": 100,
             "gradientMode": "none",
             "hideFrom": {
               "legend": false,
@@ -480,7 +480,7 @@
             },
             "insertNulls": false,
             "lineInterpolation": "linear",
-            "lineWidth": 2,
+            "lineWidth": 1,
             "pointSize": 5,
             "scaleDistribution": {
               "type": "linear"
@@ -490,7 +490,7 @@
             "spanNulls": true,
             "stacking": {
               "group": "A",
-              "mode": "none"
+              "mode": "normal"
             },
             "thresholdsStyle": {
               "mode": "off"
@@ -595,7 +595,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Total fees of transactions leaving the mempool, per second, in satoshis. This was labelled as a transaction count; it is a value rate, so the unit is now satoshis and it reads in the millions. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Fees carried out of the mempool per second, split by how the transaction left. Values are in satoshis. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -648,7 +648,7 @@
               }
             ]
           },
-          "unit": "none"
+          "unit": "short"
         },
         "overrides": []
       },
@@ -823,7 +823,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Forced removals plus the fee floor driving them. rollingMinFeePerKb updates on each size-limit trim. Series on the right axis use a different scale from the left. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Evictions caused by the size limit and expiries, per second, against the rolling minimum fee rate on the right axis. The fee floor is three to four orders of magnitude larger than the eviction rate, so sharing an axis hid the evictions entirely. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -882,12 +882,20 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "rolling min fee (sat/kvB)"
+              "options": "rolling min fee (sat/vB)"
             },
             "properties": [
               {
                 "id": "custom.axisPlacement",
                 "value": "right"
+              },
+              {
+                "id": "custom.axisLabel",
+                "value": "satoshis per vbyte"
+              },
+              {
+                "id": "unit",
+                "value": "short"
               }
             ]
           }
@@ -939,7 +947,7 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "alias(stats.gauges.transactions.mempool.rollingMinFeePerKb, 'rolling min fee (sat/kvB)')"
+          "target": "alias(scale(stats.gauges.transactions.mempool.rollingMinFeePerKb, 0.001), 'rolling min fee (sat/vB)')"
         }
       ],
       "title": "Mempool Eviction & Fee Floor",
@@ -1077,7 +1085,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Cache-style counters against a timing. The consistency check is in microseconds while the other two are counts, so only the counts are comparable. Series on the right axis use a different scale from the left. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Unbroadcast transactions and prioritiseTransaction entries, on the left, with the cost of the mempool consistency check on the right. The check duration is in microseconds and had no business on a count axis. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1142,6 +1150,26 @@
               {
                 "id": "custom.axisPlacement",
                 "value": "right"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "consistency check"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "custom.axisLabel",
+                "value": "check cost (\u00b5s)"
+              },
+              {
+                "id": "unit",
+                "value": "\u00b5s"
               }
             ]
           }

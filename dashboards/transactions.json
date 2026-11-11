@@ -401,12 +401,12 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(diffSeries(stats.message.received.tx, #A), 'txMessagesRejected')"
+          "target": "alias(removeBelowValue(diffSeries(stats.message.received.tx, stats.transactions.accepted), 0), 'txMessagesRejected')"
         }
       ],
       "title": "Transactions Accepted vs Rejected",
       "type": "timeseries",
-      "description": "Accepted transactions per second against the reject rate derived as received tx messages minus accepts. The reject series is inferred rather than emitted directly, so it carries some noise."
+      "description": "Accepted against rejected transactions, as a percent stack. The rejected series is derived by subtracting accepted from received, which can go negative when a batch is counted asymmetrically; it is clamped at zero because negative values break percent stacking."
     },
     {
       "datasource": {
@@ -422,12 +422,12 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "BTC per second",
+            "axisLabel": "count per second",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
             "drawStyle": "line",
-            "fillOpacity": 100,
+            "fillOpacity": 10,
             "gradientMode": "none",
             "hideFrom": {
               "legend": false,
@@ -436,7 +436,7 @@
             },
             "insertNulls": false,
             "lineInterpolation": "linear",
-            "lineWidth": 1,
+            "lineWidth": 2,
             "pointSize": 5,
             "scaleDistribution": {
               "type": "linear"
@@ -447,105 +447,6 @@
             "stacking": {
               "group": "A",
               "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "none"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 7,
-        "w": 24,
-        "x": 0,
-        "y": 23
-      },
-      "id": 7,
-      "options": {
-        "legend": {
-          "calcs": [
-            "lastNotNull",
-            "max"
-          ],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "13.3.1",
-      "targets": [
-        {
-          "datasource": {
-            "type": "graphite",
-            "uid": "000000001"
-          },
-          "refId": "A",
-          "target": "alias(scale(stats.transactions.inputValue, 1e-8), 'BTC')"
-        }
-      ],
-      "title": "BTC Spent Per Second",
-      "type": "timeseries",
-      "description": "Total input value of accepted transactions, in BTC. Spikes track large blocks."
-    },
-    {
-      "datasource": {
-        "type": "graphite",
-        "uid": "000000001"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "count per transaction",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "bars",
-            "fillOpacity": 100,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "showValues": false,
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "percent"
             },
             "thresholdsStyle": {
               "mode": "off"
@@ -604,7 +505,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 30
+        "y": 23
       },
       "id": 1,
       "options": {
@@ -639,9 +540,9 @@
           "target": "aliasByMetric(stats.transactions.outputs)"
         }
       ],
-      "title": "Inputs vs Outputs per Transaction",
+      "title": "Inputs vs Outputs per Second",
       "type": "timeseries",
-      "description": "Average inputs and outputs per accepted transaction, computed by the stats emitter. The old title said percent, but these are raw per-transaction counts that happen to track each other closely."
+      "description": "Transaction inputs and outputs consumed per second. Drawn as two independent lines: a percent stack implied that inputs and outputs are parts of a common whole and fabricated a 100% total that does not exist."
     },
     {
       "datasource": {
@@ -702,13 +603,34 @@
           },
           "unit": "short"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "tx accepted/s"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "custom.axisLabel",
+                "value": "transactions per second"
+              },
+              {
+                "id": "unit",
+                "value": "short"
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 37
+        "y": 30
       },
       "id": 2,
       "options": {
@@ -734,7 +656,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(divideSeries(stats.transactions.sizeBytes, #B), 'Total TX vbytes / # TX')"
+          "target": "alias(divideSeries(stats.transactions.sizeBytes, #B), 'vbytes per tx')"
         },
         {
           "datasource": {
@@ -743,12 +665,12 @@
           },
           "hide": true,
           "refId": "B",
-          "target": "stats.transactions.accepted"
+          "target": "alias(stats.transactions.accepted, 'tx accepted/s')"
         }
       ],
       "title": "vbytes Per Transaction",
       "type": "timeseries",
-      "description": "Serialized size in vbytes divided by accepted transaction count. The size series is scaled by 0.976563, inherited from the original dashboard."
+      "description": "Average virtual size per transaction on the left axis, with the transaction arrival rate on the right. A few hundred vbytes per transaction against thousands of transactions per second cannot share a scale."
     },
     {
       "datasource": {
@@ -807,15 +729,36 @@
               }
             ]
           },
-          "unit": "none"
+          "unit": "short"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "tx accepted/s"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "custom.axisLabel",
+                "value": "transactions per second"
+              },
+              {
+                "id": "unit",
+                "value": "short"
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 44
+        "y": 37
       },
       "id": 3,
       "options": {
@@ -841,7 +784,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(divideSeries(stats.transactions.fees, #B), 'Fees in satoshis / TX')"
+          "target": "alias(divideSeries(stats.transactions.fees, #B), 'fees per tx (sat)')"
         },
         {
           "datasource": {
@@ -850,12 +793,12 @@
           },
           "hide": true,
           "refId": "B",
-          "target": "stats.transactions.accepted"
+          "target": "alias(stats.transactions.accepted, 'tx accepted/s')"
         }
       ],
       "title": "Fees (satoshis) Paid Per Transaction",
       "type": "timeseries",
-      "description": "Mean fee per accepted transaction, in satoshis."
+      "description": "Average fees paid per transaction, in satoshis, with the transaction arrival rate on the right axis. Previously both shared an axis, which flattened the fee series."
     },
     {
       "datasource": {
@@ -914,15 +857,36 @@
               }
             ]
           },
-          "unit": "none"
+          "unit": "short"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "vbytes/s"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "custom.axisLabel",
+                "value": "vbytes per second"
+              },
+              {
+                "id": "unit",
+                "value": "short"
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 51
+        "y": 44
       },
       "id": 4,
       "options": {
@@ -950,7 +914,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(divideSeries(stats.transactions.fees, #B), 'Fees in satoshis / TX vbyte')"
+          "target": "alias(divideSeries(stats.transactions.fees, scale(stats.transactions.sizeBytes, 0.976563)), 'sat per vbyte')"
         },
         {
           "datasource": {
@@ -959,12 +923,12 @@
           },
           "hide": true,
           "refId": "B",
-          "target": "scale(stats.transactions.sizeBytes, 0.976563)"
+          "target": "alias(scale(stats.transactions.sizeBytes, 0.976563), 'vbytes/s')"
         }
       ],
       "title": "Transaction Fees (satoshis) Paid Per vbyte",
       "type": "timeseries",
-      "description": "Mean fee rate in satoshis per vbyte, computed as total fees divided by the scaled serialized size."
+      "description": "Fee rate in satoshis per vbyte on the left axis, with vbyte throughput on the right."
     },
     {
       "datasource": {
@@ -1047,7 +1011,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 58
+        "y": 51
       },
       "id": 8,
       "options": {
@@ -1088,41 +1052,7 @@
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "transactions",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "showValues": false,
-            "spanNulls": true,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
+            "mode": "value"
           },
           "thresholds": {
             "mode": "absolute",
@@ -1158,24 +1088,27 @@
         ]
       },
       "gridPos": {
-        "h": 7,
+        "h": 4,
         "w": 24,
         "x": 0,
-        "y": 66
+        "y": 59
       },
       "id": 10,
       "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": false
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
         },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "multi",
-          "sort": "none"
-        }
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
       },
       "pluginVersion": "13.3.1",
       "targets": [
@@ -1189,8 +1122,8 @@
         }
       ],
       "title": "Total Historical Transactions",
-      "type": "timeseries",
-      "description": "Cumulative transactions in the chain, around 1.48 billion. On a fixed axis a day of growth is invisible at this scale; zoom the time range to see the slope."
+      "type": "stat",
+      "description": "Total transactions seen since the chain began. A monotonic counter, so it is presented as a current-value stat."
     },
     {
       "collapsed": false,
@@ -1198,7 +1131,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 73
+        "y": 63
       },
       "id": 11,
       "panels": [],
@@ -1210,7 +1143,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "inputValue was already graphed; outputValue is its counterpart. The difference is value created by coinbase outputs, so comparing them separates transfer from issuance.",
+      "description": "Value moved and value spent per second, in BTC. This panel also carries the BTC-spent series that previously had its own duplicate panel.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1263,7 +1196,7 @@
               }
             ]
           },
-          "unit": "none"
+          "unit": "short"
         },
         "overrides": []
       },
@@ -1271,7 +1204,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 74
+        "y": 64
       },
       "id": 12,
       "options": {
@@ -1377,7 +1310,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 81
+        "y": 71
       },
       "id": 13,
       "options": {
@@ -1423,7 +1356,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 88
+        "y": 78
       },
       "id": 14,
       "panels": [],
@@ -1496,7 +1429,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 89
+        "y": 79
       },
       "id": 15,
       "options": {
@@ -1594,7 +1527,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 96
+        "y": 86
       },
       "id": 16,
       "options": {
@@ -1705,7 +1638,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 103
+        "y": 93
       },
       "id": 17,
       "options": {
@@ -1819,7 +1752,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 110
+        "y": 100
       },
       "id": 18,
       "options": {
@@ -1873,7 +1806,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 117
+        "y": 107
       },
       "id": 19,
       "panels": [],
@@ -1885,56 +1818,26 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Share of signature checks served from cache. This is what turns CheckInputs latency into an explainable number. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Share of ECDSA and Schnorr signature checks served from the signature cache. A gauge because the number is bounded and a healthy value is near the top; anything under 0.5 means validation is doing avoidable work. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "showValues": false,
-            "spanNulls": true,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            },
-            "axisLabel": "hit rate"
+            "mode": "thresholds"
           },
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
+                "color": "red",
                 "value": 0
               },
               {
-                "color": "red",
-                "value": 80
+                "color": "yellow",
+                "value": 0.5
+              },
+              {
+                "color": "green",
+                "value": 0.8
               }
             ]
           },
@@ -1948,23 +1851,23 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 118
+        "y": 108
       },
       "id": 20,
       "options": {
-        "legend": {
+        "minVizHeight": 75,
+        "minVizWidth": 75,
+        "orientation": "auto",
+        "reduceOptions": {
           "calcs": [
             "lastNotNull"
           ],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
+          "fields": "",
+          "values": false
         },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "multi",
-          "sort": "none"
-        }
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true,
+        "sizing": "auto"
       },
       "pluginVersion": "13.3.1",
       "targets": [
@@ -1986,7 +1889,7 @@
         }
       ],
       "title": "Signature Cache Hit Rate",
-      "type": "timeseries"
+      "type": "gauge"
     },
     {
       "datasource": {
@@ -2054,7 +1957,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 125
+        "y": 115
       },
       "id": 21,
       "options": {

@@ -48,7 +48,7 @@
               "viz": false
             },
             "insertNulls": false,
-            "lineInterpolation": "linear",
+            "lineInterpolation": "stepAfter",
             "lineWidth": 2,
             "pointSize": 5,
             "scaleDistribution": {
@@ -182,7 +182,7 @@
       ],
       "title": "Recommended Transaction Fee for Target Confirmation in X Blocks",
       "type": "timeseries",
-      "description": "Estimated fee rate to be confirmed within N blocks, in satoshis per vbyte. Each series is a confirmation target. The estimator only produces about 10 distinct rates across all 1008 targets, so neighbouring targets overlap exactly."
+      "description": "Recommended fee rate per target confirmation window. Estimates are recomputed once per block, so the series are drawn with step interpolation rather than slopes that never existed between blocks."
     },
     {
       "datasource": {
@@ -241,9 +241,30 @@
               }
             ]
           },
-          "unit": "none"
+          "unit": "short"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "vbytes/s"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "custom.axisLabel",
+                "value": "vbytes per second"
+              },
+              {
+                "id": "unit",
+                "value": "short"
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 7,
@@ -276,7 +297,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(divideSeries(stats.transactions.fees, #B), 'Fee per byte')"
+          "target": "alias(divideSeries(stats.transactions.fees, #B), 'fee rate (sat/vB)')"
         },
         {
           "datasource": {
@@ -285,12 +306,12 @@
           },
           "hide": true,
           "refId": "B",
-          "target": "aliasByMetric(scale(stats.transactions.sizeBytes, 0.976563))"
+          "target": "alias(scale(stats.transactions.sizeBytes, 0.976563), 'vbytes/s')"
         }
       ],
       "title": "Average Network Transaction Fees per Byte",
       "type": "timeseries",
-      "description": "What the network actually paid on average, in satoshis per vbyte. The transaction-size series is still queried because the fee rate is derived from it, but it is hidden: it is not a fee rate and would distort the axis."
+      "description": "Average fee rate paid, in satoshis per vbyte, against the vbyte throughput of the mempool. The throughput series is on the right axis: vbytes per second runs in the millions against a fee rate in single digits, so on a shared axis one of them was unreadable."
     },
     {
       "datasource": {
@@ -310,8 +331,8 @@
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
-            "drawStyle": "points",
-            "fillOpacity": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
             "gradientMode": "none",
             "hideFrom": {
               "legend": false,
@@ -349,9 +370,30 @@
               }
             ]
           },
-          "unit": "none"
+          "unit": "short"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "vbytes/s"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "custom.axisLabel",
+                "value": "vbytes per second"
+              },
+              {
+                "id": "unit",
+                "value": "short"
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 7,
@@ -384,7 +426,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(removeAbovePercentile(divideSeries(stats.transactions.fees, #B), 1), 'Lowest percentile fee rate')"
+          "target": "alias(removeAbovePercentile(divideSeries(stats.transactions.fees, #B), 1), 'lowest percentile fee rate')"
         },
         {
           "datasource": {
@@ -393,7 +435,7 @@
           },
           "hide": true,
           "refId": "B",
-          "target": "aliasByMetric(scale(stats.transactions.sizeBytes, 0.976563))"
+          "target": "alias(scale(stats.transactions.sizeBytes, 0.976563), 'vbytes/s')"
         },
         {
           "datasource": {
@@ -401,19 +443,19 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "alias(removeBelowPercentile(divideSeries(stats.transactions.fees, #B), 99), 'Highest percentile fee rate')"
+          "target": "alias(removeBelowPercentile(divideSeries(stats.transactions.fees, #B), 99), 'highest percentile fee rate')"
         }
       ],
       "title": "Network Transaction Fees per Byte Range",
       "type": "timeseries",
-      "description": "The 1st and 99th percentile fee rates paid by the network, in satoshis per vbyte. Together they bracket the spread of real fee rates. The size series is queried but hidden, since it is not a fee rate."
+      "description": "The fee-rate envelope: the 1st and 99th percentile fee rates paid, with throughput on the right axis. Drawn as lines rather than scattered points, which is far easier to read as an envelope over time."
     },
     {
       "datasource": {
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "The same estimates at 6, 12, 25, 50, 144 and 1008 blocks. These six plus the nine on the panel above cover the entire bucket range the node publishes.",
+      "description": "Recommended fee rate for wider confirmation targets. Step interpolation, because the estimator only updates once per block.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -435,7 +477,7 @@
               "viz": false
             },
             "insertNulls": false,
-            "lineInterpolation": "linear",
+            "lineInterpolation": "stepAfter",
             "lineWidth": 2,
             "pointSize": 5,
             "scaleDistribution": {
@@ -681,7 +723,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "countedTxs is a transaction count from the last block; maxUsableEstimate is a confirmation target in blocks. They share an axis but measure different things. Series on the right axis use a different scale from the left. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "How many transactions from the last block the estimator scored, on the left axis, against the largest confirmation target it is still willing to answer for, on the right. The two are different units and were previously sharing an axis. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -746,6 +788,22 @@
               {
                 "id": "custom.axisPlacement",
                 "value": "right"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "max usable target (blocks)"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "custom.axisLabel",
+                "value": "blocks"
               }
             ]
           }

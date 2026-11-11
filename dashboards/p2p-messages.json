@@ -76,8 +76,8 @@
         "defaults": {
           "custom": {
             "axisLabel": "messages per second",
-            "fillOpacity": 10,
-            "lineWidth": 2,
+            "fillOpacity": 100,
+            "lineWidth": 0,
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
@@ -102,7 +102,7 @@
             "spanNulls": false,
             "stacking": {
               "group": "A",
-              "mode": "none"
+              "mode": "normal"
             },
             "thresholdsStyle": {
               "mode": "off"
@@ -129,7 +129,7 @@
         },
         "overrides": []
       },
-      "description": "All message types received, smoothed with a 10-point moving average. Note the receive path keys on the raw protocol type, so junk or unexpected type bytes show up as extra series; see the bandwidth board for that count."
+      "description": "All P2P message types received per second, smoothed over ten samples. Drawn as a stacked area so the total message volume is readable as the height of the band, with the per-type split visible inside it."
     },
     {
       "datasource": {
@@ -173,8 +173,8 @@
         "defaults": {
           "custom": {
             "axisLabel": "messages per second",
-            "fillOpacity": 10,
-            "lineWidth": 2,
+            "fillOpacity": 100,
+            "lineWidth": 0,
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
@@ -199,7 +199,7 @@
             "spanNulls": false,
             "stacking": {
               "group": "A",
-              "mode": "none"
+              "mode": "normal"
             },
             "thresholdsStyle": {
               "mode": "off"
@@ -226,7 +226,7 @@
         },
         "overrides": []
       },
-      "description": "All message types sent, smoothed with a 10-point moving average."
+      "description": "All P2P message types sent per second, smoothed over ten samples. Drawn as a stacked area so the total message volume is readable as the height of the band, with the per-type split visible inside it."
     },
     {
       "collapsed": false,
@@ -708,6 +708,26 @@
                 "value": "right"
               }
             ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "ratio of tx sent:received"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "custom.axisLabel",
+                "value": "ratio"
+              },
+              {
+                "id": "unit",
+                "value": "none"
+              }
+            ]
           }
         ]
       },
@@ -763,7 +783,7 @@
       ],
       "title": "tx",
       "type": "timeseries",
-      "description": "Transaction relay. Sent can run far above received when this node is well connected and other nodes are pulling from it. Note the third series is a ratio, not a rate. Series on the right axis use a different scale from the left."
+      "description": "tx messages received and sent per second, with the sent-to-received ratio on the right axis. The ratio sits near 1 against rates in the hundreds, so it needs its own scale."
     },
     {
       "datasource": {

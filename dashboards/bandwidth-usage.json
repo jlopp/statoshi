@@ -39,8 +39,8 @@
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
-            "drawStyle": "bars",
-            "fillOpacity": 100,
+            "drawStyle": "line",
+            "fillOpacity": 10,
             "gradientMode": "none",
             "hideFrom": {
               "legend": false,
@@ -59,7 +59,7 @@
             "spanNulls": false,
             "stacking": {
               "group": "A",
-              "mode": "normal"
+              "mode": "none"
             },
             "thresholdsStyle": {
               "mode": "off"
@@ -157,7 +157,7 @@
       ],
       "title": "Incoming & Outgoing Bandwidth Usage per second",
       "type": "timeseries",
-      "description": "Both series come from the sampled counters in CConnman::RecordBytesRecv/Sent. Receive is emitted with sample_rate 0.1 and send with 0.01, so their absolute levels are not directly comparable. Use the reconciliation panel on this board to see the per-message sums, which are unsampled."
+      "description": "Incoming and outgoing bandwidth per second, drawn as two lines rather than a stack so each direction can be read on its own. The stack implied a total that is not meaningful (received plus sent is not a combined throughput figure)."
     },
     {
       "datasource": {
@@ -167,41 +167,7 @@
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "cumulative bytes",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "bars",
-            "fillOpacity": 100,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "showValues": false,
-            "spanNulls": true,
-            "stacking": {
-              "group": "A",
-              "mode": "normal"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
+            "mode": "value"
           },
           "thresholds": {
             "mode": "absolute",
@@ -252,26 +218,27 @@
         ]
       },
       "gridPos": {
-        "h": 7,
+        "h": 4,
         "w": 24,
         "x": 0,
         "y": 7
       },
       "id": 2,
       "options": {
-        "legend": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
           "calcs": [
             "lastNotNull"
           ],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
+          "fields": "",
+          "values": false
         },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "multi",
-          "sort": "none"
-        }
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
       },
       "pluginVersion": "13.3.1",
       "targets": [
@@ -293,8 +260,8 @@
         }
       ],
       "title": "Total Bandwidth Used Since Last Restart",
-      "type": "timeseries",
-      "description": "Cumulative bytes since the node started, from the sampled connection counters. Because receive and send use different sample rates (0.1 and 0.01), these totals under-report the two directions by different factors."
+      "type": "stat",
+      "description": "Cumulative bytes received and sent since the node process last restarted. This is a monotonic counter, so it is shown as a current-value stat rather than a rising bar chart; the previous stacked bars suggested a composition that does not exist."
     },
     {
       "datasource": {
@@ -361,7 +328,7 @@
         "h": 12,
         "w": 12,
         "x": 0,
-        "y": 14
+        "y": 11
       },
       "id": 4,
       "options": {
@@ -460,7 +427,7 @@
         "h": 12,
         "w": 12,
         "x": 12,
-        "y": 14
+        "y": 11
       },
       "id": 6,
       "options": {
@@ -502,52 +469,14 @@
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "cumulative bytes per message",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "showValues": false,
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
+            "mode": "thresholds"
           },
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": 0
-              },
-              {
-                "color": "red",
-                "value": 80
+                "color": "blue",
+                "value": null
               }
             ]
           },
@@ -580,23 +509,26 @@
         "h": 16,
         "w": 12,
         "x": 0,
-        "y": 26
+        "y": 23
       },
       "id": 7,
       "options": {
-        "legend": {
+        "displayMode": "gradient",
+        "maxVizHeight": 300,
+        "minVizHeight": 16,
+        "minVizWidth": 8,
+        "namePlacement": "auto",
+        "orientation": "horizontal",
+        "reduceOptions": {
           "calcs": [
             "lastNotNull"
           ],
-          "displayMode": "table",
-          "placement": "right",
-          "showLegend": true
+          "fields": "",
+          "values": false
         },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "single",
-          "sort": "none"
-        }
+        "showUnfilled": true,
+        "sizing": "auto",
+        "valueMode": "color"
       },
       "pluginVersion": "13.3.1",
       "targets": [
@@ -610,8 +542,8 @@
         }
       ],
       "title": "Total Incoming Bandwidth Usage by Message (currently connected peers)",
-      "type": "timeseries",
-      "description": "Cumulative bytes received per message type since start. The leading series is usually addrv2 or inv; quieter types are pinned to the baseline."
+      "type": "bargauge",
+      "description": "Total bytes carried per message type across currently connected peers. A bar gauge ranks the message types by volume, which is what this panel is for; the previous line chart over time made the ranking unreadable."
     },
     {
       "datasource": {
@@ -621,52 +553,14 @@
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "cumulative bytes per message",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "showValues": false,
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
+            "mode": "thresholds"
           },
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": 0
-              },
-              {
-                "color": "red",
-                "value": 80
+                "color": "blue",
+                "value": null
               }
             ]
           },
@@ -699,23 +593,26 @@
         "h": 16,
         "w": 12,
         "x": 12,
-        "y": 26
+        "y": 23
       },
       "id": 8,
       "options": {
-        "legend": {
+        "displayMode": "gradient",
+        "maxVizHeight": 300,
+        "minVizHeight": 16,
+        "minVizWidth": 8,
+        "namePlacement": "auto",
+        "orientation": "horizontal",
+        "reduceOptions": {
           "calcs": [
             "lastNotNull"
           ],
-          "displayMode": "table",
-          "placement": "right",
-          "showLegend": true
+          "fields": "",
+          "values": false
         },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "single",
-          "sort": "none"
-        }
+        "showUnfilled": true,
+        "sizing": "auto",
+        "valueMode": "color"
       },
       "pluginVersion": "13.3.1",
       "targets": [
@@ -729,8 +626,8 @@
         }
       ],
       "title": "Total Outgoing Bandwidth Usage by Message (currently connected peers)",
-      "type": "timeseries",
-      "description": "Cumulative bytes sent per message type since start. tx and inv dominate by a wide margin."
+      "type": "bargauge",
+      "description": "Total bytes carried per message type across currently connected peers. A bar gauge ranks the message types by volume, which is what this panel is for; the previous line chart over time made the ranking unreadable."
     },
     {
       "datasource": {
@@ -797,7 +694,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 42
+        "y": 39
       },
       "id": 1,
       "options": {
@@ -894,7 +791,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 50
+        "y": 47
       },
       "id": 9,
       "options": {
@@ -1017,7 +914,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 57
+        "y": 54
       },
       "id": 10,
       "options": {

@@ -29,41 +29,7 @@
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "transactions",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "showValues": false,
-            "spanNulls": true,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
+            "mode": "value"
           },
           "thresholds": {
             "mode": "absolute",
@@ -83,26 +49,27 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 7,
-        "w": 12,
+        "h": 4,
+        "w": 8,
         "x": 0,
         "y": 0
       },
       "id": 5,
       "options": {
-        "legend": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
           "calcs": [
-            "mean"
+            "lastNotNull"
           ],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
+          "fields": "",
+          "values": false
         },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "single",
-          "sort": "none"
-        }
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
       },
       "pluginVersion": "13.3.1",
       "targets": [
@@ -116,8 +83,8 @@
         }
       ],
       "title": "Total Transactions With Unspent Outputs",
-      "type": "timeseries",
-      "description": "Transactions that still have at least one unspent output, about 113 million. This is a subset of the 1.48 billion historical transactions."
+      "type": "stat",
+      "description": "Number of transactions with at least one unspent output. A monotonic counter shown as a current-value stat."
     },
     {
       "datasource": {
@@ -127,41 +94,7 @@
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "outputs",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "showValues": false,
-            "spanNulls": true,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
+            "mode": "value"
           },
           "thresholds": {
             "mode": "absolute",
@@ -181,26 +114,27 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 7,
-        "w": 12,
-        "x": 12,
+        "h": 4,
+        "w": 8,
+        "x": 8,
         "y": 0
       },
       "id": 6,
       "options": {
-        "legend": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
           "calcs": [
-            "mean"
+            "lastNotNull"
           ],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
+          "fields": "",
+          "values": false
         },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "single",
-          "sort": "none"
-        }
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
       },
       "pluginVersion": "13.3.1",
       "targets": [
@@ -214,8 +148,8 @@
         }
       ],
       "title": "Unspent Transaction Outputs",
-      "type": "timeseries",
-      "description": "Total unspent outputs, about 163 million."
+      "type": "stat",
+      "description": "Total unspent transaction outputs. A monotonic counter shown as a current-value stat."
     },
     {
       "datasource": {
@@ -314,7 +248,7 @@
         "h": 7,
         "w": 12,
         "x": 0,
-        "y": 7
+        "y": 4
       },
       "id": 8,
       "options": {
@@ -355,41 +289,7 @@
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "BTC",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "showValues": false,
-            "spanNulls": true,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
+            "mode": "value"
           },
           "thresholds": {
             "mode": "absolute",
@@ -404,7 +304,7 @@
               }
             ]
           },
-          "unit": "none"
+          "unit": "short"
         },
         "overrides": [
           {
@@ -425,26 +325,27 @@
         ]
       },
       "gridPos": {
-        "h": 7,
-        "w": 12,
+        "h": 4,
+        "w": 8,
         "x": 12,
-        "y": 7
+        "y": 4
       },
       "id": 7,
       "options": {
-        "legend": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
           "calcs": [
-            "max"
+            "lastNotNull"
           ],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
+          "fields": "",
+          "values": false
         },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "single",
-          "sort": "none"
-        }
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
       },
       "pluginVersion": "13.3.1",
       "targets": [
@@ -458,8 +359,8 @@
         }
       ],
       "title": "Total Bitcoins in Existence",
-      "type": "timeseries",
-      "description": "Sum of all unspent output values, about 20.11 million BTC. Includes coins that are provably unspendable, so it drifts slightly above the circulating supply."
+      "type": "stat",
+      "description": "Total bitcoins in existence per the UTXO set. A monotonic counter shown as a current-value stat."
     },
     {
       "datasource": {
@@ -527,7 +428,7 @@
         "h": 7,
         "w": 12,
         "x": 0,
-        "y": 14
+        "y": 11
       },
       "id": 10,
       "options": {
@@ -572,7 +473,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "gettxoutsetinfo reports the height it computed at. Watching it diverge from the tip is an instant staleness check on the index.",
+      "description": "Height of the UTXO set against the chain tip. Both advance only at block boundaries, so they are drawn with step interpolation; a widening gap means the set is lagging the tip.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -594,7 +495,7 @@
               "viz": false
             },
             "insertNulls": false,
-            "lineInterpolation": "linear",
+            "lineInterpolation": "stepAfter",
             "lineWidth": 2,
             "pointSize": 5,
             "scaleDistribution": {
@@ -625,15 +526,15 @@
               }
             ]
           },
-          "unit": "none"
+          "unit": "short"
         },
         "overrides": []
       },
       "gridPos": {
         "h": 7,
-        "w": 12,
-        "x": 12,
-        "y": 14
+        "w": 24,
+        "x": 0,
+        "y": 18
       },
       "id": 11,
       "options": {

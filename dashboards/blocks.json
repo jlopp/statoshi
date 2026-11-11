@@ -62,7 +62,7 @@
               "mode": "none"
             },
             "thresholdsStyle": {
-              "mode": "off"
+              "mode": "line"
             }
           },
           "thresholds": {
@@ -73,8 +73,12 @@
                 "value": 0
               },
               {
+                "color": "yellow",
+                "value": 3000000
+              },
+              {
                 "color": "red",
-                "value": 80
+                "value": 4000000
               }
             ]
           },
@@ -157,7 +161,7 @@
       ],
       "title": "Block Size",
       "type": "timeseries",
-      "description": "Serialized size with and without witness data. Both are gauges for the most recently validated block, sampling once per minute, so they show whichever block happened to be current rather than an average."
+      "description": "Serialized size of the current block, with and without witness data. The 4 MB ceiling is shown as a threshold line."
     },
     {
       "datasource": {
@@ -200,7 +204,7 @@
               "mode": "none"
             },
             "thresholdsStyle": {
-              "mode": "off"
+              "mode": "line"
             }
           },
           "thresholds": {
@@ -211,14 +215,35 @@
                 "value": 0
               },
               {
+                "color": "yellow",
+                "value": 40000
+              },
+              {
                 "color": "red",
-                "value": 80
+                "value": 80000
               }
             ]
           },
           "unit": "short"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "currentSigOps"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "custom.axisLabel",
+                "value": "sigop cost"
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 7,
@@ -263,7 +288,7 @@
       ],
       "title": "Transactions & SigOps per Block",
       "type": "timeseries",
-      "description": "Transaction count and sigops for the most recent block. Split out of the old 'Block Usage' panel, where they shared an axis with block weight (up to 4,000,000) and were flattened into the baseline."
+      "description": "Transaction count on the left axis and sigop cost on the right. Sigop cost runs roughly an order of magnitude higher than the transaction count, so on a shared axis the count was squashed into the bottom of the panel. The 80,000 sigop cost cap is shown as a threshold line."
     },
     {
       "datasource": {
@@ -306,7 +331,7 @@
               "mode": "none"
             },
             "thresholdsStyle": {
-              "mode": "off"
+              "mode": "line"
             }
           },
           "thresholds": {
@@ -317,8 +342,12 @@
                 "value": 0
               },
               {
+                "color": "yellow",
+                "value": 3600000
+              },
+              {
                 "color": "red",
-                "value": 80
+                "value": 4000000
               }
             ]
           },
@@ -362,7 +391,7 @@
       ],
       "title": "Block Weight",
       "type": "timeseries",
-      "description": "Total block weight against the 4,000,000 consensus limit. SigOps and transaction count used to share this axis and were invisible beside weight, so they have their own panel above."
+      "description": "Weight of the current block. The consensus cap is 4,000,000 weight units, shown as a threshold line; sustained proximity to the cap means the chain is running full."
     },
     {
       "datasource": {
@@ -494,8 +523,8 @@
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
-            "drawStyle": "bars",
-            "fillOpacity": 100,
+            "drawStyle": "line",
+            "fillOpacity": 10,
             "gradientMode": "none",
             "hideFrom": {
               "legend": false,
@@ -503,8 +532,8 @@
               "viz": false
             },
             "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
+            "lineInterpolation": "stepAfter",
+            "lineWidth": 2,
             "pointSize": 5,
             "scaleDistribution": {
               "type": "linear"
@@ -570,7 +599,7 @@
       ],
       "title": "Block Height",
       "type": "timeseries",
-      "description": "Chain tip height. Was previously plotted against message-per-second series on the same axis, which made the rates unreadable; height now has its own panel and is also shown against the UTXO set height on that dashboard."
+      "description": "Chain tip height. Drawn as a stepped line rather than bars: height only changes at a block boundary, so linear interpolation would invent progress between blocks."
     },
     {
       "datasource": {
@@ -702,82 +731,127 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "verificationProgress is 0..1. initialBlockDownload is a 0/1 flag, scaled by 1000 so it stays visible on the same axis. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Block chain verification progress, 0 to 1. Shown as a gauge because the useful question is how close the node is to fully verified, and a 7-day line pinned just under 1 answers that poorly. The initial-block-download flag has its own state panel. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "palette-classic"
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": 0
+              },
+              {
+                "color": "yellow",
+                "value": 0.999
+              },
+              {
+                "color": "green",
+                "value": 0.9999
+              }
+            ]
+          },
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 16,
+        "x": 0,
+        "y": 43
+      },
+      "id": 7,
+      "options": {
+        "minVizHeight": 75,
+        "minVizWidth": 75,
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true,
+        "sizing": "auto"
+      },
+      "pluginVersion": "13.3.1",
+      "targets": [
+        {
+          "datasource": {
+            "type": "graphite",
+            "uid": "000000001"
+          },
+          "refId": "A",
+          "target": "alias(stats.gauges.blocks.verificationProgress, 'verification progress')"
+        }
+      ],
+      "title": "Chain Verification & Sync State",
+      "type": "gauge"
+    },
+    {
+      "datasource": {
+        "type": "graphite",
+        "uid": "000000001"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
           },
           "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
+            "fillOpacity": 70,
             "hideFrom": {
               "legend": false,
               "tooltip": false,
               "viz": false
             },
             "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "showValues": false,
-            "spanNulls": true,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            },
-            "axisLabel": "progress / IBD flag"
+            "lineWidth": 0,
+            "spanNulls": false
           },
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
                 "color": "green",
-                "value": 0
+                "value": null
               },
               {
-                "color": "red",
-                "value": 80
+                "color": "orange",
+                "value": 1
               }
             ]
-          },
-          "unit": "percentunit"
+          }
         },
         "overrides": []
       },
       "gridPos": {
         "h": 7,
-        "w": 24,
-        "x": 0,
+        "w": 8,
+        "x": 16,
         "y": 43
       },
-      "id": 7,
+      "id": 28,
       "options": {
+        "alignValue": "left",
         "legend": {
-          "calcs": [
-            "lastNotNull"
-          ],
           "displayMode": "list",
           "placement": "bottom",
           "showLegend": true
         },
+        "mergeValues": true,
+        "rowHeight": 0.9,
+        "showValue": "auto",
         "tooltip": {
-          "hideZeros": false,
-          "mode": "multi",
+          "mode": "single",
           "sort": "none"
         }
       },
@@ -789,26 +863,19 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.gauges.blocks.verificationProgress, 'verification progress')"
-        },
-        {
-          "datasource": {
-            "type": "graphite",
-            "uid": "000000001"
-          },
-          "refId": "B",
-          "target": "alias(scale(stats.gauges.blocks.initialBlockDownload, 1000), 'initial block download (x1000)')"
+          "target": "alias(stats.gauges.blocks.initialBlockDownload, 'IBD')"
         }
       ],
-      "title": "Chain Verification & Sync State",
-      "type": "timeseries"
+      "title": "Initial Block Download",
+      "type": "state-timeline",
+      "description": "Initial block download flag as a state timeline: green means synced, orange means the node is still catching up. Previously this 0/1 value was multiplied by 1000 to drag it onto the percent axis, which is a workaround for showing a state on a numeric chart. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree."
     },
     {
       "datasource": {
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "The gap between them is header download that has not been validated yet.",
+      "description": "Best header height against the block tip height. Both only advance at block boundaries, so they are drawn with step interpolation. The gap opening up means headers are arriving faster than full blocks.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -830,7 +897,7 @@
               "viz": false
             },
             "insertNulls": false,
-            "lineInterpolation": "linear",
+            "lineInterpolation": "stepAfter",
             "lineWidth": 2,
             "pointSize": 5,
             "scaleDistribution": {
@@ -914,241 +981,11 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "m_chain_tx_count at the tip, emitted every minute from EmitPeriodicStats. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Total transactions in the chain at the tip. A monotonic counter, so it is shown as a current-value stat; the trend is visible in the sparkline. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "showValues": false,
-            "spanNulls": true,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            },
-            "axisLabel": "transactions"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "none"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 7,
-        "w": 24,
-        "x": 0,
-        "y": 57
-      },
-      "id": 9,
-      "options": {
-        "legend": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "multi",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "13.3.1",
-      "targets": [
-        {
-          "datasource": {
-            "type": "graphite",
-            "uid": "000000001"
-          },
-          "refId": "A",
-          "target": "alias(stats.gauges.blocks.currentTxCount, 'total txs in chain')"
-        }
-      ],
-      "title": "Transactions In Chain",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "graphite",
-        "uid": "000000001"
-      },
-      "description": "BIP9 version bit field of the last block CheckBlock'd. The only per-block gauge with no panel. It is set when the block is checked, so it lags the tip by one block.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "showValues": false,
-            "spanNulls": true,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            },
-            "axisLabel": "version"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "none"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 7,
-        "w": 24,
-        "x": 0,
-        "y": 64
-      },
-      "id": 10,
-      "options": {
-        "legend": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "multi",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "13.3.1",
-      "targets": [
-        {
-          "datasource": {
-            "type": "graphite",
-            "uid": "000000001"
-          },
-          "refId": "A",
-          "target": "alias(stats.gauges.blocks.currentVersion, 'block version')"
-        }
-      ],
-      "title": "Current Block Version",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "graphite",
-        "uid": "000000001"
-      },
-      "description": "The only warning counter in the codebase. Should be flat zero; any non-zero means this node was handed a block that failed validation.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "showValues": false,
-            "spanNulls": true,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            },
-            "axisLabel": "events per second"
+            "mode": "value"
           },
           "thresholds": {
             "mode": "absolute",
@@ -1168,26 +1005,157 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 7,
-        "w": 24,
+        "h": 4,
+        "w": 8,
         "x": 0,
-        "y": 71
+        "y": 57
       },
-      "id": 11,
+      "id": 9,
       "options": {
-        "legend": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
           "calcs": [
             "lastNotNull"
           ],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
+          "fields": "",
+          "values": false
         },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "multi",
-          "sort": "none"
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "13.3.1",
+      "targets": [
+        {
+          "datasource": {
+            "type": "graphite",
+            "uid": "000000001"
+          },
+          "refId": "A",
+          "target": "alias(stats.gauges.blocks.currentTxCount, 'total txs in chain')"
         }
+      ],
+      "title": "Transactions In Chain",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "graphite",
+        "uid": "000000001"
+      },
+      "description": "Version field of the current block header. This is a discrete flag set, not a continuous quantity, so it is shown as a value rather than a line that appears to drift between versions.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "value"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 8,
+        "x": 8,
+        "y": 57
+      },
+      "id": 10,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "13.3.1",
+      "targets": [
+        {
+          "datasource": {
+            "type": "graphite",
+            "uid": "000000001"
+          },
+          "refId": "A",
+          "target": "alias(stats.gauges.blocks.currentVersion, 'block version')"
+        }
+      ],
+      "title": "Current Block Version",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "graphite",
+        "uid": "000000001"
+      },
+      "description": "The only warning counter in the codebase. Values above zero turn the stat red: a non-zero reading means this node was handed a block that failed validation.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 8,
+        "x": 16,
+        "y": 57
+      },
+      "id": 11,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
       },
       "pluginVersion": "13.3.1",
       "targets": [
@@ -1201,7 +1169,7 @@
         }
       ],
       "title": "Invalid Block Warnings",
-      "type": "timeseries"
+      "type": "stat"
     },
     {
       "collapsed": false,
@@ -1209,7 +1177,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 78
+        "y": 61
       },
       "id": 18,
       "panels": [],
@@ -1282,7 +1250,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 79
+        "y": 62
       },
       "id": 19,
       "options": {
@@ -1396,7 +1364,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 86
+        "y": 69
       },
       "id": 20,
       "options": {
@@ -1457,7 +1425,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Fires when a peer fails to deliver a requested block in time. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Block downloads that timed out, per second. Should be flat zero. The height of the last timed-out block is broken out into its own stat panel, because an absolute height near 930,000 pinned this rate to the axis baseline. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1516,9 +1484,9 @@
       },
       "gridPos": {
         "h": 7,
-        "w": 24,
+        "w": 16,
         "x": 0,
-        "y": 93
+        "y": 76
       },
       "id": 21,
       "options": {
@@ -1545,14 +1513,6 @@
           },
           "refId": "A",
           "target": "alias(stats.blocks.downloadTimeout, 'timeouts/s')"
-        },
-        {
-          "datasource": {
-            "type": "graphite",
-            "uid": "000000001"
-          },
-          "refId": "B",
-          "target": "alias(stats.gauges.blocks.downloadTimeoutHeight, 'height that timed out')"
         }
       ],
       "title": "Block Download Timeouts",
@@ -1563,7 +1523,165 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Frequency and depth of reorganisations. Depth is normalised per reorg so one deep reorg is distinguishable from many shallow ones. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 16,
+        "y": 76
+      },
+      "id": 26,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "13.3.1",
+      "targets": [
+        {
+          "datasource": {
+            "type": "graphite",
+            "uid": "000000001"
+          },
+          "refId": "A",
+          "target": "alias(stats.gauges.blocks.downloadTimeoutHeight, 'height')"
+        }
+      ],
+      "title": "Height That Timed Out",
+      "type": "stat",
+      "description": "Height of the most recent block whose download timed out. A stat rather than a line: the value only changes on a discrete event, and on a shared axis it dwarfed the timeout rate. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree."
+    },
+    {
+      "datasource": {
+        "type": "graphite",
+        "uid": "000000001"
+      },
+      "description": "Reorgs per second, drawn as bars because a reorg is a discrete event rather than a continuous quantity. Severity (how many blocks and transactions were disconnected) is in the adjacent panel. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "bars",
+            "fillOpacity": 100,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "showValues": false,
+            "spanNulls": true,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            },
+            "axisLabel": "rate and per-reorg count"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 0,
+        "y": 83
+      },
+      "id": 24,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "13.3.1",
+      "targets": [
+        {
+          "datasource": {
+            "type": "graphite",
+            "uid": "000000001"
+          },
+          "refId": "A",
+          "target": "alias(stats.chain.reorg, 'reorgs/s')"
+        }
+      ],
+      "title": "Reorgs",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "graphite",
+        "uid": "000000001"
+      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1622,11 +1740,11 @@
       },
       "gridPos": {
         "h": 7,
-        "w": 24,
-        "x": 0,
-        "y": 100
+        "w": 16,
+        "x": 8,
+        "y": 83
       },
-      "id": 24,
+      "id": 27,
       "options": {
         "legend": {
           "calcs": [
@@ -1650,14 +1768,6 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.chain.reorg, 'reorgs/s')"
-        },
-        {
-          "datasource": {
-            "type": "graphite",
-            "uid": "000000001"
-          },
-          "refId": "B",
           "target": "alias(divideSeries(stats.chain.reorg.disconnectedBlocks, stats.chain.reorg), 'blocks per reorg')"
         },
         {
@@ -1665,12 +1775,13 @@
             "type": "graphite",
             "uid": "000000001"
           },
-          "refId": "C",
+          "refId": "B",
           "target": "alias(divideSeries(stats.chain.reorg.disconnectedTxs, stats.chain.reorg), 'txs per reorg')"
         }
       ],
-      "title": "Reorgs",
-      "type": "timeseries"
+      "title": "Reorg Severity",
+      "type": "timeseries",
+      "description": "How much work was undone per reorg. Kept separate from the reorg rate: a per-reorg ratio and an event rate differ by orders of magnitude and cannot share an axis. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree."
     }
   ],
   "preload": false,

@@ -39,8 +39,8 @@
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
-            "drawStyle": "bars",
-            "fillOpacity": 100,
+            "drawStyle": "line",
+            "fillOpacity": 10,
             "gradientMode": "none",
             "hideFrom": {
               "legend": false,
@@ -62,7 +62,7 @@
               "mode": "none"
             },
             "thresholdsStyle": {
-              "mode": "off"
+              "mode": "line"
             }
           },
           "thresholds": {
@@ -73,8 +73,12 @@
                 "value": 0
               },
               {
+                "color": "yellow",
+                "value": 75
+              },
+              {
                 "color": "red",
-                "value": 80
+                "value": 90
               }
             ]
           },
@@ -102,7 +106,7 @@
       },
       "gridPos": {
         "h": 7,
-        "w": 24,
+        "w": 12,
         "x": 0,
         "y": 0
       },
@@ -133,7 +137,7 @@
       ],
       "title": "CPU Usage",
       "type": "timeseries",
-      "description": "Overall CPU utilisation, 0-100. The per-mode breakdown in CPU Usage Breakdown is normalised differently and does not sum to this."
+      "description": "Overall CPU utilisation, 0-100. Drawn as a line rather than bars: the gauge is sampled every minute, so bars read as a solid wall at long ranges and imply discrete events that are not happening. The per-mode breakdown below is normalised differently and does not sum to this figure."
     },
     {
       "datasource": {
@@ -153,8 +157,8 @@
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
-            "drawStyle": "bars",
-            "fillOpacity": 100,
+            "drawStyle": "line",
+            "fillOpacity": 10,
             "gradientMode": "none",
             "hideFrom": {
               "legend": false,
@@ -163,7 +167,7 @@
             },
             "insertNulls": false,
             "lineInterpolation": "linear",
-            "lineWidth": 1,
+            "lineWidth": 2,
             "pointSize": 5,
             "scaleDistribution": {
               "type": "linear"
@@ -176,7 +180,7 @@
               "mode": "none"
             },
             "thresholdsStyle": {
-              "mode": "off"
+              "mode": "line"
             }
           },
           "thresholds": {
@@ -187,8 +191,12 @@
                 "value": 0
               },
               {
+                "color": "yellow",
+                "value": 4
+              },
+              {
                 "color": "red",
-                "value": 80
+                "value": 8
               }
             ]
           },
@@ -214,9 +222,9 @@
       },
       "gridPos": {
         "h": 7,
-        "w": 24,
-        "x": 0,
-        "y": 7
+        "w": 12,
+        "x": 12,
+        "y": 0
       },
       "id": 4,
       "options": {
@@ -245,7 +253,7 @@
       ],
       "title": "Load",
       "type": "timeseries",
-      "description": "System load average as reported by the metrics daemon. Compare against the core count (4 here) to judge saturation."
+      "description": "System load average, with the host's four-core count marked as a threshold: load above 4 means work is queueing for CPU, above 8 means it is badly oversubscribed."
     },
     {
       "datasource": {
@@ -265,8 +273,8 @@
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
-            "drawStyle": "bars",
-            "fillOpacity": 100,
+            "drawStyle": "line",
+            "fillOpacity": 10,
             "gradientMode": "none",
             "hideFrom": {
               "legend": false,
@@ -275,7 +283,7 @@
             },
             "insertNulls": false,
             "lineInterpolation": "linear",
-            "lineWidth": 1,
+            "lineWidth": 2,
             "pointSize": 5,
             "scaleDistribution": {
               "type": "linear"
@@ -326,9 +334,9 @@
       },
       "gridPos": {
         "h": 7,
-        "w": 24,
+        "w": 12,
         "x": 0,
-        "y": 14
+        "y": 7
       },
       "id": 2,
       "options": {
@@ -357,7 +365,7 @@
       ],
       "title": "Memory Usage",
       "type": "timeseries",
-      "description": "Used memory, around 6.8 GB of a 16 GB host, so utilisation sits near 50%."
+      "description": "Used memory, around 6.8 GB of a 16 GB host. Drawn as a line for consistency with the rest of the dashboard and because the sample is continuous, not a series of discrete events."
     },
     {
       "datasource": {
@@ -422,9 +430,9 @@
       },
       "gridPos": {
         "h": 7,
-        "w": 24,
-        "x": 0,
-        "y": 21
+        "w": 12,
+        "x": 12,
+        "y": 7
       },
       "id": 27,
       "options": {
@@ -469,7 +477,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 28
+        "y": 14
       },
       "id": 6,
       "panels": [],
@@ -481,7 +489,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "system.cpu.percent is the 0-100 headline already charted above. These components are per-core-normalised: they sum to roughly the core count (about 4 here), not to 100, so they show the split of busy time but cannot be read as percents of the total. iowait is the one that matters for telling CPU-bound from disk-bound.",
+      "description": "CPU time split by mode, stacked. system.cpu.percent above is the 0-100 headline. These components are per-core-normalised and sum to roughly the core count (about 4 here), not to 100, so the stack shows the split of busy time rather than percentages of the total. iowait is the series that distinguishes CPU-bound from disk-bound.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -495,7 +503,7 @@
             "barAlignment": 0,
             "barWidthFactor": 0.6,
             "drawStyle": "line",
-            "fillOpacity": 10,
+            "fillOpacity": 100,
             "gradientMode": "none",
             "hideFrom": {
               "legend": false,
@@ -504,7 +512,7 @@
             },
             "insertNulls": false,
             "lineInterpolation": "linear",
-            "lineWidth": 2,
+            "lineWidth": 0,
             "pointSize": 5,
             "scaleDistribution": {
               "type": "linear"
@@ -514,7 +522,7 @@
             "spanNulls": true,
             "stacking": {
               "group": "A",
-              "mode": "none"
+              "mode": "normal"
             },
             "thresholdsStyle": {
               "mode": "off"
@@ -542,7 +550,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 29
+        "y": 15
       },
       "id": 7,
       "options": {
@@ -664,7 +672,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 36
+        "y": 22
       },
       "id": 8,
       "options": {
@@ -718,7 +726,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 43
+        "y": 29
       },
       "id": 9,
       "panels": [],
@@ -791,7 +799,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 44
+        "y": 30
       },
       "id": 10,
       "options": {
@@ -852,45 +860,11 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Used memory as a percentage. On this host it sits near 50%, which is normal for a Linux box with a large page cache.",
+      "description": "Used memory as a percentage of the host. On this host it sits near 50%, which is normal for a Linux box with a large page cache.",
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "showValues": false,
-            "spanNulls": true,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            },
-            "axisLabel": "percent"
+            "mode": "thresholds"
           },
           "thresholds": {
             "mode": "absolute",
@@ -900,8 +874,12 @@
                 "value": 0
               },
               {
-                "color": "red",
+                "color": "yellow",
                 "value": 80
+              },
+              {
+                "color": "red",
+                "value": 90
               }
             ]
           },
@@ -913,25 +891,25 @@
       },
       "gridPos": {
         "h": 7,
-        "w": 24,
+        "w": 12,
         "x": 0,
-        "y": 51
+        "y": 37
       },
       "id": 11,
       "options": {
-        "legend": {
+        "minVizHeight": 75,
+        "minVizWidth": 75,
+        "orientation": "auto",
+        "reduceOptions": {
           "calcs": [
             "lastNotNull"
           ],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
+          "fields": "",
+          "values": false
         },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "multi",
-          "sort": "none"
-        }
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true,
+        "sizing": "auto"
       },
       "pluginVersion": "13.3.1",
       "targets": [
@@ -945,7 +923,77 @@
         }
       ],
       "title": "Memory Used Percent",
-      "type": "timeseries"
+      "type": "gauge"
+    },
+    {
+      "datasource": {
+        "type": "graphite",
+        "uid": "000000001"
+      },
+      "description": "Swap currently allocated, as a percentage. It reads 98-100% for long stretches, so on its own it is not a problem indicator; watch Swap Page Activity to see whether the kernel is actually paging. A gauge makes the 'saturated and stable' reading self-evident.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "yellow",
+                "value": 80
+              },
+              {
+                "color": "red",
+                "value": 95
+              }
+            ]
+          },
+          "unit": "percent",
+          "min": 0,
+          "max": 100
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 37
+      },
+      "id": 13,
+      "options": {
+        "minVizHeight": 75,
+        "minVizWidth": 75,
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true,
+        "sizing": "auto"
+      },
+      "pluginVersion": "13.3.1",
+      "targets": [
+        {
+          "datasource": {
+            "type": "graphite",
+            "uid": "000000001"
+          },
+          "refId": "A",
+          "target": "alias(stats.gauges.system.swap.percent, 'swap used %')"
+        }
+      ],
+      "title": "Swap Used Percent",
+      "type": "gauge"
     },
     {
       "datasource": {
@@ -1013,7 +1061,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 58
+        "y": 44
       },
       "id": 12,
       "options": {
@@ -1051,106 +1099,6 @@
         }
       ],
       "title": "Swap Usage",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "graphite",
-        "uid": "000000001"
-      },
-      "description": "Swap currently allocated. It reads 98-100% for long stretches, so on its own it is not a problem indicator; watch Swap Page Activity to see whether the kernel is actually paging.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "showValues": false,
-            "spanNulls": true,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            },
-            "axisLabel": "percent"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "percent",
-          "min": 0,
-          "max": 100
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 7,
-        "w": 24,
-        "x": 0,
-        "y": 65
-      },
-      "id": 13,
-      "options": {
-        "legend": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "multi",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "13.3.1",
-      "targets": [
-        {
-          "datasource": {
-            "type": "graphite",
-            "uid": "000000001"
-          },
-          "refId": "A",
-          "target": "alias(stats.gauges.system.swap.percent, 'swap used %')"
-        }
-      ],
-      "title": "Swap Used Percent",
       "type": "timeseries"
     },
     {
@@ -1219,7 +1167,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 72
+        "y": 51
       },
       "id": 14,
       "options": {
@@ -1265,7 +1213,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 79
+        "y": 58
       },
       "id": 15,
       "panels": [],
@@ -1277,7 +1225,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Disk busy and per-operation time, summed in milliseconds per wall-clock second. 1000 means the device was busy the entire second.",
+      "description": "Disk busy time and per-operation time, summed in milliseconds per wall-clock second, where 1000 means the device was busy for the entire second. Marked as a threshold.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1313,7 +1261,7 @@
               "mode": "none"
             },
             "thresholdsStyle": {
-              "mode": "off"
+              "mode": "line"
             },
             "axisLabel": "ms per second (1000 = fully busy)"
           },
@@ -1325,8 +1273,12 @@
                 "value": 0
               },
               {
+                "color": "yellow",
+                "value": 800
+              },
+              {
                 "color": "red",
-                "value": 80
+                "value": 1000
               }
             ]
           },
@@ -1338,7 +1290,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 80
+        "y": 59
       },
       "id": 16,
       "options": {
@@ -1452,7 +1404,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 87
+        "y": 66
       },
       "id": 17,
       "options": {
@@ -1558,7 +1510,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 94
+        "y": 73
       },
       "id": 20,
       "options": {
@@ -1665,7 +1617,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 101
+        "y": 80
       },
       "id": 21,
       "options": {
@@ -1727,7 +1679,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 108
+        "y": 87
       },
       "id": 22,
       "panels": [],
@@ -1800,7 +1752,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 109
+        "y": 88
       },
       "id": 23,
       "options": {
@@ -1837,45 +1789,11 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Approaching the ulimit is a hard failure waiting to happen. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Open file descriptors held by the node process. Approaching the process ulimit is a hard failure waiting to happen; the thresholds mark the default soft limit. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "showValues": false,
-            "spanNulls": true,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            },
-            "axisLabel": "open descriptors"
+            "mode": "thresholds"
           },
           "thresholds": {
             "mode": "absolute",
@@ -1885,8 +1803,12 @@
                 "value": 0
               },
               {
+                "color": "yellow",
+                "value": 512
+              },
+              {
                 "color": "red",
-                "value": 80
+                "value": 1024
               }
             ]
           },
@@ -1897,25 +1819,25 @@
       },
       "gridPos": {
         "h": 7,
-        "w": 24,
+        "w": 12,
         "x": 0,
-        "y": 116
+        "y": 95
       },
       "id": 24,
       "options": {
-        "legend": {
+        "minVizHeight": 75,
+        "minVizWidth": 75,
+        "orientation": "auto",
+        "reduceOptions": {
           "calcs": [
             "lastNotNull"
           ],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
+          "fields": "",
+          "values": false
         },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "multi",
-          "sort": "none"
-        }
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true,
+        "sizing": "auto"
       },
       "pluginVersion": "13.3.1",
       "targets": [
@@ -1929,52 +1851,18 @@
         }
       ],
       "title": "Open File Descriptors",
-      "type": "timeseries"
+      "type": "gauge"
     },
     {
       "datasource": {
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Host uptime. Reported in seconds by the collector, so it is formatted as a duration here; the value is about 709 days.",
+      "description": "Host uptime. A monotonic counter, so it is shown as a current-value stat; the previous seven-day line was just a rising diagonal.",
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "showValues": false,
-            "spanNulls": true,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            },
-            "axisLabel": "uptime (days)"
+            "mode": "value"
           },
           "thresholds": {
             "mode": "absolute",
@@ -1995,25 +1883,26 @@
       },
       "gridPos": {
         "h": 7,
-        "w": 24,
-        "x": 0,
-        "y": 123
+        "w": 12,
+        "x": 12,
+        "y": 95
       },
       "id": 26,
       "options": {
-        "legend": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
           "calcs": [
             "lastNotNull"
           ],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
+          "fields": "",
+          "values": false
         },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "multi",
-          "sort": "none"
-        }
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
       },
       "pluginVersion": "13.3.1",
       "targets": [
@@ -2027,7 +1916,7 @@
         }
       ],
       "title": "System Uptime",
-      "type": "timeseries"
+      "type": "stat"
     }
   ],
   "preload": false,

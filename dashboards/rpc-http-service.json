@@ -95,10 +95,10 @@
         "overrides": []
       },
       "gridPos": {
+        "h": 7,
         "w": 12,
         "x": 0,
-        "y": 1,
-        "h": 7
+        "y": 1
       },
       "id": 201,
       "options": {
@@ -135,51 +135,17 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "The eight most-called methods, ranked by maximum. There are around 110 registered methods, so a top-N view is the only readable option; use the table on the panel below for the full ranked list. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "The eight busiest RPC methods, ranked. A bar gauge rather than a time series, because this is a ranking question, not a trend question. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "calls per second",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "showValues": false,
-            "spanNulls": true,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
+            "mode": "thresholds"
           },
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
+                "color": "blue",
                 "value": null
               }
             ]
@@ -190,28 +156,29 @@
         "overrides": []
       },
       "gridPos": {
+        "h": 7,
         "w": 12,
         "x": 12,
-        "y": 1,
-        "h": 7
+        "y": 1
       },
       "id": 202,
       "options": {
-        "legend": {
+        "displayMode": "gradient",
+        "maxVizHeight": 300,
+        "minVizHeight": 16,
+        "minVizWidth": 8,
+        "namePlacement": "auto",
+        "orientation": "horizontal",
+        "reduceOptions": {
           "calcs": [
-            "lastNotNull",
-            "max",
-            "mean"
+            "lastNotNull"
           ],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
+          "fields": "",
+          "values": false
         },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "multi",
-          "sort": "desc"
-        }
+        "showUnfilled": true,
+        "sizing": "auto",
+        "valueMode": "color"
       },
       "pluginVersion": "13.3.1",
       "targets": [
@@ -225,58 +192,24 @@
         }
       ],
       "title": "Busiest RPC Methods",
-      "type": "timeseries"
+      "type": "bargauge"
     },
     {
       "datasource": {
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Every method that received traffic in the selected window, sorted by legend value. Wallets and monitoring agents generate wildly different profiles, so this is the panel for answering 'who is hammering the node'. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Every RPC method that received traffic in the selected window, ranked by call rate. A bar gauge is the natural shape for 'who is hammering the node'; as a time series with dozens of overlapping methods it was very hard to read. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "calls per second",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "showValues": false,
-            "spanNulls": true,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
+            "mode": "thresholds"
           },
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
+                "color": "blue",
                 "value": null
               }
             ]
@@ -287,28 +220,29 @@
         "overrides": []
       },
       "gridPos": {
+        "h": 9,
         "w": 24,
         "x": 0,
-        "y": 8,
-        "h": 9
+        "y": 8
       },
       "id": 203,
       "options": {
-        "legend": {
+        "displayMode": "gradient",
+        "maxVizHeight": 300,
+        "minVizHeight": 16,
+        "minVizWidth": 8,
+        "namePlacement": "auto",
+        "orientation": "horizontal",
+        "reduceOptions": {
           "calcs": [
-            "lastNotNull",
-            "max",
-            "mean"
+            "lastNotNull"
           ],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
+          "fields": "",
+          "values": false
         },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "multi",
-          "sort": "desc"
-        }
+        "showUnfilled": true,
+        "sizing": "auto",
+        "valueMode": "color"
       },
       "pluginVersion": "13.3.1",
       "targets": [
@@ -322,7 +256,7 @@
         }
       ],
       "title": "Per-Method Call Rate (all methods, ranked)",
-      "type": "timeseries"
+      "type": "bargauge"
     },
     {
       "collapsed": false,
@@ -336,101 +270,6 @@
       "panels": [],
       "title": "Latency",
       "type": "row"
-    },
-    {
-      "datasource": {
-        "type": "graphite",
-        "uid": "000000001"
-      },
-      "description": "Mean latency per method. The untrimmed view mixes cheap calls like getblockcount with expensive ones like scantxoutset, so the y axis is driven by the slowest method present. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "microseconds",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "showValues": false,
-            "spanNulls": true,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "\u00b5s"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "w": 12,
-        "x": 0,
-        "y": 18,
-        "h": 7
-      },
-      "id": 211,
-      "options": {
-        "legend": {
-          "calcs": [
-            "lastNotNull",
-            "max"
-          ],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "pluginVersion": "13.3.1",
-      "targets": [
-        {
-          "datasource": {
-            "type": "graphite",
-            "uid": "000000001"
-          },
-          "refId": "A",
-          "target": "aliasByNode(stats.timers.rpc.duration_us.*.mean, 3)"
-        }
-      ],
-      "title": "Busiest Methods by Latency",
-      "type": "timeseries"
     },
     {
       "datasource": {
@@ -491,10 +330,10 @@
         "overrides": []
       },
       "gridPos": {
+        "h": 7,
         "w": 12,
-        "x": 12,
-        "y": 18,
-        "h": 7
+        "x": 0,
+        "y": 18
       },
       "id": 212,
       "options": {
@@ -532,51 +371,17 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "The five methods with the highest average latency. This is the shortlist for tuning, and the reason a per-method board is worth having rather than one aggregate latency line. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "The five slowest RPC methods by average latency, ranked. A bar gauge shows the ranking directly instead of asking the reader to compare five overlapping lines. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "microseconds",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "showValues": false,
-            "spanNulls": true,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
+            "mode": "thresholds"
           },
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
+                "color": "blue",
                 "value": null
               }
             ]
@@ -586,27 +391,29 @@
         "overrides": []
       },
       "gridPos": {
+        "h": 7,
         "w": 12,
-        "x": 0,
-        "y": 25,
-        "h": 7
+        "x": 12,
+        "y": 18
       },
       "id": 213,
       "options": {
-        "legend": {
+        "displayMode": "gradient",
+        "maxVizHeight": 300,
+        "minVizHeight": 16,
+        "minVizWidth": 8,
+        "namePlacement": "auto",
+        "orientation": "horizontal",
+        "reduceOptions": {
           "calcs": [
-            "lastNotNull",
-            "max"
+            "lastNotNull"
           ],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
+          "fields": "",
+          "values": false
         },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "multi",
-          "sort": "desc"
-        }
+        "showUnfilled": true,
+        "sizing": "auto",
+        "valueMode": "color"
       },
       "pluginVersion": "13.3.1",
       "targets": [
@@ -620,7 +427,7 @@
         }
       ],
       "title": "Slowest Methods",
-      "type": "timeseries"
+      "type": "bargauge"
     },
     {
       "datasource": {
@@ -681,10 +488,10 @@
         "overrides": []
       },
       "gridPos": {
+        "h": 7,
         "w": 12,
-        "x": 12,
-        "y": 25,
-        "h": 7
+        "x": 0,
+        "y": 25
       },
       "id": 214,
       "options": {
@@ -789,10 +596,10 @@
         "overrides": []
       },
       "gridPos": {
+        "h": 7,
         "w": 12,
         "x": 0,
-        "y": 33,
-        "h": 7
+        "y": 33
       },
       "id": 221,
       "options": {
@@ -838,80 +645,56 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Fraction of calls that returned an error. A sustained rise usually means a client is sending malformed requests, not that the node is unhealthy. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Errors as a fraction of all RPC calls. A gauge with a threshold makes the difference between a healthy zero, background noise and a real failure obvious at a glance. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "errors per call",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "showValues": false,
-            "spanNulls": true,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
+            "mode": "thresholds"
           },
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
+              },
+              {
+                "color": "yellow",
+                "value": 0.01
+              },
+              {
+                "color": "red",
+                "value": 0.05
               }
             ]
           },
-          "unit": "percentunit"
+          "unit": "percentunit",
+          "min": 0,
+          "max": 0.1
         },
         "overrides": []
       },
       "gridPos": {
+        "h": 7,
         "w": 12,
         "x": 12,
-        "y": 33,
-        "h": 7
+        "y": 33
       },
       "id": 222,
       "options": {
-        "legend": {
+        "minVizHeight": 75,
+        "minVizWidth": 75,
+        "orientation": "auto",
+        "reduceOptions": {
           "calcs": [
             "lastNotNull"
           ],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
+          "fields": "",
+          "values": false
         },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "multi",
-          "sort": "desc"
-        }
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true,
+        "sizing": "auto"
       },
       "pluginVersion": "13.3.1",
       "targets": [
@@ -925,7 +708,7 @@
         }
       ],
       "title": "Error Rate",
-      "type": "timeseries"
+      "type": "gauge"
     },
     {
       "collapsed": false,
@@ -1000,10 +783,10 @@
         "overrides": []
       },
       "gridPos": {
+        "h": 7,
         "w": 12,
         "x": 0,
-        "y": 41,
-        "h": 7
+        "y": 41
       },
       "id": 231,
       "options": {
@@ -1103,10 +886,10 @@
         "overrides": []
       },
       "gridPos": {
+        "h": 7,
         "w": 12,
         "x": 12,
-        "y": 41,
-        "h": 7
+        "y": 41
       },
       "id": 232,
       "options": {
@@ -1143,52 +926,26 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Queue depth as a fraction of the configured maximum. Above roughly 0.8 there is no headroom for a burst and rejections become likely. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Work queue depth as a fraction of the configured maximum. Shown as a gauge because the actionable question is how close the HTTP service is to shedding load; above 0.8 the service starts rejecting requests. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "fraction of queue used",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "showValues": false,
-            "spanNulls": true,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
+            "mode": "thresholds"
           },
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
+              },
+              {
+                "color": "yellow",
+                "value": 0.8
+              },
+              {
+                "color": "red",
+                "value": 0.95
               }
             ]
           },
@@ -1199,26 +956,26 @@
         "overrides": []
       },
       "gridPos": {
+        "h": 7,
         "w": 12,
         "x": 0,
-        "y": 48,
-        "h": 7
+        "y": 48
       },
       "id": 233,
       "options": {
-        "legend": {
+        "minVizHeight": 75,
+        "minVizWidth": 75,
+        "orientation": "auto",
+        "reduceOptions": {
           "calcs": [
             "lastNotNull"
           ],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
+          "fields": "",
+          "values": false
         },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "multi",
-          "sort": "desc"
-        }
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true,
+        "sizing": "auto"
       },
       "pluginVersion": "13.3.1",
       "targets": [
@@ -1232,7 +989,7 @@
         }
       ],
       "title": "Queue Saturation",
-      "type": "timeseries"
+      "type": "gauge"
     }
   ],
   "refresh": "1m",

@@ -110,22 +110,6 @@
             "type": "graphite",
             "uid": "000000001"
           },
-          "refId": "A",
-          "target": "aliasByMetric(stats.gauges.peers.fullNodeConnections)"
-        },
-        {
-          "datasource": {
-            "type": "graphite",
-            "uid": "000000001"
-          },
-          "refId": "B",
-          "target": "aliasByMetric(stats.gauges.peers.spvNodeConnections)"
-        },
-        {
-          "datasource": {
-            "type": "graphite",
-            "uid": "000000001"
-          },
           "refId": "C",
           "target": "aliasByMetric(stats.gauges.peers.inboundConnections)"
         },
@@ -142,37 +126,13 @@
             "type": "graphite",
             "uid": "000000001"
           },
-          "refId": "E",
-          "target": "aliasByMetric(stats.gauges.peers.ipv4Connections)"
-        },
-        {
-          "datasource": {
-            "type": "graphite",
-            "uid": "000000001"
-          },
-          "refId": "F",
-          "target": "aliasByMetric(stats.gauges.peers.ipv6Connections)"
-        },
-        {
-          "datasource": {
-            "type": "graphite",
-            "uid": "000000001"
-          },
-          "refId": "G",
-          "target": "aliasByMetric(stats.gauges.peers.torConnections)"
-        },
-        {
-          "datasource": {
-            "type": "graphite",
-            "uid": "000000001"
-          },
           "refId": "H",
           "target": "aliasByMetric(stats.gauges.peers.totalConnections)"
         }
       ],
       "title": "Peers",
       "type": "timeseries",
-      "description": "Connection counts by type and address family. knownAddresses was removed from this panel: it holds about 80,000 entries against 130 connections, which compressed every real series onto the baseline. It now has its own panel."
+      "description": "Total, inbound and outbound connection counts. The address-family and node-type splits are broken out on the connection-composition panels below, so plotting all eight overlapping slices here just made the totals hard to read."
     },
     {
       "datasource": {
@@ -285,7 +245,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "nanoseconds",
+            "axisLabel": "ping latency (\u00b5s)",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -328,7 +288,7 @@
               }
             ]
           },
-          "unit": "ns"
+          "unit": "\u00b5s"
         },
         "overrides": [
           {
@@ -429,7 +389,7 @@
       ],
       "title": "Peer Pings",
       "type": "timeseries",
-      "description": "Ping round-trip derived from m_last_ping_time. Despite the metric name ending in _us the emitted value is the raw clock tick count, which is nanoseconds (verified against the emitter in net.cpp). Median is around 93 ms."
+      "description": "Round-trip ping latency to peers at the lower bound, median and upper bound, in microseconds. The series come from ping_us, so they are microseconds; the previous nanosecond unit made every reading a thousand times too large."
     },
     {
       "datasource": {
@@ -459,7 +419,7 @@
             },
             "insertNulls": false,
             "lineInterpolation": "linear",
-            "lineWidth": 2,
+            "lineWidth": 1,
             "pointSize": 5,
             "scaleDistribution": {
               "type": "linear"
@@ -469,7 +429,7 @@
             "spanNulls": false,
             "stacking": {
               "group": "A",
-              "mode": "none"
+              "mode": "normal"
             },
             "thresholdsStyle": {
               "mode": "off"
@@ -694,7 +654,7 @@
       ],
       "title": "Reject Messages Sent",
       "type": "timeseries",
-      "description": "P2P reject messages (BIP61) this node sent to peers, broken out by reason. Most nodes no longer send rejects, so this normally reads zero; the non-zero series that do appear come from peer misbehaviour enforcement. Genuine misbehaviour scoring is on the Misbehavior by Reason panel below. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree."
+      "description": "Reject messages sent, stacked by reason. The per-reason series are mutually exclusive and sum to the 'all rejects' series, so a stack shows both the total rejection rate and its composition. As nineteen unstacked bars this was unreadable. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree."
     },
     {
       "collapsed": false,
@@ -1080,7 +1040,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Evictions per second, plus the mean age at eviction derived from the age counter. The age ratio is in seconds while the rate is per second, so compare against its own baseline rather than the rate line. Series on the right axis use a different scale from the left. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Inbound evictions per second on the left axis, with the age of the evicted connection on the right. The age is in seconds and is one to two orders of magnitude larger than the eviction rate. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1145,6 +1105,26 @@
               {
                 "id": "custom.axisPlacement",
                 "value": "right"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "age at eviction (s)"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "custom.axisLabel",
+                "value": "age (seconds)"
+              },
+              {
+                "id": "unit",
+                "value": "s"
               }
             ]
           }
@@ -1327,7 +1307,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Full breakdown by connection type, not just the six aggregate gauges above. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Connections by type as a stacked area. The types are mutually exclusive and sum to the connection total, so the stack height is the peer count. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1341,7 +1321,7 @@
             "barAlignment": 0,
             "barWidthFactor": 0.6,
             "drawStyle": "line",
-            "fillOpacity": 10,
+            "fillOpacity": 100,
             "gradientMode": "none",
             "hideFrom": {
               "legend": false,
@@ -1350,7 +1330,7 @@
             },
             "insertNulls": false,
             "lineInterpolation": "linear",
-            "lineWidth": 2,
+            "lineWidth": 0,
             "pointSize": 5,
             "scaleDistribution": {
               "type": "linear"
@@ -1360,7 +1340,7 @@
             "spanNulls": true,
             "stacking": {
               "group": "A",
-              "mode": "none"
+              "mode": "normal"
             },
             "thresholdsStyle": {
               "mode": "off"
@@ -1425,7 +1405,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "BIP324 adoption on this node's own connections - a network-health headline that had no panel. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Connections by transport protocol as a stacked area: cleartext v1, BIP324 v2 and peers still being probed. The band height is the connection total. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1439,7 +1419,7 @@
             "barAlignment": 0,
             "barWidthFactor": 0.6,
             "drawStyle": "line",
-            "fillOpacity": 10,
+            "fillOpacity": 100,
             "gradientMode": "none",
             "hideFrom": {
               "legend": false,
@@ -1448,7 +1428,7 @@
             },
             "insertNulls": false,
             "lineInterpolation": "linear",
-            "lineWidth": 2,
+            "lineWidth": 0,
             "pointSize": 5,
             "scaleDistribution": {
               "type": "linear"
@@ -1458,7 +1438,7 @@
             "spanNulls": true,
             "stacking": {
               "group": "A",
-              "mode": "none"
+              "mode": "normal"
             },
             "thresholdsStyle": {
               "mode": "off"
@@ -1645,7 +1625,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Inbound accepts by peer network (ipv4, ipv6, onion, i2p, cjdns). Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Inbound connections by network, stacked. The networks are mutually exclusive, so the stack shows both the inbound total and its composition. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1659,7 +1639,7 @@
             "barAlignment": 0,
             "barWidthFactor": 0.6,
             "drawStyle": "line",
-            "fillOpacity": 10,
+            "fillOpacity": 100,
             "gradientMode": "none",
             "hideFrom": {
               "legend": false,
@@ -1668,7 +1648,7 @@
             },
             "insertNulls": false,
             "lineInterpolation": "linear",
-            "lineWidth": 2,
+            "lineWidth": 0,
             "pointSize": 5,
             "scaleDistribution": {
               "type": "linear"
@@ -1678,7 +1658,7 @@
             "spanNulls": true,
             "stacking": {
               "group": "A",
-              "mode": "none"
+              "mode": "normal"
             },
             "thresholdsStyle": {
               "mode": "off"
@@ -1743,7 +1723,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Outbound attempts that succeeded, split by connection type and peer network. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Outbound connections by type and network, stacked. Each combination occupies its own part of the outbound total. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1757,7 +1737,7 @@
             "barAlignment": 0,
             "barWidthFactor": 0.6,
             "drawStyle": "line",
-            "fillOpacity": 10,
+            "fillOpacity": 100,
             "gradientMode": "none",
             "hideFrom": {
               "legend": false,
@@ -1766,7 +1746,7 @@
             },
             "insertNulls": false,
             "lineInterpolation": "linear",
-            "lineWidth": 2,
+            "lineWidth": 0,
             "pointSize": 5,
             "scaleDistribution": {
               "type": "linear"
@@ -1776,7 +1756,7 @@
             "spanNulls": true,
             "stacking": {
               "group": "A",
-              "mode": "none"
+              "mode": "normal"
             },
             "thresholdsStyle": {
               "mode": "off"
@@ -2424,7 +2404,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "One series per misbehavior message; misbehavior.banned is the aggregate already plotted above.",
+      "description": "Peer misbehaviour, stacked by reason. The reasons are mutually exclusive and the stack height is the total misbehaviour rate.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -2438,7 +2418,7 @@
             "barAlignment": 0,
             "barWidthFactor": 0.6,
             "drawStyle": "line",
-            "fillOpacity": 10,
+            "fillOpacity": 100,
             "gradientMode": "none",
             "hideFrom": {
               "legend": false,
@@ -2447,7 +2427,7 @@
             },
             "insertNulls": false,
             "lineInterpolation": "linear",
-            "lineWidth": 2,
+            "lineWidth": 0,
             "pointSize": 5,
             "scaleDistribution": {
               "type": "linear"
@@ -2457,7 +2437,7 @@
             "spanNulls": true,
             "stacking": {
               "group": "A",
-              "mode": "none"
+              "mode": "normal"
             },
             "thresholdsStyle": {
               "mode": "off"

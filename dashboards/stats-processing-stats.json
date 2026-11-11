@@ -35,102 +35,6 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "packets per second",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 30,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "showValues": false,
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 7,
-        "w": 24,
-        "x": 0,
-        "y": 0
-      },
-      "id": 3,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": false
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "single",
-          "sort": "decreasing"
-        }
-      },
-      "pluginVersion": "13.3.1",
-      "targets": [
-        {
-          "datasource": {
-            "type": "graphite",
-            "uid": "000000001"
-          },
-          "refId": "A",
-          "target": "scaleToSeconds(stats_counts.statsd.packets_received, 1)"
-        }
-      ],
-      "title": "Stats Processed per Second By StatsD",
-      "type": "timeseries",
-      "description": "Packets per second arriving at StatsD, about 220-700."
-    },
-    {
-      "datasource": {
-        "type": "graphite",
-        "uid": "000000001"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
             "axisLabel": "bytes",
             "axisPlacement": "auto",
             "barAlignment": 0,
@@ -182,7 +86,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 7
+        "y": 0
       },
       "id": 1,
       "options": {
@@ -278,7 +182,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 14
+        "y": 7
       },
       "id": 2,
       "options": {
@@ -323,7 +227,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 21
+        "y": 14
       },
       "id": 5,
       "panels": [],
@@ -396,7 +300,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 22
+        "y": 15
       },
       "id": 6,
       "options": {
@@ -433,7 +337,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "bad_lines_seen is the important one: non-zero means metrics are being dropped before Graphite sees them.",
+      "description": "Metrics and packets received per second, with malformed lines on the right axis. Malformed lines are normally zero or a handful against thousands of metrics, so a shared axis hid them; any sustained non-zero value here is worth investigating.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -489,13 +393,34 @@
           "unit": "short",
           "min": 0
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "malformed lines/s"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "custom.axisLabel",
+                "value": "malformed lines/s"
+              },
+              {
+                "id": "unit",
+                "value": "short"
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 29
+        "y": 22
       },
       "id": 7,
       "options": {
@@ -548,7 +473,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Timestamp lag is how far behind real time the pipeline is; both series read zero, which is the healthy state.",
+      "description": "How far behind the newest incoming sample is, in seconds. The graphite flush exception flag that used to share this axis is a 0/1 toggle and now has its own stat panel.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -584,9 +509,9 @@
               "mode": "none"
             },
             "thresholdsStyle": {
-              "mode": "off"
+              "mode": "line"
             },
-            "axisLabel": "seconds / flag"
+            "axisLabel": "lag (seconds)"
           },
           "thresholds": {
             "mode": "absolute",
@@ -596,20 +521,24 @@
                 "value": 0
               },
               {
+                "color": "yellow",
+                "value": 60
+              },
+              {
                 "color": "red",
-                "value": 80
+                "value": 300
               }
             ]
           },
-          "unit": "short"
+          "unit": "s"
         },
         "overrides": []
       },
       "gridPos": {
         "h": 7,
-        "w": 24,
+        "w": 16,
         "x": 0,
-        "y": 36
+        "y": 29
       },
       "id": 8,
       "options": {
@@ -636,14 +565,6 @@
           },
           "refId": "A",
           "target": "alias(stats.gauges.statsd.timestamp_lag, 'timestamp lag')"
-        },
-        {
-          "datasource": {
-            "type": "graphite",
-            "uid": "000000001"
-          },
-          "refId": "B",
-          "target": "alias(stats.statsd.graphiteStats.last_exception, 'last exception flag')"
         }
       ],
       "title": "Pipeline Freshness",
@@ -654,45 +575,10 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Time StatsD spends flushing to Graphite. Sub-millisecond in the live store, which is healthy. Payload size is on the panel below. Series on the right axis use a different scale from the left.",
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "showValues": false,
-            "spanNulls": true,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            },
-            "axisLabel": "milliseconds"
+            "mode": "thresholds"
           },
           "thresholds": {
             "mode": "absolute",
@@ -703,35 +589,36 @@
               },
               {
                 "color": "red",
-                "value": 80
+                "value": 1
               }
             ]
           },
-          "unit": "ms"
+          "unit": "short"
         },
         "overrides": []
       },
       "gridPos": {
         "h": 7,
-        "w": 24,
-        "x": 0,
-        "y": 43
+        "w": 8,
+        "x": 16,
+        "y": 29
       },
-      "id": 9,
+      "id": 17,
       "options": {
-        "legend": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
           "calcs": [
             "lastNotNull"
           ],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
+          "fields": "",
+          "values": false
         },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "multi",
-          "sort": "none"
-        }
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
       },
       "pluginVersion": "13.3.1",
       "targets": [
@@ -741,11 +628,12 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.statsd.graphiteStats.flush_time, 'flush time')"
+          "target": "alias(stats.statsd.graphiteStats.last_exception, 'exceptions')"
         }
       ],
-      "title": "Graphite Flush Health",
-      "type": "timeseries"
+      "title": "Graphite Flush Exceptions",
+      "type": "stat",
+      "description": "Non-zero means the last Graphite flush raised an exception. A stat that goes red is far clearer than a 0/1 toggle lost on a seconds-scale axis."
     },
     {
       "datasource": {
@@ -813,7 +701,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 50
+        "y": 36
       },
       "id": 16,
       "options": {
@@ -851,7 +739,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 57
+        "y": 43
       },
       "id": 10,
       "panels": [],
@@ -925,7 +813,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 58
+        "y": 44
       },
       "id": 11,
       "options": {
@@ -978,7 +866,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Metrics arriving at Carbon against points committed to disk and cache queries. Received and committed track each other closely.",
+      "description": "Carbon cache CPU usage. The update cost and points-per-update series that used to share this axis are in the adjacent panel; they are measured in seconds and counts, not percent CPU.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1016,7 +904,7 @@
             "thresholdsStyle": {
               "mode": "off"
             },
-            "axisLabel": "points per second"
+            "axisLabel": "cpu usage"
           },
           "thresholds": {
             "mode": "absolute",
@@ -1031,18 +919,17 @@
               }
             ]
           },
-          "unit": "short",
-          "min": 0
+          "unit": "short"
         },
         "overrides": []
       },
       "gridPos": {
         "h": 7,
-        "w": 24,
+        "w": 12,
         "x": 0,
-        "y": 65
+        "y": 51
       },
-      "id": 12,
+      "id": 13,
       "options": {
         "legend": {
           "calcs": [
@@ -1066,26 +953,10 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(carbon.agents.statoshi-a.metricsReceived, 'metrics received/s')"
-        },
-        {
-          "datasource": {
-            "type": "graphite",
-            "uid": "000000001"
-          },
-          "refId": "B",
-          "target": "alias(carbon.agents.statoshi-a.committedPoints, 'committed points/s')"
-        },
-        {
-          "datasource": {
-            "type": "graphite",
-            "uid": "000000001"
-          },
-          "refId": "C",
-          "target": "alias(carbon.agents.statoshi-a.cache.queries, 'cache queries/s')"
+          "target": "alias(carbon.agents.statoshi-a.cpuUsage, 'cpu usage')"
         }
       ],
-      "title": "Carbon Throughput",
+      "title": "Carbon Load",
       "type": "timeseries"
     },
     {
@@ -1093,7 +964,6 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "cpuUsage is a percentage (5-7). avgUpdateTime is seconds per update (about 0.0003). pointsPerUpdate is a fixed count of 1. Three different units on one axis; read values from the legend. Series on the right axis use a different scale from the left.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1165,11 +1035,11 @@
       },
       "gridPos": {
         "h": 7,
-        "w": 24,
-        "x": 0,
-        "y": 72
+        "w": 12,
+        "x": 12,
+        "y": 51
       },
-      "id": 13,
+      "id": 18,
       "options": {
         "legend": {
           "calcs": [
@@ -1193,14 +1063,6 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(carbon.agents.statoshi-a.cpuUsage, 'cpu usage')"
-        },
-        {
-          "datasource": {
-            "type": "graphite",
-            "uid": "000000001"
-          },
-          "refId": "B",
           "target": "alias(carbon.agents.statoshi-a.avgUpdateTime, 'avg update time')"
         },
         {
@@ -1208,12 +1070,13 @@
             "type": "graphite",
             "uid": "000000001"
           },
-          "refId": "C",
+          "refId": "B",
           "target": "alias(carbon.agents.statoshi-a.pointsPerUpdate, 'points per update')"
         }
       ],
-      "title": "Carbon Load",
-      "type": "timeseries"
+      "title": "Carbon Update Cost",
+      "type": "timeseries",
+      "description": "How long a Carbon cache update takes and how many points it carries. Separated from the CPU usage panel so both can be read against a meaningful scale. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree."
     },
     {
       "datasource": {
@@ -1281,7 +1144,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 79
+        "y": 58
       },
       "id": 14,
       "options": {
@@ -1408,7 +1271,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 86
+        "y": 65
       },
       "id": 15,
       "options": {

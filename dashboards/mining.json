@@ -48,7 +48,7 @@
               "viz": false
             },
             "insertNulls": false,
-            "lineInterpolation": "linear",
+            "lineInterpolation": "stepAfter",
             "lineWidth": 2,
             "pointSize": 5,
             "scaleDistribution": {
@@ -78,7 +78,7 @@
               }
             ]
           },
-          "unit": "short"
+          "unit": "si"
         },
         "overrides": [
           {
@@ -133,7 +133,7 @@
       ],
       "title": "Mining Difficulty",
       "type": "timeseries",
-      "description": "Network difficulty as a multiple of the genesis difficulty, around 1.48e14. It only changes every 2016 blocks, so a flat line is expected between retargets."
+      "description": "Network mining difficulty, formatted with SI prefixes so it reads as tera-scale rather than a fourteen-digit integer. Drawn as a step, because difficulty only changes every 2016 blocks."
     },
     {
       "datasource": {
@@ -337,7 +337,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Weight of the block this node would mine right now, against the 4,000,000 consensus limit. Split off from the transaction count, which it used to flatten by two orders of magnitude. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Weight of the block template being assembled. The 4,000,000 weight-unit cap is shown as a threshold line; the template only changes on a new block tip, so it steps. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -359,7 +359,7 @@
               "viz": false
             },
             "insertNulls": false,
-            "lineInterpolation": "linear",
+            "lineInterpolation": "stepAfter",
             "lineWidth": 2,
             "pointSize": 5,
             "scaleDistribution": {
@@ -373,7 +373,7 @@
               "mode": "none"
             },
             "thresholdsStyle": {
-              "mode": "off"
+              "mode": "line"
             },
             "axisLabel": "block weight (max 4,000,000)"
           },
@@ -385,8 +385,12 @@
                 "value": 0
               },
               {
+                "color": "yellow",
+                "value": 3600000
+              },
+              {
                 "color": "red",
-                "value": 80
+                "value": 4000000
               }
             ]
           },
@@ -436,7 +440,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Total fees in the current block template, in BTC. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Total fees available in the current block template, in satoshis. Converting from BTC gives the panel a usable dynamic range instead of plotting numbers near zero. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -474,7 +478,7 @@
             "thresholdsStyle": {
               "mode": "off"
             },
-            "axisLabel": "BTC"
+            "axisLabel": "satoshis"
           },
           "thresholds": {
             "mode": "absolute",
@@ -489,7 +493,7 @@
               }
             ]
           },
-          "unit": "none"
+          "unit": "short"
         },
         "overrides": []
       },
@@ -523,7 +527,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(scale(stats.gauges.mining.templateFees, 1e-8), 'template fees (BTC)')"
+          "target": "alias(stats.gauges.mining.templateFees, 'template fees (sat)')"
         }
       ],
       "title": "Block Template Fees",

@@ -496,7 +496,7 @@
             "barAlignment": 0,
             "barWidthFactor": 0.6,
             "drawStyle": "line",
-            "fillOpacity": 20,
+            "fillOpacity": 10,
             "gradientMode": "none",
             "hideFrom": {
               "legend": false,
@@ -505,7 +505,7 @@
             },
             "insertNulls": false,
             "lineInterpolation": "linear",
-            "lineWidth": 1,
+            "lineWidth": 2,
             "pointSize": 5,
             "scaleDistribution": {
               "type": "linear"
@@ -515,7 +515,7 @@
             "spanNulls": false,
             "stacking": {
               "group": "A",
-              "mode": "normal"
+              "mode": "none"
             },
             "thresholdsStyle": {
               "mode": "off"
@@ -605,7 +605,7 @@
       ],
       "title": "AcceptToMemoryPool",
       "type": "timeseries",
-      "description": "Mempool admission time. Lower, median and upper are the rollup percentiles; lower reading zero is normal for the cheapest transactions."
+      "description": "AcceptToMemoryPool latency at the lower bound, median and upper bound. Percentiles are not additive parts of a whole, so they are drawn as three separate lines; stacking them displaced the median by the lower bound and turned the top of the stack into lower plus median plus upper."
     },
     {
       "datasource": {
