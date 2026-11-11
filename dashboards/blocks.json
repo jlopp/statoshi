@@ -136,7 +136,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "13.3.0",
+      "pluginVersion": "13.3.1",
       "targets": [
         {
           "datasource": {
@@ -338,7 +338,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "13.3.0",
+      "pluginVersion": "13.3.1",
       "targets": [
         {
           "datasource": {
@@ -503,7 +503,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "13.3.0",
+      "pluginVersion": "13.3.1",
       "targets": [
         {
           "datasource": {
@@ -656,7 +656,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "13.3.0",
+      "pluginVersion": "13.3.1",
       "targets": [
         {
           "datasource": {
@@ -842,7 +842,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "13.3.0",
+      "pluginVersion": "13.3.1",
       "targets": [
         {
           "datasource": {

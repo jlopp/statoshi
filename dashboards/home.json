@@ -1,8 +1,26 @@
 {
-  "links": [],
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": false,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "liveNow": false,
   "panels": [
     {
-      "datasource": null,
       "gridPos": {
         "h": 5,
         "w": 24,
@@ -10,131 +28,200 @@
         "y": 0
       },
       "id": 1,
+      "options": {
+        "code": {
+          "language": "plaintext",
+          "showLineNumbers": false,
+          "showMiniMap": false
+        },
+        "content": "<table cellspacing='0' cellpadding='0' style='border-collapse: collapse;border:none'><tr><td style='border:none'><img src=/public/img/statoshi.png /></td><td style='border:none'><div><h2>Statoshi.info - Realtime Bitcoin Node Stats</h2>To learn about the purpose of statoshi.info, <a href='https://blog.lopp.net/announcing-statoshi-info/'><u>read this</u>.</a><br/>To learn how to use Grafana, <a href='https://grafana.com/docs/grafana/latest/dashboards/build-dashboards/'><u>RTFM</u></a> and <a href='https://grafana.com/tutorials/'><u>WTFV</u></a><br/>In order to create an account on statoshi.info, <a href='https://blog.lopp.net/statoshi-info-account-creation-guide/'><u>follow this guide</u>.</a><br/>Statoshi is open source; you can <a href='https://github.com/jlopp/statoshi'><u>find us on GitHub</u></a></td></tr></table>",
+        "mode": "html"
+      },
+      "pluginVersion": "13.3.1",
+      "targets": [],
       "title": "",
-      "transparent": false,
-          "type": "text",
-          "mode": "html",
-          "content": "<table cellspacing='0' cellpadding='0' style='border-collapse: collapse;border:none'><tr><td style='border:none'><img src=/public/img/statoshi.png /></td><td style='border:none'><div><h2>Statoshi.info - Realtime Bitcoin Node Stats</h2>To learn about the purpose of statoshi.info, <a href='https://blog.lopp.net/announcing-statoshi-info/'><u>read this</u>.</a><br/>To learn how to use Grafana, <a href='https://grafana.com/docs/grafana/latest/dashboards/build-dashboards/'><u>RTFM</u></a> and <a href='https://grafana.com/tutorials/'><u>WTFV</u></a><br/>In order to create an account on statoshi.info, <a href='https://blog.lopp.net/statoshi-info-account-creation-guide/'><u>follow this guide</u>.</a><br/>Statoshi is open source; you can <a href='https://github.com/jlopp/statoshi'><u>find us on GitHub</u></a></td></tr></table>"
+      "type": "text"
     },
-        {
+    {
+      "datasource": {
+        "type": "graphite",
+        "uid": "000000001"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "showValues": false,
+            "spanNulls": true,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "stats.gauges.blocks.currentHeight"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Block Height"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              }
+            ]
+          }
+        ]
+      },
       "gridPos": {
         "h": 15,
         "w": 12,
         "x": 0,
-        "y": 4
+        "y": 5
       },
-          "title": "Blocks & Transactions",
-          "error": false,
-          "editable": false,
-          "type": "graph",
-          "id": 2,
-          "datasource": null,
-          "renderer": "flot",
-          "x-axis": true,
-          "y-axis": true,
-          "y_formats": [
-            "short",
-            "none"
+      "id": 2,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean"
           ],
-          "grid": {
-            "leftLogBase": 1,
-            "leftMax": null,
-            "rightMax": null,
-            "leftMin": null,
-            "rightMin": null,
-            "rightLogBase": 1,
-            "threshold1": null,
-            "threshold2": null,
-            "threshold1Color": "rgba(216, 200, 27, 0.27)",
-            "threshold2Color": "rgba(234, 112, 112, 0.22)"
-          },
-          "lines": true,
-          "fill": 1,
-          "linewidth": 2,
-          "points": false,
-          "pointradius": 5,
-          "bars": false,
-          "stack": false,
-          "percentage": false,
-          "legend": {
-            "show": true,
-            "values": true,
-            "min": false,
-            "max": false,
-            "current": false,
-            "total": false,
-            "avg": true
-          },
-          "nullPointMode": "connected",
-          "steppedLine": false,
-          "tooltip": {
-            "value_type": "cumulative",
-            "shared": true
-          },
-          "timeFrom": null,
-          "timeShift": null,
-          "targets": [
-            {
-              "target": "alias(stats.gauges.blocks.currentHeight, 'Block Height')"
-            },
-            {
-              "target": "alias(stats.transactions.accepted, 'Transactions Per Second')"
-            }
-          ],
-          "aliasColors": {},
-          "seriesOverrides": [
-            {
-              "alias": "stats.gauges.blocks.currentHeight",
-              "yaxis": 2
-            },
-            {
-              "alias": "Block Height",
-              "yaxis": 2
-            }
-          ],
-          "links": []
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
         },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "decreasing"
+        }
+      },
+      "pluginVersion": "13.3.1",
+      "targets": [
+        {
+          "datasource": {
+            "type": "graphite",
+            "uid": "000000001"
+          },
+          "refId": "A",
+          "target": "alias(stats.gauges.blocks.currentHeight, 'Block Height')"
+        },
+        {
+          "datasource": {
+            "type": "graphite",
+            "uid": "000000001"
+          },
+          "refId": "B",
+          "target": "alias(stats.transactions.accepted, 'Transactions Per Second')"
+        }
+      ],
+      "title": "Blocks & Transactions",
+      "type": "timeseries"
+    },
     {
-      "datasource": null,
-      "folderId": 0,
       "gridPos": {
         "h": 15,
         "w": 12,
         "x": 12,
-        "y": 4
+        "y": 5
       },
       "id": 3,
-      "links": [],
       "options": {
-        "showStarred": false,
-        "showRecentlyViewed":false,
-        "showSearch": true,
-        "showHeadings": true,
-        "folderId": 0,
+        "folderUID": "",
+        "includeVars": false,
+        "keepTime": false,
         "maxItems": 30,
-        "tags": [],
-        "query": ""
+        "query": "",
+        "showFolderNames": true,
+        "showHeadings": true,
+        "showRecentlyViewed": false,
+        "showSearch": true,
+        "showStarred": false,
+        "tags": []
       },
+      "pluginVersion": "13.3.1",
+      "targets": [],
       "title": "",
       "type": "dashlist"
     }
   ],
-  "schemaVersion": 22,
-  "tags": [],
-  "templating": {
-    "list": []
-  },
+  "preload": false,
+  "refresh": "",
+  "schemaVersion": 42,
   "time": {
     "from": "now-6h",
     "to": "now"
   },
-  "editable": false,
   "timepicker": {
     "hidden": true,
-    "refresh_intervals": ["5s", "10s", "30s", "1m", "5m", "15m", "30m", "1h", "2h", "1d"],
-    "time_options": ["5m", "15m", "1h", "6h", "12h", "24h", "2d", "7d", "30d"],
-    "type": "timepicker"
+    "refresh_intervals": [
+      "5s",
+      "10s",
+      "30s",
+      "1m",
+      "5m",
+      "15m",
+      "30m",
+      "1h",
+      "2h",
+      "1d"
+    ]
   },
   "timezone": "browser",
-  "title": "Home"
+  "title": "Home",
+  "version": 2
 }
