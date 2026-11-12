@@ -18,7 +18,6 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
-  "id": 10,
   "liveNow": false,
   "panels": [
     {
@@ -30,7 +29,6 @@
         "y": 0
       },
       "id": 11,
-      "panels": [],
       "title": "All Messages",
       "type": "row"
     },
@@ -38,6 +36,63 @@
       "datasource": {
         "type": "graphite",
         "uid": "000000001"
+      },
+      "description": "All P2P message types received per second, smoothed over ten samples. Drawn as a stacked area so the total message volume is readable as the height of the band, with the per-type split visible inside it.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "messages per second",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 100,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 0,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "normal"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "short"
+        }
       },
       "gridPos": {
         "h": 14,
@@ -71,20 +126,29 @@
         }
       ],
       "title": "Messages Received",
-      "type": "timeseries",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "graphite",
+        "uid": "000000001"
+      },
+      "description": "All P2P message types sent per second, smoothed over ten samples. Drawn as a stacked area so the total message volume is readable as the height of the band, with the per-type split visible inside it.",
       "fieldConfig": {
         "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
           "custom": {
-            "axisLabel": "messages per second",
-            "fillOpacity": 100,
-            "lineWidth": 0,
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
+            "axisLabel": "messages per second",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
             "drawStyle": "line",
+            "fillOpacity": 100,
             "gradientMode": "none",
             "hideFrom": {
               "legend": false,
@@ -93,6 +157,7 @@
             },
             "insertNulls": false,
             "lineInterpolation": "linear",
+            "lineWidth": 0,
             "pointSize": 5,
             "scaleDistribution": {
               "type": "linear"
@@ -109,9 +174,6 @@
             }
           },
           "min": 0,
-          "color": {
-            "mode": "palette-classic"
-          },
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -126,15 +188,7 @@
             ]
           },
           "unit": "short"
-        },
-        "overrides": []
-      },
-      "description": "All P2P message types received per second, smoothed over ten samples. Drawn as a stacked area so the total message volume is readable as the height of the band, with the per-type split visible inside it."
-    },
-    {
-      "datasource": {
-        "type": "graphite",
-        "uid": "000000001"
+        }
       },
       "gridPos": {
         "h": 14,
@@ -168,65 +222,7 @@
         }
       ],
       "title": "Messages Sent",
-      "type": "timeseries",
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "axisLabel": "messages per second",
-            "fillOpacity": 100,
-            "lineWidth": 0,
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "showValues": false,
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "normal"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "min": 0,
-          "color": {
-            "mode": "palette-classic"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "description": "All P2P message types sent per second, smoothed over ten samples. Drawn as a stacked area so the total message volume is readable as the height of the band, with the per-type split visible inside it."
+      "type": "timeseries"
     },
     {
       "collapsed": false,
@@ -245,6 +241,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
+      "description": "Block and transaction download requests. Received tracks inbound block/tx announcements; sent tracks what this node asked its peers for.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -284,6 +281,7 @@
               "mode": "off"
             }
           },
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -297,7 +295,6 @@
               }
             ]
           },
-          "min": 0,
           "unit": "short"
         },
         "overrides": [
@@ -310,8 +307,8 @@
               {
                 "id": "color",
                 "value": {
-                  "mode": "fixed",
-                  "fixedColor": "#890F02"
+                  "fixedColor": "#890F02",
+                  "mode": "fixed"
                 }
               }
             ]
@@ -360,14 +357,14 @@
         }
       ],
       "title": "getData",
-      "type": "timeseries",
-      "description": "Block and transaction download requests. Received tracks inbound block/tx announcements; sent tracks what this node asked its peers for."
+      "type": "timeseries"
     },
     {
       "datasource": {
         "type": "graphite",
         "uid": "000000001"
       },
+      "description": "Peer address gossip. Both directions are a live trickle of background traffic.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -407,6 +404,7 @@
               "mode": "off"
             }
           },
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -420,7 +418,6 @@
               }
             ]
           },
-          "min": 0,
           "unit": "short"
         },
         "overrides": [
@@ -433,8 +430,8 @@
               {
                 "id": "color",
                 "value": {
-                  "mode": "fixed",
-                  "fixedColor": "#890F02"
+                  "fixedColor": "#890F02",
+                  "mode": "fixed"
                 }
               }
             ]
@@ -483,14 +480,14 @@
         }
       ],
       "title": "addr",
-      "type": "timeseries",
-      "description": "Peer address gossip. Both directions are a live trickle of background traffic."
+      "type": "timeseries"
     },
     {
       "datasource": {
         "type": "graphite",
         "uid": "000000001"
       },
+      "description": "Keepalive pings. Sent outpaces received because this node also pings to measure latency; the round-trip time is on the peers board.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -530,6 +527,7 @@
               "mode": "off"
             }
           },
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -543,7 +541,6 @@
               }
             ]
           },
-          "min": 0,
           "unit": "short"
         },
         "overrides": [
@@ -556,8 +553,8 @@
               {
                 "id": "color",
                 "value": {
-                  "mode": "fixed",
-                  "fixedColor": "#890F02"
+                  "fixedColor": "#890F02",
+                  "mode": "fixed"
                 }
               }
             ]
@@ -606,14 +603,14 @@
         }
       ],
       "title": "ping",
-      "type": "timeseries",
-      "description": "Keepalive pings. Sent outpaces received because this node also pings to measure latency; the round-trip time is on the peers board."
+      "type": "timeseries"
     },
     {
       "datasource": {
         "type": "graphite",
         "uid": "000000001"
       },
+      "description": "tx messages received and sent per second, with the sent-to-received ratio on the right axis. The ratio sits near 1 against rates in the hundreds, so it needs its own scale.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -653,6 +650,7 @@
               "mode": "off"
             }
           },
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -666,7 +664,6 @@
               }
             ]
           },
-          "min": 0,
           "unit": "short"
         },
         "overrides": [
@@ -679,8 +676,8 @@
               {
                 "id": "color",
                 "value": {
-                  "mode": "fixed",
-                  "fixedColor": "#890F02"
+                  "fixedColor": "#890F02",
+                  "mode": "fixed"
                 }
               }
             ]
@@ -782,14 +779,14 @@
         }
       ],
       "title": "tx",
-      "type": "timeseries",
-      "description": "tx messages received and sent per second, with the sent-to-received ratio on the right axis. The ratio sits near 1 against rates in the hundreds, so it needs its own scale."
+      "type": "timeseries"
     },
     {
       "datasource": {
         "type": "graphite",
         "uid": "000000001"
       },
+      "description": "Inventory announcements, the dominant message type on the wire. Received is driven by peers announcing new transactions and blocks.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -829,6 +826,7 @@
               "mode": "off"
             }
           },
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -842,7 +840,6 @@
               }
             ]
           },
-          "min": 0,
           "unit": "short"
         },
         "overrides": [
@@ -855,8 +852,8 @@
               {
                 "id": "color",
                 "value": {
-                  "mode": "fixed",
-                  "fixedColor": "#890F02"
+                  "fixedColor": "#890F02",
+                  "mode": "fixed"
                 }
               }
             ]
@@ -906,14 +903,14 @@
         }
       ],
       "title": "inv",
-      "type": "timeseries",
-      "description": "Inventory announcements, the dominant message type on the wire. Received is driven by peers announcing new transactions and blocks."
+      "type": "timeseries"
     },
     {
       "datasource": {
         "type": "graphite",
         "uid": "000000001"
       },
+      "description": "Keepalive replies. Received should roughly track pings sent; a gap means peers are not answering.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -953,6 +950,7 @@
               "mode": "off"
             }
           },
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -966,7 +964,6 @@
               }
             ]
           },
-          "min": 0,
           "unit": "short"
         },
         "overrides": [
@@ -979,8 +976,8 @@
               {
                 "id": "color",
                 "value": {
-                  "mode": "fixed",
-                  "fixedColor": "#890F02"
+                  "fixedColor": "#890F02",
+                  "mode": "fixed"
                 }
               }
             ]
@@ -1029,8 +1026,7 @@
         }
       ],
       "title": "pong",
-      "type": "timeseries",
-      "description": "Keepalive replies. Received should roughly track pings sent; a gap means peers are not answering."
+      "type": "timeseries"
     }
   ],
   "preload": false,
@@ -1056,6 +1052,5 @@
   },
   "timezone": "browser",
   "title": "P2P Messages",
-  "uid": "000000010",
-  "version": 2
+  "uid": "000000010"
 }

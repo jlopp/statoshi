@@ -15,11 +15,10 @@
       }
     ]
   },
-  "editable": true,
   "description": "RPC and HTTP service health: request volume and per-method latency across roughly 110 registered RPC methods, error and abort rates, plus HTTP work queue depth and rejections.",
+  "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
-  "id": null,
   "liveNow": false,
   "panels": [
     {
@@ -30,8 +29,7 @@
         "x": 0,
         "y": 0
       },
-      "id": 200,
-      "panels": [],
+      "id": 234,
       "title": "Request volume",
       "type": "row"
     },
@@ -40,7 +38,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Every RPC call the node serves, summed across methods. Bitcoin Core emits a counter per method name, so this is the rollup that tells you overall API load. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Every RPC call the node serves, summed across methods. Bitcoin Core emits a counter per method name, so this is the rollup that tells you overall API load.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -80,6 +78,7 @@
               "mode": "off"
             }
           },
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -89,10 +88,8 @@
               }
             ]
           },
-          "unit": "short",
-          "min": 0
-        },
-        "overrides": []
+          "unit": "short"
+        }
       },
       "gridPos": {
         "h": 7,
@@ -135,12 +132,13 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "The eight busiest RPC methods, ranked. A bar gauge rather than a time series, because this is a ranking question, not a trend question. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "The eight busiest RPC methods, ranked. A bar gauge rather than a time series, because this is a ranking question, not a trend question.",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "thresholds"
           },
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -150,10 +148,8 @@
               }
             ]
           },
-          "unit": "short",
-          "min": 0
-        },
-        "overrides": []
+          "unit": "short"
+        }
       },
       "gridPos": {
         "h": 7,
@@ -199,12 +195,13 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Every RPC method that received traffic in the selected window, ranked by call rate. A bar gauge is the natural shape for 'who is hammering the node'; as a time series with dozens of overlapping methods it was very hard to read. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Every RPC method that received traffic in the selected window, ranked by call rate. A bar gauge is the natural shape for 'who is hammering the node'; as a time series with dozens of overlapping methods it was very hard to read.",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "thresholds"
           },
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -214,10 +211,8 @@
               }
             ]
           },
-          "unit": "short",
-          "min": 0
-        },
-        "overrides": []
+          "unit": "short"
+        }
       },
       "gridPos": {
         "h": 9,
@@ -266,8 +261,7 @@
         "x": 0,
         "y": 17
       },
-      "id": 210,
-      "panels": [],
+      "id": 235,
       "title": "Latency",
       "type": "row"
     },
@@ -276,7 +270,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "90th-percentile latency per method. Compare against the mean above: a wide gap means the method is bimodal, usually because some calls hit an index that others do not. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "90th-percentile latency per method. Compare against the mean above: a wide gap means the method is bimodal, usually because some calls hit an index that others do not.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -326,8 +320,7 @@
             ]
           },
           "unit": "\u00b5s"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 7,
@@ -360,7 +353,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByNode(stats.timers.rpc.duration_us.*.upper_90, 3)"
+          "target": "aliasByNode(stats.timers.rpc.duration_us.*.upper_90, 4)"
         }
       ],
       "title": "P90 Latency by Method",
@@ -371,7 +364,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "The five slowest RPC methods by average latency, ranked. A bar gauge shows the ranking directly instead of asking the reader to compare five overlapping lines. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "The five slowest RPC methods by average latency, ranked. A bar gauge shows the ranking directly instead of asking the reader to compare five overlapping lines.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -387,8 +380,7 @@
             ]
           },
           "unit": "\u00b5s"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 7,
@@ -423,7 +415,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByNode(highestAverage(stats.timers.rpc.duration_us.*.mean, 5), 3)"
+          "target": "aliasByNode(highestAverage(stats.timers.rpc.duration_us.*.mean, 5), 4)"
         }
       ],
       "title": "Slowest Methods",
@@ -434,7 +426,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Average latency paid per call across all methods, which is request volume weighted by cost. Use it to tell a load spike caused by many cheap calls apart from one caused by a few expensive ones. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Average latency paid per call across all methods, which is request volume weighted by cost. Use it to tell a load spike caused by many cheap calls apart from one caused by a few expensive ones.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -484,8 +476,7 @@
             ]
           },
           "unit": "\u00b5s"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 7,
@@ -531,8 +522,7 @@
         "x": 0,
         "y": 32
       },
-      "id": 220,
-      "panels": [],
+      "id": 236,
       "title": "Errors",
       "type": "row"
     },
@@ -541,7 +531,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Errors per second, split into errors raised with a typed RPC error code and everything else. Typed errors are usually caller mistakes; 'other' is the bucket to investigate. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Errors per second, split into errors raised with a typed RPC error code and everything else. Typed errors are usually caller mistakes; 'other' is the bucket to investigate.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -581,6 +571,7 @@
               "mode": "off"
             }
           },
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -590,10 +581,8 @@
               }
             ]
           },
-          "unit": "short",
-          "min": 0
-        },
-        "overrides": []
+          "unit": "short"
+        }
       },
       "gridPos": {
         "h": 7,
@@ -645,12 +634,14 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Errors as a fraction of all RPC calls. A gauge with a threshold makes the difference between a healthy zero, background noise and a real failure obvious at a glance. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Errors as a fraction of all RPC calls. A gauge with a threshold makes the difference between a healthy zero, background noise and a real failure obvious at a glance.",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "thresholds"
           },
+          "max": 0.1,
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -668,11 +659,8 @@
               }
             ]
           },
-          "unit": "percentunit",
-          "min": 0,
-          "max": 0.1
-        },
-        "overrides": []
+          "unit": "percentunit"
+        }
       },
       "gridPos": {
         "h": 7,
@@ -718,8 +706,7 @@
         "x": 0,
         "y": 40
       },
-      "id": 230,
-      "panels": [],
+      "id": 237,
       "title": "HTTP service",
       "type": "row"
     },
@@ -728,7 +715,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Requests waiting for an HTTP worker against the configured limit (-rpcworkqueue, default 100). At the cap the node starts rejecting work. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Requests waiting for an HTTP worker against the configured limit (-rpcworkqueue, default 100). At the cap the node starts rejecting work.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -768,6 +755,7 @@
               "mode": "off"
             }
           },
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -777,10 +765,8 @@
               }
             ]
           },
-          "unit": "short",
-          "min": 0
-        },
-        "overrides": []
+          "unit": "short"
+        }
       },
       "gridPos": {
         "h": 7,
@@ -831,7 +817,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Requests refused because the work queue was full. This is the direct symptom of rpcworkqueue being set too low for the client load, and it is invisible to the caller beyond a connection error. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Requests refused because the work queue was full. This is the direct symptom of rpcworkqueue being set too low for the client load, and it is invisible to the caller beyond a connection error.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -871,6 +857,7 @@
               "mode": "off"
             }
           },
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -880,10 +867,8 @@
               }
             ]
           },
-          "unit": "short",
-          "min": 0
-        },
-        "overrides": []
+          "unit": "short"
+        }
       },
       "gridPos": {
         "h": 7,
@@ -926,12 +911,14 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Work queue depth as a fraction of the configured maximum. Shown as a gauge because the actionable question is how close the HTTP service is to shedding load; above 0.8 the service starts rejecting requests. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Work queue depth as a fraction of the configured maximum. Shown as a gauge because the actionable question is how close the HTTP service is to shedding load; above 0.8 the service starts rejecting requests.",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "thresholds"
           },
+          "max": 1,
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -949,11 +936,8 @@
               }
             ]
           },
-          "unit": "percentunit",
-          "min": 0,
-          "max": 1
-        },
-        "overrides": []
+          "unit": "percentunit"
+        }
       },
       "gridPos": {
         "h": 7,
@@ -992,6 +976,7 @@
       "type": "gauge"
     }
   ],
+  "preload": false,
   "refresh": "1m",
   "schemaVersion": 42,
   "tags": [
@@ -1003,10 +988,21 @@
     "from": "now-6h",
     "to": "now"
   },
-  "timepicker": {},
+  "timepicker": {
+    "refresh_intervals": [
+      "5s",
+      "10s",
+      "30s",
+      "1m",
+      "5m",
+      "15m",
+      "30m",
+      "1h",
+      "2h",
+      "1d"
+    ]
+  },
   "timezone": "browser",
   "title": "RPC & HTTP Service",
-  "uid": "statoshi-rpc-http",
-  "version": 1,
-  "preload": false
+  "uid": "statoshi-rpc-http"
 }

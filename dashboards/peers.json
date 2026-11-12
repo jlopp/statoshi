@@ -18,7 +18,6 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
-  "id": 8,
   "liveNow": false,
   "panels": [
     {
@@ -26,6 +25,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
+      "description": "Total, inbound and outbound connection counts. The address-family and node-type splits are broken out on the connection-composition panels below, so plotting all eight overlapping slices here just made the totals hard to read.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -65,6 +65,7 @@
               "mode": "off"
             }
           },
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -78,10 +79,8 @@
               }
             ]
           },
-          "unit": "short",
-          "min": 0
-        },
-        "overrides": []
+          "unit": "short"
+        }
       },
       "gridPos": {
         "h": 7,
@@ -111,7 +110,7 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "aliasByMetric(stats.gauges.peers.inboundConnections)"
+          "target": "alias(stats.gauges.peers.inboundConnections, 'inbound')"
         },
         {
           "datasource": {
@@ -119,7 +118,7 @@
             "uid": "000000001"
           },
           "refId": "D",
-          "target": "aliasByMetric(stats.gauges.peers.outboundConnections)"
+          "target": "alias(stats.gauges.peers.outboundConnections, 'outbound')"
         },
         {
           "datasource": {
@@ -127,18 +126,18 @@
             "uid": "000000001"
           },
           "refId": "H",
-          "target": "aliasByMetric(stats.gauges.peers.totalConnections)"
+          "target": "alias(stats.gauges.peers.totalConnections, 'total')"
         }
       ],
       "title": "Peers",
-      "type": "timeseries",
-      "description": "Total, inbound and outbound connection counts. The address-family and node-type splits are broken out on the connection-composition panels below, so plotting all eight overlapping slices here just made the totals hard to read."
+      "type": "timeseries"
     },
     {
       "datasource": {
         "type": "graphite",
         "uid": "000000001"
       },
+      "description": "Size of the address manager's peer database. Split out because it is roughly 600x the connection count, so on a shared axis it hid every connection series.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -178,6 +177,7 @@
               "mode": "off"
             }
           },
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -191,10 +191,8 @@
               }
             ]
           },
-          "unit": "short",
-          "min": 0
-        },
-        "overrides": []
+          "unit": "short"
+        }
       },
       "gridPos": {
         "h": 7,
@@ -224,18 +222,18 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByMetric(stats.gauges.peers.knownAddresses)"
+          "target": "alias(stats.gauges.peers.knownAddresses, 'known addresses')"
         }
       ],
       "title": "Known Addresses",
-      "type": "timeseries",
-      "description": "Size of the address manager's peer database. Split out because it is roughly 600x the connection count, so on a shared axis it hid every connection series."
+      "type": "timeseries"
     },
     {
       "datasource": {
         "type": "graphite",
         "uid": "000000001"
       },
+      "description": "Round-trip ping latency to peers at the lower bound, median and upper bound, in microseconds. The series come from ping_us, so they are microseconds; the previous nanosecond unit made every reading a thousand times too large.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -368,7 +366,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByMetric(stats.timers.peers.ping_us.lower)"
+          "target": "alias(stats.timers.peers.ping_us.lower, 'min')"
         },
         {
           "datasource": {
@@ -376,7 +374,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "aliasByMetric(stats.timers.peers.ping_us.median)"
+          "target": "alias(stats.timers.peers.ping_us.median, 'median (p50)')"
         },
         {
           "datasource": {
@@ -384,18 +382,18 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "aliasByMetric(stats.timers.peers.ping_us.upper)"
+          "target": "alias(stats.timers.peers.ping_us.upper, 'max')"
         }
       ],
       "title": "Peer Pings",
-      "type": "timeseries",
-      "description": "Round-trip ping latency to peers at the lower bound, median and upper bound, in microseconds. The series come from ping_us, so they are microseconds; the previous nanosecond unit made every reading a thousand times too large."
+      "type": "timeseries"
     },
     {
       "datasource": {
         "type": "graphite",
         "uid": "000000001"
       },
+      "description": "Reject messages sent, stacked by reason. The per-reason series are mutually exclusive and sum to the 'all rejects' series, so a stack shows both the total rejection rate and its composition. As nineteen unstacked bars this was unreadable.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -435,6 +433,7 @@
               "mode": "off"
             }
           },
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -448,8 +447,7 @@
               }
             ]
           },
-          "unit": "short",
-          "min": 0
+          "unit": "short"
         },
         "overrides": [
           {
@@ -653,8 +651,7 @@
         }
       ],
       "title": "Reject Messages Sent",
-      "type": "timeseries",
-      "description": "Reject messages sent, stacked by reason. The per-reason series are mutually exclusive and sum to the 'all rejects' series, so a stack shows both the total rejection rate and its composition. As nineteen unstacked bars this was unreadable. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree."
+      "type": "timeseries"
     },
     {
       "collapsed": false,
@@ -664,8 +661,7 @@
         "x": 0,
         "y": 28
       },
-      "id": 10,
-      "panels": [],
+      "id": 30,
       "title": "Connection lifecycle",
       "type": "row"
     },
@@ -674,7 +670,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Outbound connects and disconnects per second. Inbound accepted is also plotted but that counter is not in the current build; the two outbound series carry the churn signal. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Outbound connects and disconnects per second. Inbound accepted is also plotted but that counter is not in the current build; the two outbound series carry the churn signal.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -684,6 +680,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
+            "axisLabel": "events per second",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -711,8 +708,7 @@
             },
             "thresholdsStyle": {
               "mode": "off"
-            },
-            "axisLabel": "events per second"
+            }
           },
           "thresholds": {
             "mode": "absolute",
@@ -728,8 +724,7 @@
             ]
           },
           "unit": "short"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 7,
@@ -788,7 +783,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Closes split by connection type. Listed explicitly because a wildcard would also match each type's .lifetimeSeconds sibling. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Closes split by connection type. Listed explicitly because a wildcard would also match each type's .lifetimeSeconds sibling.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -798,6 +793,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
+            "axisLabel": "closes per second",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -825,8 +821,7 @@
             },
             "thresholdsStyle": {
               "mode": "off"
-            },
-            "axisLabel": "closes per second"
+            }
           },
           "thresholds": {
             "mode": "absolute",
@@ -842,8 +837,7 @@
             ]
           },
           "unit": "short"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 7,
@@ -926,7 +920,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Average lifetime at close, per type. A flood of one-second block-relay closes looks nothing like normal churn, and neither was visible before. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Average lifetime at close, per type. A flood of one-second block-relay closes looks nothing like normal churn, and neither was visible before.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -936,6 +930,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
+            "axisLabel": "seconds connected",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -963,8 +958,7 @@
             },
             "thresholdsStyle": {
               "mode": "off"
-            },
-            "axisLabel": "seconds connected"
+            }
           },
           "thresholds": {
             "mode": "absolute",
@@ -980,8 +974,7 @@
             ]
           },
           "unit": "s"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 7,
@@ -1040,7 +1033,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Inbound evictions per second on the left axis, with the age of the evicted connection on the right. The age is in seconds and is one to two orders of magnitude larger than the eviction rate. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Inbound evictions per second on the left axis, with the age of the evicted connection on the right. The age is in seconds and is one to two orders of magnitude larger than the eviction rate.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1050,6 +1043,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
+            "axisLabel": "rate and seconds",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -1077,8 +1071,7 @@
             },
             "thresholdsStyle": {
               "mode": "off"
-            },
-            "axisLabel": "rate and seconds"
+            }
           },
           "thresholds": {
             "mode": "absolute",
@@ -1179,7 +1172,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Inbound slot usage against the configured maximum, with total connections for context. The slot gauges are not in the current build, so only total connections plots today. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Inbound slot usage against the configured maximum, with total connections for context. The slot gauges are not in the current build, so only total connections plots today.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1189,6 +1182,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
+            "axisLabel": "inbound slots",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -1216,9 +1210,9 @@
             },
             "thresholdsStyle": {
               "mode": "off"
-            },
-            "axisLabel": "inbound slots"
+            }
           },
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -1232,10 +1226,8 @@
               }
             ]
           },
-          "unit": "short",
-          "min": 0
-        },
-        "overrides": []
+          "unit": "short"
+        }
       },
       "gridPos": {
         "h": 7,
@@ -1297,8 +1289,7 @@
         "x": 0,
         "y": 64
       },
-      "id": 16,
-      "panels": [],
+      "id": 31,
       "title": "Connection composition",
       "type": "row"
     },
@@ -1307,7 +1298,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Connections by type as a stacked area. The types are mutually exclusive and sum to the connection total, so the stack height is the peer count. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Connections by type as a stacked area. The types are mutually exclusive and sum to the connection total, so the stack height is the peer count.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1317,6 +1308,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
+            "axisLabel": "connections",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -1344,8 +1336,7 @@
             },
             "thresholdsStyle": {
               "mode": "off"
-            },
-            "axisLabel": "connections"
+            }
           },
           "thresholds": {
             "mode": "absolute",
@@ -1361,8 +1352,7 @@
             ]
           },
           "unit": "short"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 7,
@@ -1394,7 +1384,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByNode(stats.gauges.peers.connectionType.*, 3)"
+          "target": "aliasByNode(stats.gauges.peers.connectionType.*, 4)"
         }
       ],
       "title": "Peers by Connection Type",
@@ -1405,7 +1395,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Connections by transport protocol as a stacked area: cleartext v1, BIP324 v2 and peers still being probed. The band height is the connection total. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Connections by transport protocol as a stacked area: cleartext v1, BIP324 v2 and peers still being probed. The band height is the connection total.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1415,6 +1405,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
+            "axisLabel": "connections",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -1442,8 +1433,7 @@
             },
             "thresholdsStyle": {
               "mode": "off"
-            },
-            "axisLabel": "connections"
+            }
           },
           "thresholds": {
             "mode": "absolute",
@@ -1459,8 +1449,7 @@
             ]
           },
           "unit": "short"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 7,
@@ -1519,7 +1508,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Age of the oldest and newest connection. A newest age stuck near zero means constant churn; oldest age tracks how long the longest-lived peer has been with us. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Age of the oldest and newest connection. A newest age stuck near zero means constant churn; oldest age tracks how long the longest-lived peer has been with us.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1529,6 +1518,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
+            "axisLabel": "seconds",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -1556,8 +1546,7 @@
             },
             "thresholdsStyle": {
               "mode": "off"
-            },
-            "axisLabel": "seconds"
+            }
           },
           "thresholds": {
             "mode": "absolute",
@@ -1573,8 +1562,7 @@
             ]
           },
           "unit": "s"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 7,
@@ -1625,7 +1613,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Inbound connections by network, stacked. The networks are mutually exclusive, so the stack shows both the inbound total and its composition. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Inbound connections by network, stacked. The networks are mutually exclusive, so the stack shows both the inbound total and its composition.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1635,6 +1623,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
+            "axisLabel": "connections per second",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -1662,8 +1651,7 @@
             },
             "thresholdsStyle": {
               "mode": "off"
-            },
-            "axisLabel": "connections per second"
+            }
           },
           "thresholds": {
             "mode": "absolute",
@@ -1679,8 +1667,7 @@
             ]
           },
           "unit": "short"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 7,
@@ -1712,7 +1699,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByNode(stats.peers.inbound.network.*, 3)"
+          "target": "aliasByNode(stats.peers.inbound.network.*, 4)"
         }
       ],
       "title": "Inbound Connections by Network",
@@ -1723,7 +1710,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Outbound connections by type and network, stacked. Each combination occupies its own part of the outbound total. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Outbound connections by type and network, stacked. Each combination occupies its own part of the outbound total.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1733,6 +1720,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
+            "axisLabel": "connections per second",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -1760,8 +1748,7 @@
             },
             "thresholdsStyle": {
               "mode": "off"
-            },
-            "axisLabel": "connections per second"
+            }
           },
           "thresholds": {
             "mode": "absolute",
@@ -1777,8 +1764,7 @@
             ]
           },
           "unit": "short"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 7,
@@ -1810,7 +1796,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByNode(stats.peers.outbound.connected.*.network.*, 3, 5)"
+          "target": "aliasByNode(stats.peers.outbound.connected.*.network.*, 4, 6)"
         }
       ],
       "title": "Outbound Connections by Type and Network",
@@ -1824,8 +1810,7 @@
         "x": 0,
         "y": 100
       },
-      "id": 22,
-      "panels": [],
+      "id": 32,
       "title": "Peer discovery & enforcement",
       "type": "row"
     },
@@ -1834,7 +1819,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Entries in the new and tried address tables. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Entries in the new and tried address tables.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1844,6 +1829,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
+            "axisLabel": "addresses",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -1871,8 +1857,7 @@
             },
             "thresholdsStyle": {
               "mode": "off"
-            },
-            "axisLabel": "addresses"
+            }
           },
           "thresholds": {
             "mode": "absolute",
@@ -1888,8 +1873,7 @@
             ]
           },
           "unit": "short"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 7,
@@ -1940,7 +1924,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Addresses entering the manager, and why the rest were rejected. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Addresses entering the manager, and why the rest were rejected.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1950,6 +1934,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
+            "axisLabel": "addresses per second",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -1977,8 +1962,7 @@
             },
             "thresholdsStyle": {
               "mode": "off"
-            },
-            "axisLabel": "addresses per second"
+            }
           },
           "thresholds": {
             "mode": "absolute",
@@ -1994,8 +1978,7 @@
             ]
           },
           "unit": "short"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 7,
@@ -2078,7 +2061,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Failed attempts to pick an address to connect to. Non-zero means the node is running out of usable peers. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Failed attempts to pick an address to connect to. Non-zero means the node is running out of usable peers.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -2088,6 +2071,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
+            "axisLabel": "events per second",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -2115,8 +2099,7 @@
             },
             "thresholdsStyle": {
               "mode": "off"
-            },
-            "axisLabel": "events per second"
+            }
           },
           "thresholds": {
             "mode": "absolute",
@@ -2132,8 +2115,7 @@
             ]
           },
           "unit": "short"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 7,
@@ -2184,7 +2166,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Bootstrap health. A silent DNS seed regression was previously undetectable. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Bootstrap health. A silent DNS seed regression was previously undetectable.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -2194,6 +2176,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
+            "axisLabel": "rate",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -2221,8 +2204,7 @@
             },
             "thresholdsStyle": {
               "mode": "off"
-            },
-            "axisLabel": "rate"
+            }
           },
           "thresholds": {
             "mode": "absolute",
@@ -2238,8 +2220,7 @@
             ]
           },
           "unit": "short"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 7,
@@ -2298,7 +2279,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Bans actually applied by banman, and addresses discouraged from being served. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Bans actually applied by banman, and addresses discouraged from being served.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -2308,6 +2289,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
+            "axisLabel": "events per second",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -2335,8 +2317,7 @@
             },
             "thresholdsStyle": {
               "mode": "off"
-            },
-            "axisLabel": "events per second"
+            }
           },
           "thresholds": {
             "mode": "absolute",
@@ -2352,8 +2333,7 @@
             ]
           },
           "unit": "short"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 7,
@@ -2414,6 +2394,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
+            "axisLabel": "events per second",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -2441,8 +2422,7 @@
             },
             "thresholdsStyle": {
               "mode": "off"
-            },
-            "axisLabel": "events per second"
+            }
           },
           "thresholds": {
             "mode": "absolute",
@@ -2458,8 +2438,7 @@
             ]
           },
           "unit": "short"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 7,
@@ -2491,7 +2470,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByNode(stats.misbehavior.*, 2)"
+          "target": "aliasByNode(exclude(stats.misbehavior.*, 'amount'), 2)"
         }
       ],
       "title": "Misbehavior by Reason",
@@ -2521,6 +2500,5 @@
   },
   "timezone": "browser",
   "title": "Peers",
-  "uid": "000000008",
-  "version": 7
+  "uid": "000000008"
 }

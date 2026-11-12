@@ -47,6 +47,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
+      "description": "Block height on the right axis and transactions per second on the left. They differ by six orders of magnitude, so each needs its own scale.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -123,8 +124,8 @@
               {
                 "id": "color",
                 "value": {
-                  "mode": "fixed",
-                  "fixedColor": "#8AB8FF"
+                  "fixedColor": "#8AB8FF",
+                  "mode": "fixed"
                 }
               }
             ]
@@ -138,8 +139,8 @@
               {
                 "id": "color",
                 "value": {
-                  "mode": "fixed",
-                  "fixedColor": "#73BF69"
+                  "fixedColor": "#73BF69",
+                  "mode": "fixed"
                 }
               }
             ]
@@ -188,8 +189,7 @@
         }
       ],
       "title": "Blocks & Transactions",
-      "type": "timeseries",
-      "description": "Block height on the right axis and transactions per second on the left. They differ by six orders of magnitude, so each needs its own scale."
+      "type": "timeseries"
     },
     {
       "gridPos": {
@@ -242,6 +242,5 @@
   },
   "timezone": "browser",
   "title": "Home",
-  "version": 2,
   "uid": "statoshi-home"
 }

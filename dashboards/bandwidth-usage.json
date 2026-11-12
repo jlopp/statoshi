@@ -18,7 +18,6 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 1,
   "liveNow": false,
   "panels": [
     {
@@ -26,6 +25,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
+      "description": "Incoming and outgoing bandwidth per second, drawn as two lines rather than a stack so each direction can be read on its own. The stack implied a total that is not meaningful (received plus sent is not a combined throughput figure).",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -41,7 +41,7 @@
             "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 10,
-            "gradientMode": "none",
+            "gradientMode": "opacity",
             "hideFrom": {
               "legend": false,
               "tooltip": false,
@@ -49,7 +49,7 @@
             },
             "insertNulls": false,
             "lineInterpolation": "linear",
-            "lineWidth": 0,
+            "lineWidth": 2,
             "pointSize": 5,
             "scaleDistribution": {
               "type": "linear"
@@ -90,7 +90,7 @@
               {
                 "id": "color",
                 "value": {
-                  "fixedColor": "#508642",
+                  "fixedColor": "#73BF69",
                   "mode": "fixed"
                 }
               }
@@ -105,7 +105,7 @@
               {
                 "id": "color",
                 "value": {
-                  "fixedColor": "#BF1B00",
+                  "fixedColor": "#F2495C",
                   "mode": "fixed"
                 }
               }
@@ -156,14 +156,14 @@
         }
       ],
       "title": "Incoming & Outgoing Bandwidth Usage per second",
-      "type": "timeseries",
-      "description": "Incoming and outgoing bandwidth per second, drawn as two lines rather than a stack so each direction can be read on its own. The stack implied a total that is not meaningful (received plus sent is not a combined throughput figure)."
+      "type": "timeseries"
     },
     {
       "datasource": {
         "type": "graphite",
         "uid": "000000001"
       },
+      "description": "Cumulative bytes received and sent since the node process last restarted. This is a monotonic counter, so it is shown as a current-value stat rather than a rising bar chart; the previous stacked bars suggested a composition that does not exist.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -260,14 +260,14 @@
         }
       ],
       "title": "Total Bandwidth Used Since Last Restart",
-      "type": "stat",
-      "description": "Cumulative bytes received and sent since the node process last restarted. This is a monotonic counter, so it is shown as a current-value stat rather than a rising bar chart; the previous stacked bars suggested a composition that does not exist."
+      "type": "stat"
     },
     {
       "datasource": {
         "type": "graphite",
         "uid": "000000001"
       },
+      "description": "Per message type, received. Event-driven types (block, cmpctblock) are almost always zero between blocks, so they read as spikes rather than a continuous rate.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -321,8 +321,7 @@
             ]
           },
           "unit": "Bps"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 12,
@@ -359,14 +358,14 @@
         }
       ],
       "title": "Incoming Bandwidth Usage by Message",
-      "type": "timeseries",
-      "description": "Per message type, received. Event-driven types (block, cmpctblock) are almost always zero between blocks, so they read as spikes rather than a continuous rate."
+      "type": "timeseries"
     },
     {
       "datasource": {
         "type": "graphite",
         "uid": "000000001"
       },
+      "description": "Per message type, sent. tx and inv dominate; the leading edge of the y axis is set by the busiest type, so quieter messages sit near the floor.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -420,8 +419,7 @@
             ]
           },
           "unit": "Bps"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 12,
@@ -458,14 +456,14 @@
         }
       ],
       "title": "Outgoing Bandwidth Usage by Message",
-      "type": "timeseries",
-      "description": "Per message type, sent. tx and inv dominate; the leading edge of the y axis is set by the busiest type, so quieter messages sit near the floor."
+      "type": "timeseries"
     },
     {
       "datasource": {
         "type": "graphite",
         "uid": "000000001"
       },
+      "description": "Bytes carried per message type across currently connected peers, sorted largest first. Bar length shows each type's share of the aggregate for this direction; the number is the byte count.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -480,7 +478,8 @@
               }
             ]
           },
-          "unit": "decbytes"
+          "unit": "decbytes",
+          "min": 0
         },
         "overrides": [
           {
@@ -538,18 +537,44 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByNode(stats.gauges.bandwidth.message.*.totalBytesReceived, 4)"
+          "target": "aliasByNode(highestCurrent(stats.gauges.bandwidth.message.*.totalBytesReceived, 1000), 4)"
+        },
+        {
+          "datasource": {
+            "type": "graphite",
+            "uid": "000000001"
+          },
+          "refId": "B",
+          "target": "alias(sumSeries(stats.gauges.bandwidth.message.*.totalBytesReceived), 'aggregate')"
         }
       ],
       "title": "Total Incoming Bandwidth Usage by Message (currently connected peers)",
       "type": "bargauge",
-      "description": "Total bytes carried per message type across currently connected peers. A bar gauge ranks the message types by volume, which is what this panel is for; the previous line chart over time made the ranking unreadable."
+      "transformations": [
+        {
+          "id": "configFromData",
+          "options": {
+            "configRefId": "B",
+            "mappings": [
+              {
+                "fieldName": "aggregate",
+                "handlerKey": "max"
+              }
+            ],
+            "applyTo": {
+              "id": "byType",
+              "options": "number"
+            }
+          }
+        }
+      ]
     },
     {
       "datasource": {
         "type": "graphite",
         "uid": "000000001"
       },
+      "description": "Bytes carried per message type across currently connected peers, sorted largest first. Bar length shows each type's share of the aggregate for this direction; the number is the byte count.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -564,7 +589,8 @@
               }
             ]
           },
-          "unit": "decbytes"
+          "unit": "decbytes",
+          "min": 0
         },
         "overrides": [
           {
@@ -622,18 +648,44 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByNode(stats.gauges.bandwidth.message.*.totalBytesSent, 4)"
+          "target": "aliasByNode(highestCurrent(stats.gauges.bandwidth.message.*.totalBytesSent, 1000), 4)"
+        },
+        {
+          "datasource": {
+            "type": "graphite",
+            "uid": "000000001"
+          },
+          "refId": "B",
+          "target": "alias(sumSeries(stats.gauges.bandwidth.message.*.totalBytesSent), 'aggregate')"
         }
       ],
       "title": "Total Outgoing Bandwidth Usage by Message (currently connected peers)",
       "type": "bargauge",
-      "description": "Total bytes carried per message type across currently connected peers. A bar gauge ranks the message types by volume, which is what this panel is for; the previous line chart over time made the ranking unreadable."
+      "transformations": [
+        {
+          "id": "configFromData",
+          "options": {
+            "configRefId": "B",
+            "mappings": [
+              {
+                "fieldName": "aggregate",
+                "handlerKey": "max"
+              }
+            ],
+            "applyTo": {
+              "id": "byType",
+              "options": "number"
+            }
+          }
+        }
+      ]
     },
     {
       "datasource": {
         "type": "graphite",
         "uid": "000000001"
       },
+      "description": "Top 5% of bandwidth series by value, summed. Reads as a stress indicator rather than a true percentile of total throughput.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -687,8 +739,7 @@
             ]
           },
           "unit": "Bps"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 8,
@@ -722,8 +773,7 @@
         }
       ],
       "title": "95th Percentile Bandwidth Usage",
-      "type": "timeseries",
-      "description": "Top 5% of bandwidth series by value, summed. Reads as a stress indicator rather than a true percentile of total throughput."
+      "type": "timeseries"
     },
     {
       "datasource": {
@@ -740,6 +790,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
+            "axisLabel": "bytes per second",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -767,8 +818,7 @@
             },
             "thresholdsStyle": {
               "mode": "off"
-            },
-            "axisLabel": "bytes per second"
+            }
           },
           "thresholds": {
             "mode": "absolute",
@@ -784,8 +834,7 @@
             ]
           },
           "unit": "Bps"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 7,
@@ -862,6 +911,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
+            "axisLabel": "distinct keys",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -889,9 +939,9 @@
             },
             "thresholdsStyle": {
               "mode": "off"
-            },
-            "axisLabel": "distinct keys"
+            }
           },
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -905,10 +955,8 @@
               }
             ]
           },
-          "unit": "short",
-          "min": 0
-        },
-        "overrides": []
+          "unit": "short"
+        }
       },
       "gridPos": {
         "h": 7,
@@ -978,6 +1026,5 @@
   },
   "timezone": "browser",
   "title": "Bandwidth Usage",
-  "uid": "000000001",
-  "version": 16
+  "uid": "000000001"
 }

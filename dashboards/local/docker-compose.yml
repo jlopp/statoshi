@@ -1,0 +1,27 @@
+services:
+  grafana:
+    image: grafana/grafana:13.3.1
+    container_name: statoshi-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      # Anonymous admin so there is no login step for local development.
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: "Admin"
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      # The dashboards are provisioned read-only from disk; the UI is a viewer.
+      # They are stored in the classic dashboard model, which is what the
+      # Grafana UI import page accepts, so the files checked into the repo can
+      # be imported into statoshi.info unchanged.
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/home.json
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+      # Troubleshooting aid: set to debug to see the Graphite requests.
+      GF_LOG_LEVEL: "warn"
+    volumes:
+      - ./provisioning:/etc/grafana/provisioning:ro
+      # Mount the parent directory so the local file edits are live.
+      - ../:/var/lib/grafana/dashboards:ro
+    restart: unless-stopped

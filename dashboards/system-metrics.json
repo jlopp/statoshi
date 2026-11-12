@@ -18,7 +18,6 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 5,
   "liveNow": false,
   "panels": [
     {
@@ -26,6 +25,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
+      "description": "Overall CPU utilisation, 0-100. Drawn as a line rather than bars: the gauge is sampled every minute, so bars read as a solid wall at long ranges and imply discrete events that are not happening. The per-mode breakdown below is normalised differently and does not sum to this figure.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -65,6 +65,8 @@
               "mode": "line"
             }
           },
+          "max": 100,
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -82,9 +84,7 @@
               }
             ]
           },
-          "unit": "percent",
-          "min": 0,
-          "max": 100
+          "unit": "percent"
         },
         "overrides": [
           {
@@ -136,14 +136,14 @@
         }
       ],
       "title": "CPU Usage",
-      "type": "timeseries",
-      "description": "Overall CPU utilisation, 0-100. Drawn as a line rather than bars: the gauge is sampled every minute, so bars read as a solid wall at long ranges and imply discrete events that are not happening. The per-mode breakdown below is normalised differently and does not sum to this figure."
+      "type": "timeseries"
     },
     {
       "datasource": {
         "type": "graphite",
         "uid": "000000001"
       },
+      "description": "System load average, with the host's four-core count marked as a threshold: load above 4 means work is queueing for CPU, above 8 means it is badly oversubscribed.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -252,14 +252,14 @@
         }
       ],
       "title": "Load",
-      "type": "timeseries",
-      "description": "System load average, with the host's four-core count marked as a threshold: load above 4 means work is queueing for CPU, above 8 means it is badly oversubscribed."
+      "type": "timeseries"
     },
     {
       "datasource": {
         "type": "graphite",
         "uid": "000000001"
       },
+      "description": "Used memory, around 6.8 GB of a 16 GB host. Drawn as a line for consistency with the rest of the dashboard and because the sample is continuous, not a series of discrete events.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -364,14 +364,14 @@
         }
       ],
       "title": "Memory Usage",
-      "type": "timeseries",
-      "description": "Used memory, around 6.8 GB of a 16 GB host. Drawn as a line for consistency with the rest of the dashboard and because the sample is continuous, not a series of discrete events."
+      "type": "timeseries"
     },
     {
       "datasource": {
         "type": "graphite",
         "uid": "000000001"
       },
+      "description": "Disk read and write throughput in bytes per second. Reads peak around 160 MB/s and writes around 10 MB/s; these used to share an axis with 933 GB of used space, which made them a flat line at zero.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -425,8 +425,7 @@
             ]
           },
           "unit": "Bps"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 7,
@@ -468,8 +467,7 @@
         }
       ],
       "title": "Disk Throughput",
-      "type": "timeseries",
-      "description": "Disk read and write throughput in bytes per second. Reads peak around 160 MB/s and writes around 10 MB/s; these used to share an axis with 933 GB of used space, which made them a flat line at zero."
+      "type": "timeseries"
     },
     {
       "collapsed": false,
@@ -479,8 +477,7 @@
         "x": 0,
         "y": 14
       },
-      "id": 6,
-      "panels": [],
+      "id": 28,
       "title": "CPU",
       "type": "row"
     },
@@ -499,6 +496,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
+            "axisLabel": "per-core load (sum \u2248 core count)",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -526,8 +524,7 @@
             },
             "thresholdsStyle": {
               "mode": "off"
-            },
-            "axisLabel": "per-core load (sum \u2248 core count)"
+            }
           },
           "thresholds": {
             "mode": "absolute",
@@ -543,8 +540,7 @@
             ]
           },
           "unit": "none"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 7,
@@ -621,6 +617,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
+            "axisLabel": "events per second",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -648,8 +645,7 @@
             },
             "thresholdsStyle": {
               "mode": "off"
-            },
-            "axisLabel": "events per second"
+            }
           },
           "thresholds": {
             "mode": "absolute",
@@ -665,8 +661,7 @@
             ]
           },
           "unit": "short"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 7,
@@ -728,8 +723,7 @@
         "x": 0,
         "y": 29
       },
-      "id": 9,
-      "panels": [],
+      "id": 29,
       "title": "Memory & swap",
       "type": "row"
     },
@@ -748,6 +742,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
+            "axisLabel": "bytes",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -775,8 +770,7 @@
             },
             "thresholdsStyle": {
               "mode": "off"
-            },
-            "axisLabel": "bytes"
+            }
           },
           "thresholds": {
             "mode": "absolute",
@@ -792,8 +786,7 @@
             ]
           },
           "unit": "decbytes"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 7,
@@ -866,6 +859,8 @@
           "color": {
             "mode": "thresholds"
           },
+          "max": 100,
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -883,11 +878,8 @@
               }
             ]
           },
-          "unit": "percent",
-          "min": 0,
-          "max": 100
-        },
-        "overrides": []
+          "unit": "percent"
+        }
       },
       "gridPos": {
         "h": 7,
@@ -936,6 +928,8 @@
           "color": {
             "mode": "thresholds"
           },
+          "max": 100,
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -953,11 +947,8 @@
               }
             ]
           },
-          "unit": "percent",
-          "min": 0,
-          "max": 100
-        },
-        "overrides": []
+          "unit": "percent"
+        }
       },
       "gridPos": {
         "h": 7,
@@ -1010,6 +1001,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
+            "axisLabel": "bytes",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -1037,8 +1029,7 @@
             },
             "thresholdsStyle": {
               "mode": "off"
-            },
-            "axisLabel": "bytes"
+            }
           },
           "thresholds": {
             "mode": "absolute",
@@ -1054,8 +1045,7 @@
             ]
           },
           "unit": "decbytes"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 7,
@@ -1116,6 +1106,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
+            "axisLabel": "pages per second",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -1143,8 +1134,7 @@
             },
             "thresholdsStyle": {
               "mode": "off"
-            },
-            "axisLabel": "pages per second"
+            }
           },
           "thresholds": {
             "mode": "absolute",
@@ -1160,8 +1150,7 @@
             ]
           },
           "unit": "short"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 7,
@@ -1215,8 +1204,7 @@
         "x": 0,
         "y": 58
       },
-      "id": 15,
-      "panels": [],
+      "id": 30,
       "title": "Disk & network",
       "type": "row"
     },
@@ -1235,6 +1223,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
+            "axisLabel": "ms per second (1000 = fully busy)",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -1262,8 +1251,7 @@
             },
             "thresholdsStyle": {
               "mode": "line"
-            },
-            "axisLabel": "ms per second (1000 = fully busy)"
+            }
           },
           "thresholds": {
             "mode": "absolute",
@@ -1283,8 +1271,7 @@
             ]
           },
           "unit": "ms"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 7,
@@ -1353,6 +1340,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
+            "axisLabel": "operations per second",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -1380,8 +1368,7 @@
             },
             "thresholdsStyle": {
               "mode": "off"
-            },
-            "axisLabel": "operations per second"
+            }
           },
           "thresholds": {
             "mode": "absolute",
@@ -1397,8 +1384,7 @@
             ]
           },
           "unit": "short"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 7,
@@ -1459,6 +1445,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
+            "axisLabel": "bytes per second",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -1486,8 +1473,7 @@
             },
             "thresholdsStyle": {
               "mode": "off"
-            },
-            "axisLabel": "bytes per second"
+            }
           },
           "thresholds": {
             "mode": "absolute",
@@ -1503,8 +1489,7 @@
             ]
           },
           "unit": "Bps"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 7,
@@ -1565,6 +1550,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
+            "axisLabel": "events per second",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -1592,9 +1578,9 @@
             },
             "thresholdsStyle": {
               "mode": "off"
-            },
-            "axisLabel": "events per second"
+            }
           },
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -1608,10 +1594,8 @@
               }
             ]
           },
-          "unit": "short",
-          "min": 0
-        },
-        "overrides": []
+          "unit": "short"
+        }
       },
       "gridPos": {
         "h": 7,
@@ -1681,8 +1665,7 @@
         "x": 0,
         "y": 87
       },
-      "id": 22,
-      "panels": [],
+      "id": 31,
       "title": "Node process",
       "type": "row"
     },
@@ -1691,7 +1674,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Resident set size of the node process, distinct from the host-level memory gauges. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Resident set size of the node process, distinct from the host-level memory gauges.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1701,6 +1684,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
+            "axisLabel": "bytes",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -1728,8 +1712,7 @@
             },
             "thresholdsStyle": {
               "mode": "off"
-            },
-            "axisLabel": "bytes"
+            }
           },
           "thresholds": {
             "mode": "absolute",
@@ -1745,8 +1728,7 @@
             ]
           },
           "unit": "decbytes"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 7,
@@ -1789,12 +1771,13 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Open file descriptors held by the node process. Approaching the process ulimit is a hard failure waiting to happen; the thresholds mark the default soft limit. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Open file descriptors held by the node process. Approaching the process ulimit is a hard failure waiting to happen; the thresholds mark the default soft limit.",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "thresholds"
           },
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -1812,10 +1795,8 @@
               }
             ]
           },
-          "unit": "short",
-          "min": 0
-        },
-        "overrides": []
+          "unit": "short"
+        }
       },
       "gridPos": {
         "h": 7,
@@ -1878,8 +1859,7 @@
             ]
           },
           "unit": "dtdurations"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 7,
@@ -1942,6 +1922,5 @@
   },
   "timezone": "browser",
   "title": "System Metrics",
-  "uid": "000000005",
-  "version": 3
+  "uid": "000000005"
 }

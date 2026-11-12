@@ -1,0 +1,28 @@
+apiVersion: 1
+
+datasources:
+  # The dashboards in this repo all reference the datasource uid "000000001",
+  # which is the uid statoshi.info itself uses for its Graphite datasource.
+  # Keeping the same uid here means the checked-in dashboards work unmodified.
+  #
+  # statoshi.info's Graphite datasource is only reachable through its Grafana
+  # HTTP proxy; the raw Carbon/pickle port is not exposed. So this datasource
+  # points straight at that public proxy, and this local Grafana behaves as a
+  # read-only frontend over the live production data.
+  #
+  # The proxy path already contains /api/datasources/proxy/uid/<uid>, so the
+  # url below must be the host root, not Grafana's own proxy prefix. Grafana
+  # appends /render, /metrics/find etc. to whatever is configured here.
+  - name: Graphite (statoshi.info live)
+    uid: "000000001"
+    type: graphite
+    access: proxy
+    url: https://statoshi.info/api/datasources/proxy/uid/000000001
+    isDefault: true
+    editable: false
+    jsonData:
+      graphiteVersion: "1.1"
+      # The live instance is a plain Graphite/Carbon pair, not Metrictank, so
+      # force the vanilla render API rather than the Metrictank one.
+      graphiteType: "graphite"
+    secureJsonData: {}

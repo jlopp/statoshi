@@ -18,7 +18,6 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 4,
   "liveNow": false,
   "panels": [
     {
@@ -26,6 +25,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
+      "description": "Resident memory of the Carbon collector, about 31-33 MB. Cache query counts used to share this axis and sat on the baseline; they are on Carbon Cache Efficiency.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -79,8 +79,7 @@
             ]
           },
           "unit": "decbytes"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 7,
@@ -114,14 +113,14 @@
         }
       ],
       "title": "Carbon Memory Usage",
-      "type": "timeseries",
-      "description": "Resident memory of the Carbon collector, about 31-33 MB. Cache query counts used to share this axis and sat on the baseline; they are on Carbon Cache Efficiency."
+      "type": "timeseries"
     },
     {
       "datasource": {
         "type": "graphite",
         "uid": "000000001"
       },
+      "description": "StatsD calculation and flush time, single-digit milliseconds.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -175,8 +174,7 @@
             ]
           },
           "unit": "ms"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 7,
@@ -218,8 +216,7 @@
         }
       ],
       "title": "Graphite Flush Timing",
-      "type": "timeseries",
-      "description": "StatsD calculation and flush time, single-digit milliseconds."
+      "type": "timeseries"
     },
     {
       "collapsed": false,
@@ -229,8 +226,7 @@
         "x": 0,
         "y": 14
       },
-      "id": 5,
-      "panels": [],
+      "id": 19,
       "title": "StatsD pipeline",
       "type": "row"
     },
@@ -249,6 +245,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
+            "axisLabel": "milliseconds",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -276,8 +273,7 @@
             },
             "thresholdsStyle": {
               "mode": "off"
-            },
-            "axisLabel": "milliseconds"
+            }
           },
           "thresholds": {
             "mode": "absolute",
@@ -293,8 +289,7 @@
             ]
           },
           "unit": "ms"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 7,
@@ -347,6 +342,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
+            "axisLabel": "per second",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -374,9 +370,9 @@
             },
             "thresholdsStyle": {
               "mode": "off"
-            },
-            "axisLabel": "per second"
+            }
           },
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -390,8 +386,7 @@
               }
             ]
           },
-          "unit": "short",
-          "min": 0
+          "unit": "short"
         },
         "overrides": [
           {
@@ -483,6 +478,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
+            "axisLabel": "lag (seconds)",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -510,8 +506,7 @@
             },
             "thresholdsStyle": {
               "mode": "line"
-            },
-            "axisLabel": "lag (seconds)"
+            }
           },
           "thresholds": {
             "mode": "absolute",
@@ -531,8 +526,7 @@
             ]
           },
           "unit": "s"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 7,
@@ -575,6 +569,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
+      "description": "Non-zero means the last Graphite flush raised an exception. A stat that goes red is far clearer than a 0/1 toggle lost on a seconds-scale axis.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -594,8 +589,7 @@
             ]
           },
           "unit": "short"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 7,
@@ -632,8 +626,7 @@
         }
       ],
       "title": "Graphite Flush Exceptions",
-      "type": "stat",
-      "description": "Non-zero means the last Graphite flush raised an exception. A stat that goes red is far clearer than a 0/1 toggle lost on a seconds-scale axis."
+      "type": "stat"
     },
     {
       "datasource": {
@@ -650,6 +643,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
+            "axisLabel": "bytes per flush",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -677,8 +671,7 @@
             },
             "thresholdsStyle": {
               "mode": "off"
-            },
-            "axisLabel": "bytes per flush"
+            }
           },
           "thresholds": {
             "mode": "absolute",
@@ -694,8 +687,7 @@
             ]
           },
           "unit": "decbytes"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 7,
@@ -741,8 +733,7 @@
         "x": 0,
         "y": 43
       },
-      "id": 10,
-      "panels": [],
+      "id": 20,
       "title": "Carbon",
       "type": "row"
     },
@@ -761,6 +752,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
+            "axisLabel": "events per second",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -788,9 +780,9 @@
             },
             "thresholdsStyle": {
               "mode": "off"
-            },
-            "axisLabel": "events per second"
+            }
           },
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -804,10 +796,8 @@
               }
             ]
           },
-          "unit": "short",
-          "min": 0
-        },
-        "overrides": []
+          "unit": "short"
+        }
       },
       "gridPos": {
         "h": 7,
@@ -876,6 +866,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
+            "axisLabel": "cpu usage",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -903,8 +894,7 @@
             },
             "thresholdsStyle": {
               "mode": "off"
-            },
-            "axisLabel": "cpu usage"
+            }
           },
           "thresholds": {
             "mode": "absolute",
@@ -920,8 +910,7 @@
             ]
           },
           "unit": "short"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 7,
@@ -964,6 +953,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
+      "description": "How long a Carbon cache update takes and how many points it carries. Separated from the CPU usage panel so both can be read against a meaningful scale.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -973,6 +963,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
+            "axisLabel": "percent, seconds, and ratio",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -1000,8 +991,7 @@
             },
             "thresholdsStyle": {
               "mode": "off"
-            },
-            "axisLabel": "percent, seconds, and ratio"
+            }
           },
           "thresholds": {
             "mode": "absolute",
@@ -1075,8 +1065,7 @@
         }
       ],
       "title": "Carbon Update Cost",
-      "type": "timeseries",
-      "description": "How long a Carbon cache update takes and how many points it carries. Separated from the CPU usage panel so both can be read against a meaningful scale. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree."
+      "type": "timeseries"
     },
     {
       "datasource": {
@@ -1137,8 +1126,7 @@
             ]
           },
           "unit": "short"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 7,
@@ -1335,6 +1323,5 @@
   },
   "timezone": "browser",
   "title": "Telemetry Pipeline",
-  "uid": "000000004",
-  "version": 2
+  "uid": "000000004"
 }

@@ -18,7 +18,6 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 18,
   "liveNow": false,
   "panels": [
     {
@@ -26,6 +25,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
+      "description": "Network mining difficulty, formatted with SI prefixes so it reads as tera-scale rather than a fourteen-digit integer. Drawn as a step, because difficulty only changes every 2016 blocks.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -78,7 +78,7 @@
               }
             ]
           },
-          "unit": "si"
+          "unit": "none"
         },
         "overrides": [
           {
@@ -132,14 +132,14 @@
         }
       ],
       "title": "Mining Difficulty",
-      "type": "timeseries",
-      "description": "Network mining difficulty, formatted with SI prefixes so it reads as tera-scale rather than a fourteen-digit integer. Drawn as a step, because difficulty only changes every 2016 blocks."
+      "type": "timeseries"
     },
     {
       "datasource": {
         "type": "graphite",
         "uid": "000000001"
       },
+      "description": "Network hashrate estimated from the trailing 120 blocks, around 900-1,080 EH/s.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -193,8 +193,7 @@
             ]
           },
           "unit": "EHs"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 7,
@@ -230,15 +229,14 @@
         }
       ],
       "title": "Estimated Network Hashrate (trailing 120 blocks)",
-      "type": "timeseries",
-      "description": "Network hashrate estimated from the trailing 120 blocks, around 900-1,080 EH/s."
+      "type": "timeseries"
     },
     {
       "datasource": {
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Transaction count for the block this node would mine right now. Template weight now has its own panel. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Transaction count for the block this node would mine right now. Template weight now has its own panel.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -248,6 +246,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
+            "axisLabel": "transactions",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -275,9 +274,9 @@
             },
             "thresholdsStyle": {
               "mode": "off"
-            },
-            "axisLabel": "transactions"
+            }
           },
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -291,10 +290,8 @@
               }
             ]
           },
-          "unit": "short",
-          "min": 0
-        },
-        "overrides": []
+          "unit": "short"
+        }
       },
       "gridPos": {
         "h": 7,
@@ -337,7 +334,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Weight of the block template being assembled. The 4,000,000 weight-unit cap is shown as a threshold line; the template only changes on a new block tip, so it steps. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Weight of the block template being assembled. The 4,000,000 weight-unit cap is shown as a threshold line; the template only changes on a new block tip, so it steps.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -347,6 +344,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
+            "axisLabel": "block weight (max 4,000,000)",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -374,9 +372,9 @@
             },
             "thresholdsStyle": {
               "mode": "line"
-            },
-            "axisLabel": "block weight (max 4,000,000)"
+            }
           },
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -394,10 +392,8 @@
               }
             ]
           },
-          "unit": "short",
-          "min": 0
-        },
-        "overrides": []
+          "unit": "short"
+        }
       },
       "gridPos": {
         "h": 7,
@@ -440,7 +436,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Total fees available in the current block template, in satoshis. Converting from BTC gives the panel a usable dynamic range instead of plotting numbers near zero. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Total fees available in the current block template, in satoshis. Converting from BTC gives the panel a usable dynamic range instead of plotting numbers near zero.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -450,6 +446,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
+            "axisLabel": "satoshis",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -477,8 +474,7 @@
             },
             "thresholdsStyle": {
               "mode": "off"
-            },
-            "axisLabel": "satoshis"
+            }
           },
           "thresholds": {
             "mode": "absolute",
@@ -494,8 +490,7 @@
             ]
           },
           "unit": "short"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 7,
@@ -538,7 +533,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Time to build a block template, broken into assembling transactions and testing validity. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Time to build a block template, broken into assembling transactions and testing validity.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -548,6 +543,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
+            "axisLabel": "microseconds",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -575,8 +571,7 @@
             },
             "thresholdsStyle": {
               "mode": "off"
-            },
-            "axisLabel": "microseconds"
+            }
           },
           "thresholds": {
             "mode": "absolute",
@@ -592,8 +587,7 @@
             ]
           },
           "unit": "\u00b5s"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 7,
@@ -671,6 +665,5 @@
   },
   "timezone": "browser",
   "title": "Mining",
-  "uid": "000000018",
-  "version": 3
+  "uid": "000000018"
 }

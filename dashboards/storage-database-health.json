@@ -15,11 +15,10 @@
       }
     ]
   },
-  "editable": true,
   "description": "Storage, LevelDB and chainstate persistence health: volume capacity, per-database read/write latency and hit rate, chainstate flush cost and triggers, block file I/O, pruning, snapshots and optional indexes. The layer every chainstate stall is attributable to.",
+  "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
-  "id": null,
   "liveNow": false,
   "panels": [
     {
@@ -30,8 +29,7 @@
         "x": 0,
         "y": 0
       },
-      "id": 100,
-      "panels": [],
+      "id": 158,
       "title": "Capacity",
       "type": "row"
     },
@@ -90,8 +88,7 @@
             ]
           },
           "unit": "decbytes"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 7,
@@ -148,6 +145,8 @@
           "color": {
             "mode": "thresholds"
           },
+          "max": 100,
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -165,11 +164,8 @@
               }
             ]
           },
-          "unit": "percent",
-          "min": 0,
-          "max": 100
-        },
-        "overrides": []
+          "unit": "percent"
+        }
       },
       "gridPos": {
         "h": 7,
@@ -215,8 +211,7 @@
         "x": 0,
         "y": 8
       },
-      "id": 120,
-      "panels": [],
+      "id": 159,
       "title": "LevelDB by database",
       "type": "row"
     },
@@ -225,7 +220,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Mean LevelDB read latency per database. chainstate serves the coins cache, index the block index, and txindex the optional transaction index. Reads here are the ones that missed the cache, so this is the number to watch when a chainstate stall needs explaining. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Mean LevelDB read latency per database. chainstate serves the coins cache, index the block index, and txindex the optional transaction index. Reads here are the ones that missed the cache, so this is the number to watch when a chainstate stall needs explaining.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -275,8 +270,7 @@
             ]
           },
           "unit": "\u00b5s"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 7,
@@ -335,7 +329,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Fraction of reads served without touching disk, per database. A falling rate means the working set has outgrown the block cache and reads are going to the table files. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Fraction of reads served without touching disk, per database. A falling rate means the working set has outgrown the block cache and reads are going to the table files.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -385,8 +379,7 @@
             ]
           },
           "unit": "percentunit"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 7,
@@ -446,7 +439,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Mean time to commit a write batch, per database. A rising value here means the write path is becoming the bottleneck rather than read latency. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Mean time to commit a write batch, per database. A rising value here means the write path is becoming the bottleneck rather than read latency.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -496,8 +489,7 @@
             ]
           },
           "unit": "\u00b5s"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 7,
@@ -556,7 +548,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Write batches per second against explicit sync writes. Sync writes force a flush to stable storage and are far more expensive, so a sync-write spike explains a latency spike. Read failures should sit at zero. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Write batches per second against explicit sync writes. Sync writes force a flush to stable storage and are far more expensive, so a sync-write spike explains a latency spike. Read failures should sit at zero.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -596,6 +588,7 @@
               "mode": "off"
             }
           },
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -605,10 +598,8 @@
               }
             ]
           },
-          "unit": "short",
-          "min": 0
-        },
-        "overrides": []
+          "unit": "short"
+        }
       },
       "gridPos": {
         "h": 7,
@@ -671,8 +662,7 @@
         "x": 0,
         "y": 30
       },
-      "id": 130,
-      "panels": [],
+      "id": 160,
       "title": "Chainstate flush",
       "type": "row"
     },
@@ -681,7 +671,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Time to flush the chainstate to disk. This is the main chainstate I/O cost and was only visible in bench logs before instrumentation. Periodic writes should be fast; a FORCE_SYNC during shutdown is legitimately slow. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Time to flush the chainstate to disk. This is the main chainstate I/O cost and was only visible in bench logs before instrumentation. Periodic writes should be fast; a FORCE_SYNC during shutdown is legitimately slow.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -731,8 +721,7 @@
             ]
           },
           "unit": "\u00b5s"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 7,
@@ -783,7 +772,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Why the chainstate was flushed, stacked by trigger mode. The modes are mutually exclusive and the stack height is the total flush rate. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Why the chainstate was flushed, stacked by trigger mode. The modes are mutually exclusive and the stack height is the total flush rate.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -823,6 +812,7 @@
               "mode": "off"
             }
           },
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -832,10 +822,8 @@
               }
             ]
           },
-          "unit": "short",
-          "min": 0
-        },
-        "overrides": []
+          "unit": "short"
+        }
       },
       "gridPos": {
         "h": 7,
@@ -903,7 +891,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Number of coins written on the last flush against the dirty count that triggered it. Flush duration scales with this, so read the two panels together. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Number of coins written on the last flush against the dirty count that triggered it. Flush duration scales with this, so read the two panels together.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -943,6 +931,7 @@
               "mode": "off"
             }
           },
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -952,10 +941,8 @@
               }
             ]
           },
-          "unit": "short",
-          "min": 0
-        },
-        "overrides": []
+          "unit": "short"
+        }
       },
       "gridPos": {
         "h": 7,
@@ -1006,7 +993,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Dynamic memory held by the coins cache when the chainstate was last flushed. This is the input to flush cost: a large dirty cache is what makes a periodic write take as long as it does. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Dynamic memory held by the coins cache when the chainstate was last flushed. This is the input to flush cost: a large dirty cache is what makes a periodic write take as long as it does.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1046,6 +1033,7 @@
               "mode": "off"
             }
           },
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -1055,10 +1043,8 @@
               }
             ]
           },
-          "unit": "decbytes",
-          "min": 0
-        },
-        "overrides": []
+          "unit": "decbytes"
+        }
       },
       "gridPos": {
         "h": 7,
@@ -1105,8 +1091,7 @@
         "x": 0,
         "y": 52
       },
-      "id": 140,
-      "panels": [],
+      "id": 161,
       "title": "Block files",
       "type": "row"
     },
@@ -1115,7 +1100,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Block file throughput as blocks are read and written. Reads dominate during initial sync and during any reorg replay; writes track new blocks only. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Block file throughput as blocks are read and written. Reads dominate during initial sync and during any reorg replay; writes track new blocks only.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1165,8 +1150,7 @@
             ]
           },
           "unit": "Bps"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 7,
@@ -1217,7 +1201,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Mean time to read or write a block file. Rising write latency with flat throughput points at the storage device rather than at load. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Mean time to read or write a block file. Rising write latency with flat throughput points at the storage device rather than at load.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1267,8 +1251,7 @@
             ]
           },
           "unit": "\u00b5s"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 7,
@@ -1319,7 +1302,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Latency of writing the block index and the undo data. The undo file is written for every connected block and is what makes a reorg possible without re-downloading. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Latency of writing the block index and the undo data. The undo file is written for every connected block and is what makes a reorg possible without re-downloading.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1369,8 +1352,7 @@
             ]
           },
           "unit": "\u00b5s"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 7,
@@ -1421,7 +1403,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Block file read and write failures, including checksum mismatches. Any non-zero value here means disk corruption or a failing device, not a transient error. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Block file read and write failures, including checksum mismatches. Any non-zero value here means disk corruption or a failing device, not a transient error.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1461,6 +1443,7 @@
               "mode": "off"
             }
           },
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -1470,10 +1453,8 @@
               }
             ]
           },
-          "unit": "short",
-          "min": 0
-        },
-        "overrides": []
+          "unit": "short"
+        }
       },
       "gridPos": {
         "h": 7,
@@ -1525,7 +1506,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Index entries and block files written per second, with undo bytes on the right axis. A byte rate on a count axis was invisible. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Index entries and block files written per second, with undo bytes on the right axis. A byte rate on a count axis was invisible.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1657,7 +1638,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Block files actually deleted per second, against the number eligible for pruning. All zero on an unpruned node, which is the normal configuration. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Block files actually deleted per second, against the number eligible for pruning. All zero on an unpruned node, which is the normal configuration.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1697,6 +1678,7 @@
               "mode": "off"
             }
           },
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -1706,10 +1688,8 @@
               }
             ]
           },
-          "unit": "short",
-          "min": 0
-        },
-        "overrides": []
+          "unit": "short"
+        }
       },
       "gridPos": {
         "h": 7,
@@ -1761,7 +1741,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Cost of deciding what to prune and then unlinking it. Both read only block index metadata, not block data. Manual is the explicit -pruneblockchain call. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Cost of deciding what to prune and then unlinking it. Both read only block index metadata, not block data. Manual is the explicit -pruneblockchain call.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1801,6 +1781,7 @@
               "mode": "off"
             }
           },
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -1810,10 +1791,8 @@
               }
             ]
           },
-          "unit": "\u00b5s",
-          "min": 0
-        },
-        "overrides": []
+          "unit": "\u00b5s"
+        }
       },
       "gridPos": {
         "h": 7,
@@ -1876,8 +1855,7 @@
         "x": 0,
         "y": 81
       },
-      "id": 150,
-      "panels": [],
+      "id": 162,
       "title": "Snapshots and indexes",
       "type": "row"
     },
@@ -1886,7 +1864,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Time to flush an assumeutxo snapshot to disk. Only active while a snapshot is being loaded or validated, so a flat zero line is expected on a node that never does. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Time to flush an assumeutxo snapshot to disk. Only active while a snapshot is being loaded or validated, so a flat zero line is expected on a node that never does.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1936,8 +1914,7 @@
             ]
           },
           "unit": "\u00b5s"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 7,
@@ -1980,7 +1957,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Cost of computing snapshot statistics, in microseconds, with the aborted-snapshot rate on the right axis. The abort rate is almost always zero and was pinned flat against a microsecond-scale cost. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Cost of computing snapshot statistics, in microseconds, with the aborted-snapshot rate on the right axis. The abort rate is almost always zero and was pinned flat against a microsecond-scale cost.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -2104,7 +2081,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Block height each optional index has reached. A persistent gap behind the chain tip (see the Blocks dashboard) means an index is still syncing or has stalled, which silently disables the RPCs that depend on it. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Block height each optional index has reached. A persistent gap behind the chain tip (see the Blocks dashboard) means an index is still syncing or has stalled, which silently disables the RPCs that depend on it.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -2154,8 +2131,7 @@
             ]
           },
           "unit": "short"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 7,
@@ -2206,7 +2182,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Per-block cost of updating the txindex, in microseconds, with the reorg rewind rate on the right axis. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Per-block cost of updating the txindex, in microseconds, with the reorg rewind rate on the right axis.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -2326,6 +2302,7 @@
       "type": "timeseries"
     }
   ],
+  "preload": false,
   "refresh": "1m",
   "schemaVersion": 42,
   "tags": [
@@ -2338,10 +2315,21 @@
     "from": "now-6h",
     "to": "now"
   },
-  "timepicker": {},
+  "timepicker": {
+    "refresh_intervals": [
+      "5s",
+      "10s",
+      "30s",
+      "1m",
+      "5m",
+      "15m",
+      "30m",
+      "1h",
+      "2h",
+      "1d"
+    ]
+  },
   "timezone": "browser",
   "title": "Storage & Database Health",
-  "uid": "statoshi-storage",
-  "version": 1,
-  "preload": false
+  "uid": "statoshi-storage"
 }

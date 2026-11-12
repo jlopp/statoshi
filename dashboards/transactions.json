@@ -18,7 +18,6 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 6,
   "liveNow": false,
   "panels": [
     {
@@ -26,6 +25,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
+      "description": "Coins-cache size against mempool occupancy. The cache holds a working set of recently touched UTXOs and runs into the thousands; the mempool runs into the tens of thousands.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -156,14 +156,14 @@
         }
       ],
       "title": "Transaction Sets",
-      "type": "timeseries",
-      "description": "Coins-cache size against mempool occupancy. The cache holds a working set of recently touched UTXOs and runs into the thousands; the mempool runs into the tens of thousands."
+      "type": "timeseries"
     },
     {
       "datasource": {
         "type": "graphite",
         "uid": "000000001"
       },
+      "description": "Accepted transactions per second against the trailing-month average rate. Short spikes far above the average are large blocks arriving; the average line is the long-run throughput.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -203,6 +203,7 @@
               "mode": "off"
             }
           },
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -216,8 +217,7 @@
               }
             ]
           },
-          "unit": "short",
-          "min": 0
+          "unit": "short"
         },
         "overrides": [
           {
@@ -280,14 +280,14 @@
         }
       ],
       "title": "Transactions Accepted Per Second",
-      "type": "timeseries",
-      "description": "Accepted transactions per second against the trailing-month average rate. Short spikes far above the average are large blocks arriving; the average line is the long-run throughput."
+      "type": "timeseries"
     },
     {
       "datasource": {
         "type": "graphite",
         "uid": "000000001"
       },
+      "description": "Accepted against rejected transactions, as a percent stack. The rejected series is derived by subtracting accepted from received, which can go negative when a batch is counted asymmetrically; it is clamped at zero because negative values break percent stacking.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -328,6 +328,7 @@
             }
           },
           "max": 1,
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -341,8 +342,7 @@
               }
             ]
           },
-          "unit": "short",
-          "min": 0
+          "unit": "short"
         },
         "overrides": [
           {
@@ -405,14 +405,14 @@
         }
       ],
       "title": "Transactions Accepted vs Rejected",
-      "type": "timeseries",
-      "description": "Accepted against rejected transactions, as a percent stack. The rejected series is derived by subtracting accepted from received, which can go negative when a batch is counted asymmetrically; it is clamped at zero because negative values break percent stacking."
+      "type": "timeseries"
     },
     {
       "datasource": {
         "type": "graphite",
         "uid": "000000001"
       },
+      "description": "Transaction inputs and outputs consumed per second. Drawn as two independent lines: a percent stack implied that inputs and outputs are parts of a common whole and fabricated a 100% total that does not exist.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -452,6 +452,7 @@
               "mode": "off"
             }
           },
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -465,8 +466,7 @@
               }
             ]
           },
-          "unit": "short",
-          "min": 0
+          "unit": "short"
         },
         "overrides": [
           {
@@ -541,14 +541,14 @@
         }
       ],
       "title": "Inputs vs Outputs per Second",
-      "type": "timeseries",
-      "description": "Transaction inputs and outputs consumed per second. Drawn as two independent lines: a percent stack implied that inputs and outputs are parts of a common whole and fabricated a 100% total that does not exist."
+      "type": "timeseries"
     },
     {
       "datasource": {
         "type": "graphite",
         "uid": "000000001"
       },
+      "description": "Average virtual size per transaction on the left axis, with the transaction arrival rate on the right. A few hundred vbytes per transaction against thousands of transactions per second cannot share a scale.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -669,14 +669,14 @@
         }
       ],
       "title": "vbytes Per Transaction",
-      "type": "timeseries",
-      "description": "Average virtual size per transaction on the left axis, with the transaction arrival rate on the right. A few hundred vbytes per transaction against thousands of transactions per second cannot share a scale."
+      "type": "timeseries"
     },
     {
       "datasource": {
         "type": "graphite",
         "uid": "000000001"
       },
+      "description": "Average fees paid per transaction, in satoshis, with the transaction arrival rate on the right axis. Previously both shared an axis, which flattened the fee series.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -797,14 +797,14 @@
         }
       ],
       "title": "Fees (satoshis) Paid Per Transaction",
-      "type": "timeseries",
-      "description": "Average fees paid per transaction, in satoshis, with the transaction arrival rate on the right axis. Previously both shared an axis, which flattened the fee series."
+      "type": "timeseries"
     },
     {
       "datasource": {
         "type": "graphite",
         "uid": "000000001"
       },
+      "description": "Fee rate in satoshis per vbyte on the left axis, with vbyte throughput on the right.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -927,14 +927,14 @@
         }
       ],
       "title": "Transaction Fees (satoshis) Paid Per vbyte",
-      "type": "timeseries",
-      "description": "Fee rate in satoshis per vbyte on the left axis, with vbyte throughput on the right."
+      "type": "timeseries"
     },
     {
       "datasource": {
         "type": "graphite",
         "uid": "000000001"
       },
+      "description": "Signature operations across accepted transactions, per second.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1041,14 +1041,14 @@
         }
       ],
       "title": "Signature Operations",
-      "type": "timeseries",
-      "description": "Signature operations across accepted transactions, per second."
+      "type": "timeseries"
     },
     {
       "datasource": {
         "type": "graphite",
         "uid": "000000001"
       },
+      "description": "Total transactions seen since the chain began. A monotonic counter, so it is presented as a current-value stat.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1122,8 +1122,7 @@
         }
       ],
       "title": "Total Historical Transactions",
-      "type": "stat",
-      "description": "Total transactions seen since the chain began. A monotonic counter, so it is presented as a current-value stat."
+      "type": "stat"
     },
     {
       "collapsed": false,
@@ -1133,8 +1132,7 @@
         "x": 0,
         "y": 63
       },
-      "id": 11,
-      "panels": [],
+      "id": 22,
       "title": "Transaction value & redundancy",
       "type": "row"
     },
@@ -1153,6 +1151,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
+            "axisLabel": "BTC per second",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -1180,8 +1179,7 @@
             },
             "thresholdsStyle": {
               "mode": "off"
-            },
-            "axisLabel": "BTC per second"
+            }
           },
           "thresholds": {
             "mode": "absolute",
@@ -1197,8 +1195,7 @@
             ]
           },
           "unit": "short"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 7,
@@ -1259,6 +1256,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
+            "axisLabel": "transactions per second",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -1286,8 +1284,7 @@
             },
             "thresholdsStyle": {
               "mode": "off"
-            },
-            "axisLabel": "transactions per second"
+            }
           },
           "thresholds": {
             "mode": "absolute",
@@ -1303,8 +1300,7 @@
             ]
           },
           "unit": "short"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 7,
@@ -1358,8 +1354,7 @@
         "x": 0,
         "y": 78
       },
-      "id": 14,
-      "panels": [],
+      "id": 23,
       "title": "Transaction admission",
       "type": "row"
     },
@@ -1368,7 +1363,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Total rejected transactions per second. A breakdown by reason is on the panel above; this is the rollup, so it should roughly equal the sum of the reasons. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Total rejected transactions per second. A breakdown by reason is on the panel above; this is the rollup, so it should roughly equal the sum of the reasons.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1378,6 +1373,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
+            "axisLabel": "transactions per second",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -1405,8 +1401,7 @@
             },
             "thresholdsStyle": {
               "mode": "off"
-            },
-            "axisLabel": "transactions per second"
+            }
           },
           "thresholds": {
             "mode": "absolute",
@@ -1422,8 +1417,7 @@
             ]
           },
           "unit": "short"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 7,
@@ -1466,7 +1460,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Reject composition, previously only in the debug log. The best available signal for the shape of a spam or attack. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Reject composition, previously only in the debug log. The best available signal for the shape of a spam or attack.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1476,6 +1470,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
+            "axisLabel": "transactions per second",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -1503,8 +1498,7 @@
             },
             "thresholdsStyle": {
               "mode": "off"
-            },
-            "axisLabel": "transactions per second"
+            }
           },
           "thresholds": {
             "mode": "absolute",
@@ -1520,8 +1514,7 @@
             ]
           },
           "unit": "short"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 7,
@@ -1553,7 +1546,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByNode(stats.transactions.rejected.reason.*, 3)"
+          "target": "aliasByNode(stats.transactions.rejected.reason.*, 4)"
         }
       ],
       "title": "Rejection Reasons",
@@ -1564,7 +1557,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Package relay activity: packages received and rejected per second, plus the mean transaction count per package. The third series is a per-package count on a rate axis, so compare shapes rather than heights. Series on the right axis use a different scale from the left. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Package relay activity: packages received and rejected per second, plus the mean transaction count per package. The third series is a per-package count on a rate axis, so compare shapes rather than heights. Series on the right axis use a different scale from the left.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1574,6 +1567,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
+            "axisLabel": "rate and txs/package",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -1601,8 +1595,7 @@
             },
             "thresholdsStyle": {
               "mode": "off"
-            },
-            "axisLabel": "rate and txs/package"
+            }
           },
           "thresholds": {
             "mode": "absolute",
@@ -1691,7 +1684,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Transactions this node asked for but never received, per second, split by txid and wtxid. A sustained non-zero rate points at peers stalling on requests. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Transactions this node asked for but never received, per second, split by txid and wtxid. A sustained non-zero rate points at peers stalling on requests.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1701,6 +1694,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
+            "axisLabel": "transactions per second",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -1728,8 +1722,7 @@
             },
             "thresholdsStyle": {
               "mode": "off"
-            },
-            "axisLabel": "transactions per second"
+            }
           },
           "thresholds": {
             "mode": "absolute",
@@ -1745,8 +1738,7 @@
             ]
           },
           "unit": "short"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 7,
@@ -1808,8 +1800,7 @@
         "x": 0,
         "y": 107
       },
-      "id": 19,
-      "panels": [],
+      "id": 24,
       "title": "Script validation caches",
       "type": "row"
     },
@@ -1818,12 +1809,14 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Share of ECDSA and Schnorr signature checks served from the signature cache. A gauge because the number is bounded and a healthy value is near the top; anything under 0.5 means validation is doing avoidable work. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Share of ECDSA and Schnorr signature checks served from the signature cache. A gauge because the number is bounded and a healthy value is near the top; anything under 0.5 means validation is doing avoidable work.",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "thresholds"
           },
+          "max": 1,
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -1841,11 +1834,8 @@
               }
             ]
           },
-          "unit": "percentunit",
-          "min": 0,
-          "max": 1
-        },
-        "overrides": []
+          "unit": "percentunit"
+        }
       },
       "gridPos": {
         "h": 7,
@@ -1896,7 +1886,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Whole-transaction script execution cache, used during ConnectBlock. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Whole-transaction script execution cache, used during ConnectBlock.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1906,6 +1896,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
+            "axisLabel": "per second",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -1933,8 +1924,7 @@
             },
             "thresholdsStyle": {
               "mode": "off"
-            },
-            "axisLabel": "per second"
+            }
           },
           "thresholds": {
             "mode": "absolute",
@@ -1950,8 +1940,7 @@
             ]
           },
           "unit": "short"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 7,
@@ -2021,6 +2010,5 @@
   },
   "timezone": "browser",
   "title": "Transactions",
-  "uid": "000000006",
-  "version": 27
+  "uid": "000000006"
 }

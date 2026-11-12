@@ -18,7 +18,6 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 3,
   "liveNow": false,
   "panels": [
     {
@@ -26,6 +25,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
+      "description": "Time to accept and validate a block, mean per block in microseconds. Includes reading from disk and checking its header and transactions.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -38,7 +38,7 @@
             "axisLabel": "microseconds",
             "axisPlacement": "auto",
             "barAlignment": 0,
-            "barWidthFactor": 1.0,
+            "barWidthFactor": 1,
             "drawStyle": "bars",
             "fillOpacity": 100,
             "gradientMode": "none",
@@ -132,14 +132,14 @@
         }
       ],
       "title": "AcceptBlock",
-      "type": "timeseries",
-      "description": "Time to accept and validate a block, mean per block in microseconds. Includes reading from disk and checking its header and transactions."
+      "type": "timeseries"
     },
     {
       "datasource": {
         "type": "graphite",
         "uid": "000000001"
       },
+      "description": "Header and basic context-free validation, mean in microseconds. Runs before the more expensive connection step.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -152,7 +152,7 @@
             "axisLabel": "microseconds",
             "axisPlacement": "auto",
             "barAlignment": 0,
-            "barWidthFactor": 1.0,
+            "barWidthFactor": 1,
             "drawStyle": "bars",
             "fillOpacity": 100,
             "gradientMode": "none",
@@ -246,14 +246,14 @@
         }
       ],
       "title": "CheckBlock",
-      "type": "timeseries",
-      "description": "Header and basic context-free validation, mean in microseconds. Runs before the more expensive connection step."
+      "type": "timeseries"
     },
     {
       "datasource": {
         "type": "graphite",
         "uid": "000000001"
       },
+      "description": "Full connection of a block to the UTXO set, mean in milliseconds. The stage breakdown below shows where the time goes.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -266,7 +266,7 @@
             "axisLabel": "milliseconds",
             "axisPlacement": "auto",
             "barAlignment": 0,
-            "barWidthFactor": 1.0,
+            "barWidthFactor": 1,
             "drawStyle": "bars",
             "fillOpacity": 100,
             "gradientMode": "none",
@@ -360,14 +360,14 @@
         }
       ],
       "title": "ConnectBlock",
-      "type": "timeseries",
-      "description": "Full connection of a block to the UTXO set, mean in milliseconds. The stage breakdown below shows where the time goes."
+      "type": "timeseries"
     },
     {
       "datasource": {
         "type": "graphite",
         "uid": "000000001"
       },
+      "description": "End-to-end chain tip update including connection, flush and post-connect steps, mean in milliseconds.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -380,7 +380,7 @@
             "axisLabel": "milliseconds",
             "axisPlacement": "auto",
             "barAlignment": 0,
-            "barWidthFactor": 1.0,
+            "barWidthFactor": 1,
             "drawStyle": "bars",
             "fillOpacity": 100,
             "gradientMode": "none",
@@ -474,14 +474,14 @@
         }
       ],
       "title": "ConnectTip",
-      "type": "timeseries",
-      "description": "End-to-end chain tip update including connection, flush and post-connect steps, mean in milliseconds."
+      "type": "timeseries"
     },
     {
       "datasource": {
         "type": "graphite",
         "uid": "000000001"
       },
+      "description": "AcceptToMemoryPool latency at the lower bound, median and upper bound. Percentiles are not additive parts of a whole, so they are drawn as three separate lines; stacking them displaced the median by the lower bound and turned the top of the stack into lower plus median plus upper.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -604,14 +604,14 @@
         }
       ],
       "title": "AcceptToMemoryPool",
-      "type": "timeseries",
-      "description": "AcceptToMemoryPool latency at the lower bound, median and upper bound. Percentiles are not additive parts of a whole, so they are drawn as three separate lines; stacking them displaced the median by the lower bound and turned the top of the stack into lower plus median plus upper."
+      "type": "timeseries"
     },
     {
       "datasource": {
         "type": "graphite",
         "uid": "000000001"
       },
+      "description": "Input and script validation for mempool admission, in milliseconds. Lower and median both read zero because most transactions validate almost instantly.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -734,14 +734,14 @@
         }
       ],
       "title": "CheckInputs",
-      "type": "timeseries",
-      "description": "Input and script validation for mempool admission, in milliseconds. Lower and median both read zero because most transactions validate almost instantly."
+      "type": "timeseries"
     },
     {
       "datasource": {
         "type": "graphite",
         "uid": "000000001"
       },
+      "description": "Context-free transaction checks in microseconds. Upper is the 90th percentile and tracks the largest transactions.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -864,8 +864,7 @@
         }
       ],
       "title": "CheckTransaction",
-      "type": "timeseries",
-      "description": "Context-free transaction checks in microseconds. Upper is the 90th percentile and tracks the largest transactions."
+      "type": "timeseries"
     },
     {
       "collapsed": false,
@@ -875,8 +874,7 @@
         "x": 0,
         "y": 49
       },
-      "id": 9,
-      "panels": [],
+      "id": 15,
       "title": "Block connection stage breakdown",
       "type": "row"
     },
@@ -885,7 +883,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Six non-overlapping intervals that sum to ConnectBlock. Emitted as counters (accumulated microseconds), so each is divided by blocks.connected to recover microseconds per block. This turns the single ConnectBlock number into an attribution. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Six non-overlapping intervals that sum to ConnectBlock. Emitted as counters (accumulated microseconds), so each is divided by blocks.connected to recover microseconds per block. This turns the single ConnectBlock number into an attribution.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -895,6 +893,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
+            "axisLabel": "microseconds",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -922,8 +921,7 @@
             },
             "thresholdsStyle": {
               "mode": "off"
-            },
-            "axisLabel": "microseconds"
+            }
           },
           "thresholds": {
             "mode": "absolute",
@@ -939,8 +937,7 @@
             ]
           },
           "unit": "\u00b5s"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 7,
@@ -1023,7 +1020,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Stage breakdown of ConnectTip, normalised per block by dividing by blocks.connected. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree.",
+      "description": "Stage breakdown of ConnectTip, normalised per block by dividing by blocks.connected.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1033,6 +1030,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
+            "axisLabel": "microseconds",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -1060,8 +1058,7 @@
             },
             "thresholdsStyle": {
               "mode": "off"
-            },
-            "axisLabel": "microseconds"
+            }
           },
           "thresholds": {
             "mode": "absolute",
@@ -1077,8 +1074,7 @@
             ]
           },
           "unit": "\u00b5s"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 7,
@@ -1163,6 +1159,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
+            "axisLabel": "milliseconds",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -1190,8 +1187,7 @@
             },
             "thresholdsStyle": {
               "mode": "off"
-            },
-            "axisLabel": "milliseconds"
+            }
           },
           "thresholds": {
             "mode": "absolute",
@@ -1207,8 +1203,7 @@
             ]
           },
           "unit": "ms"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 7,
@@ -1270,8 +1265,7 @@
         "x": 0,
         "y": 71
       },
-      "id": 13,
-      "panels": [],
+      "id": 16,
       "title": "Estimator",
       "type": "row"
     },
@@ -1280,6 +1274,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
+      "description": "Time the fee estimator spends processing each connected block, folding its transactions into the confirmation statistics. Runs once per block, so a rise here delays nothing but scales with block size.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1292,7 +1287,7 @@
             "axisLabel": "microseconds",
             "axisPlacement": "auto",
             "barAlignment": 0,
-            "barWidthFactor": 1.0,
+            "barWidthFactor": 1,
             "drawStyle": "bars",
             "fillOpacity": 100,
             "gradientMode": "none",
@@ -1333,8 +1328,7 @@
             ]
           },
           "unit": "\u00b5s"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 7,
@@ -1370,8 +1364,7 @@
         }
       ],
       "title": "Fee Estimator Update Cost",
-      "type": "timeseries",
-      "description": "Time the fee estimator spends processing each connected block, folding its transactions into the confirmation statistics. Runs once per block, so a rise here delays nothing but scales with block size. Awaiting data: the currently deployed node build does not emit this metric yet, though the query matches the instrumentation in the source tree."
+      "type": "timeseries"
     }
   ],
   "preload": false,
@@ -1397,6 +1390,5 @@
   },
   "timezone": "browser",
   "title": "Function Timings",
-  "uid": "000000003",
-  "version": 6
+  "uid": "000000003"
 }
