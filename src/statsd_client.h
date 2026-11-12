@@ -34,6 +34,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <atomic>
 #include <charconv>
 #include <chrono>
+#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -165,6 +166,27 @@ class StatsdClient {
         //! sample_rate argument is accepted for source compatibility only.
         int gaugeDouble(const std::string& key, double value, float sample_rate = 1.0);
         int timing(const std::string& key, size_t ms, float sample_rate = 1.0);
+
+        // Signed arguments (CAmount, block heights, Ticks<>() results, int
+        // literals) would otherwise convert implicitly to size_t, turning a
+        // negative value such as a deprioritised fee into ~1.8e19. Route them
+        // to the signed implementations instead.
+        template <std::signed_integral T>
+        int count(const std::string& key, T value, float sample_rate = 1.0)
+        {
+            return countSigned(key, int64_t{value}, sample_rate);
+        }
+        template <std::signed_integral T>
+        int gauge(const std::string& key, T value, float sample_rate = 1.0)
+        {
+            return gaugeSigned(key, int64_t{value}, sample_rate);
+        }
+        //! A negative duration can only come from a misbehaving clock; report 0.
+        template <std::signed_integral T>
+        int timing(const std::string& key, T ms, float sample_rate = 1.0)
+        {
+            return timing(key, ms < 0 ? size_t{0} : static_cast<size_t>(ms), sample_rate);
+        }
 
     public:
         /**

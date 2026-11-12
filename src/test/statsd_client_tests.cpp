@@ -41,9 +41,17 @@ public:
         BOOST_REQUIRE(bind(m_fd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) == 0);
 
         // A timeout turns "nothing arrived" into an empty read instead of a hang.
+        // Winsock takes the timeout as a DWORD of milliseconds, not a timeval;
+        // passing a timeval there reads tv_sec (0), which means "never time out".
+#ifdef WIN32
+        const DWORD timeout_ms{200};
+        const int rc{setsockopt(m_fd, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<const char*>(&timeout_ms), sizeof(timeout_ms))};
+#else
         timeval tv{};
         tv.tv_usec = 200'000;
-        setsockopt(m_fd, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<const char*>(&tv), sizeof(tv));
+        const int rc{setsockopt(m_fd, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<const char*>(&tv), sizeof(tv))};
+#endif
+        BOOST_REQUIRE(rc == 0);
     }
 
     ~TestSink()
@@ -292,6 +300,31 @@ BOOST_AUTO_TEST_CASE(full_sample_rate_never_drops)
     BOOST_CHECK_EQUAL(CountLines(received), total);
     // No sample suffix when sampling is not in effect.
     BOOST_CHECK_EQUAL(received.find('@'), std::string::npos);
+}
+
+/**
+ * Signed values must reach the wire as signed numbers. A negative CAmount (a
+ * deprioritised transaction's modified fee) used to convert to size_t and be
+ * reported as ~1.8e19. A negative gauge must also be sent as an absolute value,
+ * not as a StatsD delta.
+ */
+BOOST_AUTO_TEST_CASE(negative_values_are_sent_signed)
+{
+    TestSink sink{28906};
+    statsd::StatsdClient client{"127.0.0.1", 28906, ""};
+    client.SetEnabled(true);
+    client.Start();
+
+    const int64_t negative_fee{-100000000};
+    client.count("test.fees", negative_fee, 1.0f);
+    client.gauge("test.depth", int64_t{-3}, 1.0f);
+    client.timing("test.elapsed_us", int64_t{-1}, 1.0f);
+    const std::string received{sink.Drain()};
+    client.Stop();
+
+    BOOST_CHECK_NE(received.find("test.fees:-100000000|c\n"), std::string::npos);
+    BOOST_CHECK_NE(received.find("test.depth:0|g\ntest.depth:-3|g\n"), std::string::npos);
+    BOOST_CHECK_NE(received.find("test.elapsed_us:0|ms\n"), std::string::npos);
 }
 
 /**

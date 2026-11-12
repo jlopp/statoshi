@@ -679,6 +679,7 @@ void CBlockPolicyEstimator::processBlock(const std::vector<RemovedMempoolTransac
     // measured, so an estimator-induced ConnectTip_ms regression was
     // indistinguishable from disk or script-verification cost.
     const auto estimator_start{SteadyClock::now()};
+    unsigned int max_usable_estimate{0};
     {
         LOCK(m_cs_fee_estimator);
 
@@ -728,7 +729,8 @@ void CBlockPolicyEstimator::processBlock(const std::vector<RemovedMempoolTransac
         statsClient.gauge("estimates.estimator.untrackedTxs", untrackedTxs, 1.0f);
         statsClient.gauge("estimates.estimator.mapMemPoolTxs", mapMemPoolTxs.size(), 1.0f);
         statsClient.gauge("estimates.estimator.countedTxs", countedTxs, 1.0f);
-        statsClient.gauge("estimates.estimator.maxUsableEstimate", MaxUsableEstimate(), 1.0f);
+        max_usable_estimate = MaxUsableEstimate();
+        statsClient.gauge("estimates.estimator.maxUsableEstimate", max_usable_estimate, 1.0f);
 
         trackedTxs = 0;
         untrackedTxs = 0;
@@ -748,15 +750,22 @@ void CBlockPolicyEstimator::processBlock(const std::vector<RemovedMempoolTransac
         // every other metric combined, so the values are collected first and
         // then sent as a few large multi-line datagrams (StatsD allows several
         // lines per packet).
+        //
+        // estimateSmartFee() clamps every target above MaxUsableEstimate() down
+        // to it, so only targets up to that bound yield distinct values; the
+        // rest repeat the last one. Until the estimator has seen many blocks
+        // that bound is far below 1008.
         static constexpr unsigned int MAX_TARGET{1008};
+        const unsigned int distinct_targets{std::clamp(max_usable_estimate, 1u, MAX_TARGET)};
         std::vector<int64_t> fee_estimates;
         fee_estimates.reserve(MAX_TARGET);
-        for (unsigned int i = 1; i <= MAX_TARGET; i++) {
+        for (unsigned int i = 1; i <= distinct_targets; i++) {
             const CFeeRate feeEstimate = estimateSmartFee(i, nullptr, true);
             // "No estimate" (and any negative rate) is reported as 0, matching
             // the behaviour of the previous per-metric loop.
             fee_estimates.push_back(std::max<int64_t>(0, feeEstimate.GetFeePerK()));
         }
+        fee_estimates.resize(MAX_TARGET, fee_estimates.back());
         statsClient.gaugeBatch("estimates.fee.block", fee_estimates, /*first_index=*/1);
     }
     statsClient.timing("estimates.processBlock_us",

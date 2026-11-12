@@ -173,6 +173,12 @@ class TestNode():
             self.args.append("-loglevel=trace")
         if self.version_is_at_least(290100):
             self.args.append("-nologratelimit")
+        if self.version is None:
+            # Statoshi-only option (previous releases reject it). Stats emission
+            # makes every block run ~1000 fee estimates, each logged at debug
+            # level, which slows sanitizer builds past the CI timeout. Tests
+            # that exercise stats can re-enable it via extra_args.
+            self.args.append("-nostats")
 
         # Default behavior from global -v2transport flag is added to args to persist it over restarts.
         # May be overwritten in individual tests, using extra_args.

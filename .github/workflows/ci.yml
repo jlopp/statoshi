@@ -401,7 +401,9 @@ jobs:
     name: ${{ matrix.name }}
     runs-on: ${{ github.repository == 'bitcoin/bitcoin' && matrix.warp-runner || matrix.fallback-runner }}
     if: ${{ vars.SKIP_BRANCH_PUSH != 'true' || github.event_name == 'pull_request' }}
-    timeout-minutes: ${{ matrix.timeout-minutes }}
+    # The per-job timeouts are sized for the warp runners; the 4-core fallback
+    # runners need far longer for sanitizer builds (MSan fuzz alone exceeds 3h).
+    timeout-minutes: ${{ github.repository == 'bitcoin/bitcoin' && matrix.timeout-minutes || 360 }}
 
     env:
       DANGER_CI_ON_HOST_FOLDERS: 1

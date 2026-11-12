@@ -668,6 +668,13 @@ int StatsdClient::gaugeSigned(const string& key, int64_t value, float sample_rat
     if (!d->enabled) return 0;
     thread_local string message; // NOLINT(bitcoin-nontrivial-threadlocal)
     message.clear();
+    // StatsD reads a gauge value with a leading sign as a delta, so "-5|g"
+    // would subtract 5 from the current value. To set a negative absolute
+    // value, reset to zero first; the two lines are queued adjacently and sent
+    // in order.
+    if (value < 0 && !formatSigned(message, key, 0, "g", sample_rate)) {
+        return 0;
+    }
     if (!formatSigned(message, key, value, "g", sample_rate)) {
         return 0;
     }
