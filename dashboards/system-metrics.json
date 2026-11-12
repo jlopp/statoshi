@@ -16,29 +16,7 @@
     ]
   },
   "templating": {
-    "list": [
-      {
-        "name": "node",
-        "label": "Node suffix",
-        "description": "The suffix that -statshostname appends to every node-emitted metric key, including the leading dot (e.g. \".mynode\"). Leave empty for a node started without -statshostname, which is how statoshi.info runs.",
-        "type": "textbox",
-        "query": "",
-        "current": {
-          "selected": false,
-          "text": "",
-          "value": ""
-        },
-        "options": [
-          {
-            "selected": true,
-            "text": "",
-            "value": ""
-          }
-        ],
-        "hide": 0,
-        "skipUrlSync": false
-      }
-    ]
+    "list": []
   },
   "editable": true,
   "fiscalYearStartMonth": 0,
@@ -1800,7 +1778,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.gauges.process.memoryUsedBytes$node, 'RSS')"
+          "target": "alias(stats.gauges.process.memoryUsedBytes, 'RSS')"
         }
       ],
       "title": "Node Process Footprint",
@@ -1869,7 +1847,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.gauges.process.fdsOpen$node, 'open fds')"
+          "target": "alias(stats.gauges.process.fdsOpen, 'open fds')"
         }
       ],
       "title": "Open File Descriptors",
@@ -1965,7 +1943,7 @@
   "links": [
     {
       "title": "Home",
-      "url": "/d/statoshi-home",
+      "url": "d/default-home-dashboard",
       "type": "link",
       "keepTime": true,
       "includeVars": true,

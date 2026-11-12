@@ -16,29 +16,7 @@
     ]
   },
   "templating": {
-    "list": [
-      {
-        "name": "node",
-        "label": "Node suffix",
-        "description": "The suffix that -statshostname appends to every node-emitted metric key, including the leading dot (e.g. \".mynode\"). Leave empty for a node started without -statshostname, which is how statoshi.info runs.",
-        "type": "textbox",
-        "query": "",
-        "current": {
-          "selected": false,
-          "text": "",
-          "value": ""
-        },
-        "options": [
-          {
-            "selected": true,
-            "text": "",
-            "value": ""
-          }
-        ],
-        "hide": 0,
-        "skipUrlSync": false
-      }
-    ]
+    "list": []
   },
   "editable": true,
   "fiscalYearStartMonth": 0,
@@ -173,7 +151,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByMetric(stats.gauges.blocks.currentSizeBytes$node)"
+          "target": "aliasByMetric(stats.gauges.blocks.currentSizeBytes)"
         },
         {
           "datasource": {
@@ -181,7 +159,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "aliasByMetric(stats.gauges.blocks.currentSizeWithWitnessBytes$node)"
+          "target": "aliasByMetric(stats.gauges.blocks.currentSizeWithWitnessBytes)"
         }
       ],
       "title": "Block Size",
@@ -301,7 +279,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByMetric(stats.gauges.blocks.currentNumTransactions$node)"
+          "target": "aliasByMetric(stats.gauges.blocks.currentNumTransactions)"
         },
         {
           "datasource": {
@@ -309,7 +287,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "aliasByMetric(stats.gauges.blocks.currentSigOps$node)"
+          "target": "aliasByMetric(stats.gauges.blocks.currentSigOps)"
         }
       ],
       "title": "Transactions & SigOps per Block",
@@ -412,7 +390,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByMetric(stats.gauges.blocks.currentWeight$node)"
+          "target": "aliasByMetric(stats.gauges.blocks.currentWeight)"
         }
       ],
       "title": "Block Weight",
@@ -508,7 +486,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.message.received.block$node, 'block')"
+          "target": "alias(stats.message.received.block, 'block')"
         },
         {
           "datasource": {
@@ -516,7 +494,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.message.received.cmpctblock$node, 'cmpctblock')"
+          "target": "alias(stats.message.received.cmpctblock, 'cmpctblock')"
         },
         {
           "datasource": {
@@ -524,7 +502,7 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "alias(stats.message.received.inv_block$node, 'block inv')"
+          "target": "alias(stats.message.received.inv_block, 'block inv')"
         }
       ],
       "title": "Block Announcements Received",
@@ -620,7 +598,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByMetric(stats.gauges.blocks.currentHeight$node)"
+          "target": "aliasByMetric(stats.gauges.blocks.currentHeight)"
         }
       ],
       "title": "Block Height",
@@ -716,7 +694,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.message.received.block$node, 'block received')"
+          "target": "alias(stats.message.received.block, 'block received')"
         },
         {
           "datasource": {
@@ -724,7 +702,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.message.sent.block$node, 'block sent')"
+          "target": "alias(stats.message.sent.block, 'block sent')"
         },
         {
           "datasource": {
@@ -732,7 +710,7 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "alias(stats.message.received.getblocks$node, 'getblocks requested')"
+          "target": "alias(stats.message.received.getblocks, 'getblocks requested')"
         }
       ],
       "title": "Blocks Received vs Blocks Sent",
@@ -814,7 +792,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.gauges.blocks.verificationProgress$node, 'verification progress')"
+          "target": "alias(stats.gauges.blocks.verificationProgress, 'verification progress')"
         }
       ],
       "title": "Chain Verification & Sync State",
@@ -888,7 +866,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.gauges.blocks.initialBlockDownload$node, 'IBD')"
+          "target": "alias(stats.gauges.blocks.initialBlockDownload, 'IBD')"
         }
       ],
       "title": "Initial Block Download",
@@ -986,7 +964,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.gauges.blocks.bestHeaderHeight$node, 'best header height')"
+          "target": "alias(stats.gauges.blocks.bestHeaderHeight, 'best header height')"
         },
         {
           "datasource": {
@@ -994,7 +972,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.gauges.blocks.currentHeight$node, 'block tip height')"
+          "target": "alias(stats.gauges.blocks.currentHeight, 'block tip height')"
         }
       ],
       "title": "Header vs Block Height",
@@ -1055,7 +1033,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.gauges.blocks.currentTxCount$node, 'total txs in chain')"
+          "target": "alias(stats.gauges.blocks.currentTxCount, 'total txs in chain')"
         }
       ],
       "title": "Transactions In Chain",
@@ -1116,7 +1094,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.gauges.blocks.currentVersion$node, 'block version')"
+          "target": "alias(stats.gauges.blocks.currentVersion, 'block version')"
         }
       ],
       "title": "Current Block Version",
@@ -1181,7 +1159,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.warnings.InvalidBlockFound$node, 'InvalidBlockFound')"
+          "target": "alias(stats.warnings.InvalidBlockFound, 'InvalidBlockFound')"
         }
       ],
       "title": "Invalid Block Warnings",
@@ -1291,7 +1269,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(divideSeries(stats.blocks.connected.transactions$node, stats.blocks.connected$node), 'txs per block')"
+          "target": "alias(divideSeries(stats.blocks.connected.transactions, stats.blocks.connected), 'txs per block')"
         },
         {
           "datasource": {
@@ -1299,7 +1277,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(divideSeries(stats.blocks.connected.inputs$node, stats.blocks.connected$node), 'inputs per block')"
+          "target": "alias(divideSeries(stats.blocks.connected.inputs, stats.blocks.connected), 'inputs per block')"
         },
         {
           "datasource": {
@@ -1307,7 +1285,7 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "alias(divideSeries(stats.blocks.connected.sigOpsCost$node, stats.blocks.connected$node), 'sigop cost per block')"
+          "target": "alias(divideSeries(stats.blocks.connected.sigOpsCost, stats.blocks.connected), 'sigop cost per block')"
         }
       ],
       "title": "Connected Block Workload",
@@ -1405,7 +1383,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.blocks.cmpctblock.reconstruct.ok$node, 'reconstructed ok')"
+          "target": "alias(stats.blocks.cmpctblock.reconstruct.ok, 'reconstructed ok')"
         },
         {
           "datasource": {
@@ -1413,7 +1391,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.blocks.cmpctblock.reconstruct.invalid$node, 'invalid')"
+          "target": "alias(stats.blocks.cmpctblock.reconstruct.invalid, 'invalid')"
         },
         {
           "datasource": {
@@ -1421,7 +1399,7 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "alias(stats.blocks.cmpctblock.reconstruct.failed$node, 'failed (fell back to getdata)')"
+          "target": "alias(stats.blocks.cmpctblock.reconstruct.failed, 'failed (fell back to getdata)')"
         },
         {
           "datasource": {
@@ -1429,7 +1407,7 @@
             "uid": "000000001"
           },
           "refId": "D",
-          "target": "alias(stats.blocks.cmpctblock.txnsRequested$node, 'txns via getblocktxn')"
+          "target": "alias(stats.blocks.cmpctblock.txnsRequested, 'txns via getblocktxn')"
         }
       ],
       "title": "Compact Block Reconstruction Quality",
@@ -1527,7 +1505,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.blocks.downloadTimeout$node, 'timeouts/s')"
+          "target": "alias(stats.blocks.downloadTimeout, 'timeouts/s')"
         }
       ],
       "title": "Block Download Timeouts",
@@ -1588,7 +1566,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.gauges.blocks.downloadTimeoutHeight$node, 'height')"
+          "target": "alias(stats.gauges.blocks.downloadTimeoutHeight, 'height')"
         }
       ],
       "title": "Height That Timed Out",
@@ -1686,7 +1664,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.chain.reorg$node, 'reorgs/s')"
+          "target": "alias(stats.chain.reorg, 'reorgs/s')"
         }
       ],
       "title": "Reorgs",
@@ -1784,7 +1762,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(divideSeries(stats.chain.reorg.disconnectedBlocks$node, stats.chain.reorg$node), 'blocks per reorg')"
+          "target": "alias(divideSeries(stats.chain.reorg.disconnectedBlocks, stats.chain.reorg), 'blocks per reorg')"
         },
         {
           "datasource": {
@@ -1792,7 +1770,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(divideSeries(stats.chain.reorg.disconnectedTxs$node, stats.chain.reorg$node), 'txs per reorg')"
+          "target": "alias(divideSeries(stats.chain.reorg.disconnectedTxs, stats.chain.reorg), 'txs per reorg')"
         }
       ],
       "title": "Reorg Severity",
@@ -1827,7 +1805,7 @@
   "links": [
     {
       "title": "Home",
-      "url": "/d/statoshi-home",
+      "url": "d/default-home-dashboard",
       "type": "link",
       "keepTime": true,
       "includeVars": true,

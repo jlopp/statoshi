@@ -16,29 +16,7 @@
     ]
   },
   "templating": {
-    "list": [
-      {
-        "name": "node",
-        "label": "Node suffix",
-        "description": "The suffix that -statshostname appends to every node-emitted metric key, including the leading dot (e.g. \".mynode\"). Leave empty for a node started without -statshostname, which is how statoshi.info runs.",
-        "type": "textbox",
-        "query": "",
-        "current": {
-          "selected": false,
-          "text": "",
-          "value": ""
-        },
-        "options": [
-          {
-            "selected": true,
-            "text": "",
-            "value": ""
-          }
-        ],
-        "hide": 0,
-        "skipUrlSync": false
-      }
-    ]
+    "list": []
   },
   "editable": true,
   "fiscalYearStartMonth": 0,
@@ -100,7 +78,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByMetric(stats.gauges.utxoset.tx$node)"
+          "target": "aliasByMetric(stats.gauges.utxoset.tx)"
         }
       ],
       "title": "Total Transactions With Unspent Outputs",
@@ -162,7 +140,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByMetric(stats.gauges.utxoset.txOutputs$node)"
+          "target": "aliasByMetric(stats.gauges.utxoset.txOutputs)"
         }
       ],
       "title": "Unspent Transaction Outputs",
@@ -293,7 +271,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByMetric(stats.gauges.utxoset.dbSizeBytes$node)"
+          "target": "aliasByMetric(stats.gauges.utxoset.dbSizeBytes)"
         }
       ],
       "title": "Size of Serialized UTXO Set",
@@ -372,7 +350,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByMetric(stats.gauges.utxoset.totalBTCAmount$node)"
+          "target": "aliasByMetric(stats.gauges.utxoset.totalBTCAmount)"
         }
       ],
       "title": "Total Bitcoins in Existence",
@@ -453,7 +431,7 @@
             "lastNotNull"
           ],
           "displayMode": "list",
-          "placement": "right",
+          "placement": "bottom",
           "showLegend": true
         },
         "tooltip": {
@@ -470,7 +448,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.gauges.utxoset.cacheSize$node, 'cached coins')"
+          "target": "alias(stats.gauges.utxoset.cacheSize, 'cached coins')"
         },
         {
           "datasource": {
@@ -478,7 +456,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.gauges.utxoset.cacheDirty$node, 'dirty coins')"
+          "target": "alias(stats.gauges.utxoset.cacheDirty, 'dirty coins')"
         }
       ],
       "title": "Coins Cache Occupancy",
@@ -559,7 +537,7 @@
             "lastNotNull"
           ],
           "displayMode": "list",
-          "placement": "right",
+          "placement": "bottom",
           "showLegend": true
         },
         "tooltip": {
@@ -576,7 +554,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.gauges.utxoset.blockHeight$node, 'utxoset height')"
+          "target": "alias(stats.gauges.utxoset.blockHeight, 'utxoset height')"
         },
         {
           "datasource": {
@@ -584,7 +562,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.gauges.blocks.currentHeight$node, 'chain tip height')"
+          "target": "alias(stats.gauges.blocks.currentHeight, 'chain tip height')"
         }
       ],
       "title": "UTXO Height vs Chain Tip",
@@ -619,7 +597,7 @@
   "links": [
     {
       "title": "Home",
-      "url": "/d/statoshi-home",
+      "url": "d/default-home-dashboard",
       "type": "link",
       "keepTime": true,
       "includeVars": true,

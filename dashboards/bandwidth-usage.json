@@ -16,29 +16,7 @@
     ]
   },
   "templating": {
-    "list": [
-      {
-        "name": "node",
-        "label": "Node suffix",
-        "description": "The suffix that -statshostname appends to every node-emitted metric key, including the leading dot (e.g. \".mynode\"). Leave empty for a node started without -statshostname, which is how statoshi.info runs.",
-        "type": "textbox",
-        "query": "",
-        "current": {
-          "selected": false,
-          "text": "",
-          "value": ""
-        },
-        "options": [
-          {
-            "selected": true,
-            "text": "",
-            "value": ""
-          }
-        ],
-        "hide": 0,
-        "skipUrlSync": false
-      }
-    ]
+    "list": []
   },
   "editable": true,
   "fiscalYearStartMonth": 0,
@@ -169,7 +147,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByMetric(stats.bandwidth.bytesReceived$node)"
+          "target": "aliasByMetric(stats.bandwidth.bytesReceived)"
         },
         {
           "datasource": {
@@ -177,7 +155,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "aliasByMetric(stats.bandwidth.bytesSent$node)"
+          "target": "aliasByMetric(stats.bandwidth.bytesSent)"
         }
       ],
       "title": "Incoming & Outgoing Bandwidth Usage per second",
@@ -270,7 +248,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByMetric(stats.gauges.bandwidth.totalBytesReceived$node)"
+          "target": "aliasByMetric(stats.gauges.bandwidth.totalBytesReceived)"
         },
         {
           "datasource": {
@@ -278,7 +256,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "aliasByMetric(stats.gauges.bandwidth.totalBytesSent$node)"
+          "target": "aliasByMetric(stats.gauges.bandwidth.totalBytesSent)"
         }
       ],
       "title": "Total Bandwidth Used Since Last Restart",
@@ -377,7 +355,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByNode(stats.bandwidth.message.*.bytesReceived$node, 3)"
+          "target": "aliasByNode(stats.bandwidth.message.*.bytesReceived, 3)"
         }
       ],
       "title": "Incoming Bandwidth Usage by Message",
@@ -476,7 +454,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByNode(stats.bandwidth.message.*.bytesSent$node, 3)"
+          "target": "aliasByNode(stats.bandwidth.message.*.bytesSent, 3)"
         }
       ],
       "title": "Outgoing Bandwidth Usage by Message",
@@ -562,7 +540,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByNode(highestCurrent(stats.gauges.bandwidth.message.*.totalBytesReceived$node, 1000), 4)"
+          "target": "aliasByNode(highestCurrent(stats.gauges.bandwidth.message.*.totalBytesReceived, 1000), 4)"
         },
         {
           "datasource": {
@@ -570,7 +548,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(sumSeries(stats.gauges.bandwidth.message.*.totalBytesReceived$node), 'aggregate')"
+          "target": "alias(sumSeries(stats.gauges.bandwidth.message.*.totalBytesReceived), 'aggregate')"
         }
       ],
       "title": "Total Incoming Bandwidth Usage by Message (currently connected peers)",
@@ -674,7 +652,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByNode(highestCurrent(stats.gauges.bandwidth.message.*.totalBytesSent$node, 1000), 4)"
+          "target": "aliasByNode(highestCurrent(stats.gauges.bandwidth.message.*.totalBytesSent, 1000), 4)"
         },
         {
           "datasource": {
@@ -682,7 +660,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(sumSeries(stats.gauges.bandwidth.message.*.totalBytesSent$node), 'aggregate')"
+          "target": "alias(sumSeries(stats.gauges.bandwidth.message.*.totalBytesSent), 'aggregate')"
         }
       ],
       "title": "Total Outgoing Bandwidth Usage by Message (currently connected peers)",
@@ -796,7 +774,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(removeBelowPercentile(sumSeries(stats.bandwidth.*$node), 95), 'Top 5% Bandwidth Spikes')"
+          "target": "alias(removeBelowPercentile(sumSeries(stats.bandwidth.*), 95), 'Top 5% Bandwidth Spikes')"
         }
       ],
       "title": "95th Percentile Bandwidth Usage",
@@ -894,7 +872,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(sumSeries(stats.bandwidth.message.*.bytesReceived$node), 'sum of per-message recv')"
+          "target": "alias(sumSeries(stats.bandwidth.message.*.bytesReceived), 'sum of per-message recv')"
         },
         {
           "datasource": {
@@ -902,7 +880,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.bandwidth.bytesReceived$node, 'aggregate recv counter')"
+          "target": "alias(stats.bandwidth.bytesReceived, 'aggregate recv counter')"
         },
         {
           "datasource": {
@@ -910,7 +888,7 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "alias(sumSeries(stats.bandwidth.message.*.bytesSent$node), 'sum of per-message sent')"
+          "target": "alias(sumSeries(stats.bandwidth.message.*.bytesSent), 'sum of per-message sent')"
         },
         {
           "datasource": {
@@ -918,7 +896,7 @@
             "uid": "000000001"
           },
           "refId": "D",
-          "target": "alias(stats.bandwidth.bytesSent$node, 'aggregate sent counter')"
+          "target": "alias(stats.bandwidth.bytesSent, 'aggregate sent counter')"
         }
       ],
       "title": "Per-Message Sum vs Aggregate Counter",
@@ -1017,7 +995,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(countSeries(stats.bandwidth.message.*.bytesReceived$node), 'distinct received message types')"
+          "target": "alias(countSeries(stats.bandwidth.message.*.bytesReceived), 'distinct received message types')"
         },
         {
           "datasource": {
@@ -1025,7 +1003,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(countSeries(stats.bandwidth.message.*.bytesSent$node), 'distinct sent message types')"
+          "target": "alias(countSeries(stats.bandwidth.message.*.bytesSent), 'distinct sent message types')"
         }
       ],
       "title": "Unexpected Message Type Keys",
@@ -1060,7 +1038,7 @@
   "links": [
     {
       "title": "Home",
-      "url": "/d/statoshi-home",
+      "url": "d/default-home-dashboard",
       "type": "link",
       "keepTime": true,
       "includeVars": true,

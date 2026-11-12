@@ -16,29 +16,7 @@
     ]
   },
   "templating": {
-    "list": [
-      {
-        "name": "node",
-        "label": "Node suffix",
-        "description": "The suffix that -statshostname appends to every node-emitted metric key, including the leading dot (e.g. \".mynode\"). Leave empty for a node started without -statshostname, which is how statoshi.info runs.",
-        "type": "textbox",
-        "query": "",
-        "current": {
-          "selected": false,
-          "text": "",
-          "value": ""
-        },
-        "options": [
-          {
-            "selected": true,
-            "text": "",
-            "value": ""
-          }
-        ],
-        "hide": 0,
-        "skipUrlSync": false
-      }
-    ]
+    "list": []
   },
   "editable": true,
   "fiscalYearStartMonth": 0,
@@ -147,7 +125,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByNode(movingAverage(stats.message.received.*$node, 10), 3)"
+          "target": "aliasByNode(movingAverage(stats.message.received.*, 10), 3)"
         }
       ],
       "title": "Messages Received",
@@ -244,7 +222,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByNode(movingAverage(stats.message.sent.*$node, 10), 3)"
+          "target": "aliasByNode(movingAverage(stats.message.sent.*, 10), 3)"
         }
       ],
       "title": "Messages Sent",
@@ -372,7 +350,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.message.received.getdata$node, 'getData messages received')"
+          "target": "alias(stats.message.received.getdata, 'getData messages received')"
         },
         {
           "datasource": {
@@ -380,7 +358,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.message.sent.getdata$node, 'getData messages sent')"
+          "target": "alias(stats.message.sent.getdata, 'getData messages sent')"
         }
       ],
       "title": "getData",
@@ -496,7 +474,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.message.received.addr$node, 'addr messages received')"
+          "target": "alias(stats.message.received.addr, 'addr messages received')"
         },
         {
           "datasource": {
@@ -504,7 +482,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.message.sent.addr$node, 'addr messages sent')"
+          "target": "alias(stats.message.sent.addr, 'addr messages sent')"
         }
       ],
       "title": "addr",
@@ -620,7 +598,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.message.received.ping$node, 'ping messages received')"
+          "target": "alias(stats.message.received.ping, 'ping messages received')"
         },
         {
           "datasource": {
@@ -628,7 +606,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.message.sent.ping$node, 'ping messages sent')"
+          "target": "alias(stats.message.sent.ping, 'ping messages sent')"
         }
       ],
       "title": "ping",
@@ -789,7 +767,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.message.received.tx$node, 'tx messages received')"
+          "target": "alias(stats.message.received.tx, 'tx messages received')"
         },
         {
           "datasource": {
@@ -797,7 +775,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.message.sent.tx$node, 'tx messages sent')"
+          "target": "alias(stats.message.sent.tx, 'tx messages sent')"
         },
         {
           "datasource": {
@@ -805,7 +783,7 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "alias(divideSeries(stats.message.sent.tx$node, stats.message.received.tx$node), 'ratio of tx sent:received')"
+          "target": "alias(divideSeries(stats.message.sent.tx, stats.message.received.tx), 'ratio of tx sent:received')"
         }
       ],
       "title": "tx",
@@ -922,7 +900,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.message.received.inv$node, 'inv messages received')"
+          "target": "alias(stats.message.received.inv, 'inv messages received')"
         },
         {
           "datasource": {
@@ -930,7 +908,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.message.sent.inv$node, 'inv messages sent')"
+          "target": "alias(stats.message.sent.inv, 'inv messages sent')"
         }
       ],
       "title": "inv",
@@ -1046,7 +1024,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.message.received.pong$node, 'pong messages received')"
+          "target": "alias(stats.message.received.pong, 'pong messages received')"
         },
         {
           "datasource": {
@@ -1054,7 +1032,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.message.sent.pong$node, 'pong messages sent')"
+          "target": "alias(stats.message.sent.pong, 'pong messages sent')"
         }
       ],
       "title": "pong",
@@ -1089,7 +1067,7 @@
   "links": [
     {
       "title": "Home",
-      "url": "/d/statoshi-home",
+      "url": "d/default-home-dashboard",
       "type": "link",
       "keepTime": true,
       "includeVars": true,

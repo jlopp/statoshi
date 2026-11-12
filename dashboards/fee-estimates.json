@@ -16,29 +16,7 @@
     ]
   },
   "templating": {
-    "list": [
-      {
-        "name": "node",
-        "label": "Node suffix",
-        "description": "The suffix that -statshostname appends to every node-emitted metric key, including the leading dot (e.g. \".mynode\"). Leave empty for a node started without -statshostname, which is how statoshi.info runs.",
-        "type": "textbox",
-        "query": "",
-        "current": {
-          "selected": false,
-          "text": "",
-          "value": ""
-        },
-        "options": [
-          {
-            "selected": true,
-            "text": "",
-            "value": ""
-          }
-        ],
-        "hide": 0,
-        "skipUrlSync": false
-      }
-    ]
+    "list": []
   },
   "editable": true,
   "fiscalYearStartMonth": 0,
@@ -137,7 +115,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(aliasByNode(scale(stats.gauges.estimates.fee.block1$node, 0.001), 4), 'within 1 blocks')"
+          "target": "alias(aliasByNode(scale(stats.gauges.estimates.fee.block1, 0.001), 4), 'within 1 blocks')"
         },
         {
           "datasource": {
@@ -145,7 +123,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(aliasByNode(scale(stats.gauges.estimates.fee.block2$node, 0.001), 4), 'within 2 blocks')"
+          "target": "alias(aliasByNode(scale(stats.gauges.estimates.fee.block2, 0.001), 4), 'within 2 blocks')"
         },
         {
           "datasource": {
@@ -153,7 +131,7 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "alias(aliasByNode(scale(stats.gauges.estimates.fee.block3$node, 0.001), 4), 'within 3 blocks')"
+          "target": "alias(aliasByNode(scale(stats.gauges.estimates.fee.block3, 0.001), 4), 'within 3 blocks')"
         },
         {
           "datasource": {
@@ -161,7 +139,7 @@
             "uid": "000000001"
           },
           "refId": "D",
-          "target": "alias(aliasByNode(scale(stats.gauges.estimates.fee.block4$node, 0.001), 4), 'within 4 blocks')"
+          "target": "alias(aliasByNode(scale(stats.gauges.estimates.fee.block4, 0.001), 4), 'within 4 blocks')"
         },
         {
           "datasource": {
@@ -169,7 +147,7 @@
             "uid": "000000001"
           },
           "refId": "E",
-          "target": "alias(aliasByNode(scale(stats.gauges.estimates.fee.block5$node, 0.001), 4), 'within 5 blocks')"
+          "target": "alias(aliasByNode(scale(stats.gauges.estimates.fee.block5, 0.001), 4), 'within 5 blocks')"
         },
         {
           "datasource": {
@@ -177,7 +155,7 @@
             "uid": "000000001"
           },
           "refId": "F",
-          "target": "alias(aliasByNode(scale(stats.gauges.estimates.fee.block10$node, 0.001), 4), 'within 10 blocks')"
+          "target": "alias(aliasByNode(scale(stats.gauges.estimates.fee.block10, 0.001), 4), 'within 10 blocks')"
         },
         {
           "datasource": {
@@ -185,7 +163,7 @@
             "uid": "000000001"
           },
           "refId": "G",
-          "target": "alias(aliasByNode(scale(stats.gauges.estimates.fee.block20$node, 0.001), 4), 'within 20 blocks')"
+          "target": "alias(aliasByNode(scale(stats.gauges.estimates.fee.block20, 0.001), 4), 'within 20 blocks')"
         },
         {
           "datasource": {
@@ -193,7 +171,7 @@
             "uid": "000000001"
           },
           "refId": "H",
-          "target": "alias(aliasByNode(scale(stats.gauges.estimates.fee.block100$node, 0.001), 4), 'within 100 blocks')"
+          "target": "alias(aliasByNode(scale(stats.gauges.estimates.fee.block100, 0.001), 4), 'within 100 blocks')"
         },
         {
           "datasource": {
@@ -201,7 +179,7 @@
             "uid": "000000001"
           },
           "refId": "I",
-          "target": "alias(aliasByNode(scale(stats.gauges.estimates.fee.block1000$node, 0.001), 4), 'within 1000 blocks')"
+          "target": "alias(aliasByNode(scale(stats.gauges.estimates.fee.block1000, 0.001), 4), 'within 1000 blocks')"
         }
       ],
       "title": "Recommended Transaction Fee for Target Confirmation in X Blocks",
@@ -322,7 +300,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(divideSeries(stats.transactions.fees$node, scale(stats.transactions.sizeBytes$node, 0.976563)), 'fee rate (sat/vB)')"
+          "target": "alias(divideSeries(stats.transactions.fees, scale(stats.transactions.sizeBytes, 0.976563)), 'fee rate (sat/vB)')"
         },
         {
           "datasource": {
@@ -331,7 +309,7 @@
           },
           "hide": true,
           "refId": "B",
-          "target": "alias(scale(stats.transactions.sizeBytes$node, 0.976563), 'vbytes/s')"
+          "target": "alias(scale(stats.transactions.sizeBytes, 0.976563), 'vbytes/s')"
         }
       ],
       "title": "Average Network Transaction Fees per Byte",
@@ -452,7 +430,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(removeAbovePercentile(divideSeries(stats.transactions.fees$node, scale(stats.transactions.sizeBytes$node, 0.976563)), 1), 'lowest percentile fee rate')"
+          "target": "alias(removeAbovePercentile(divideSeries(stats.transactions.fees, scale(stats.transactions.sizeBytes, 0.976563)), 1), 'lowest percentile fee rate')"
         },
         {
           "datasource": {
@@ -461,7 +439,7 @@
           },
           "hide": true,
           "refId": "B",
-          "target": "alias(scale(stats.transactions.sizeBytes$node, 0.976563), 'vbytes/s')"
+          "target": "alias(scale(stats.transactions.sizeBytes, 0.976563), 'vbytes/s')"
         },
         {
           "datasource": {
@@ -469,7 +447,7 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "alias(removeBelowPercentile(divideSeries(stats.transactions.fees$node, scale(stats.transactions.sizeBytes$node, 0.976563)), 99), 'highest percentile fee rate')"
+          "target": "alias(removeBelowPercentile(divideSeries(stats.transactions.fees, scale(stats.transactions.sizeBytes, 0.976563)), 99), 'highest percentile fee rate')"
         }
       ],
       "title": "Network Transaction Fees per Byte Range",
@@ -580,7 +558,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(timeShift(summarize(divideSeries(stats.transactions.fees$node, scale(stats.transactions.sizeBytes$node, 0.976563)),'1h','last'),'-1h'), 'open')"
+          "target": "alias(timeShift(summarize(divideSeries(stats.transactions.fees, scale(stats.transactions.sizeBytes, 0.976563)),'1h','last'),'-1h'), 'open')"
         },
         {
           "datasource": {
@@ -588,7 +566,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(summarize(divideSeries(stats.transactions.fees$node, scale(stats.transactions.sizeBytes$node, 0.976563)),'1h','max'), 'high')"
+          "target": "alias(summarize(divideSeries(stats.transactions.fees, scale(stats.transactions.sizeBytes, 0.976563)),'1h','max'), 'high')"
         },
         {
           "datasource": {
@@ -596,7 +574,7 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "alias(summarize(divideSeries(stats.transactions.fees$node, scale(stats.transactions.sizeBytes$node, 0.976563)),'1h','min'), 'low')"
+          "target": "alias(summarize(divideSeries(stats.transactions.fees, scale(stats.transactions.sizeBytes, 0.976563)),'1h','min'), 'low')"
         },
         {
           "datasource": {
@@ -604,7 +582,7 @@
             "uid": "000000001"
           },
           "refId": "D",
-          "target": "alias(summarize(divideSeries(stats.transactions.fees$node, scale(stats.transactions.sizeBytes$node, 0.976563)),'1h','last'), 'close')"
+          "target": "alias(summarize(divideSeries(stats.transactions.fees, scale(stats.transactions.sizeBytes, 0.976563)),'1h','last'), 'close')"
         }
       ],
       "title": "Fee Rate OHLC (hourly candles)",
@@ -715,7 +693,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.gauges.estimates.estimator.trackedTxs$node, 'tracked')"
+          "target": "alias(stats.gauges.estimates.estimator.trackedTxs, 'tracked')"
         },
         {
           "datasource": {
@@ -723,7 +701,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.gauges.estimates.estimator.untrackedTxs$node, 'untracked')"
+          "target": "alias(stats.gauges.estimates.estimator.untrackedTxs, 'untracked')"
         },
         {
           "datasource": {
@@ -731,7 +709,7 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "alias(stats.gauges.estimates.estimator.mapMemPoolTxs$node, 'mempool entries tracked')"
+          "target": "alias(stats.gauges.estimates.estimator.mapMemPoolTxs, 'mempool entries tracked')"
         }
       ],
       "title": "Fee Estimator Tracked vs Untracked",
@@ -860,7 +838,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.gauges.estimates.estimator.countedTxs$node, 'txs counted in last block')"
+          "target": "alias(stats.gauges.estimates.estimator.countedTxs, 'txs counted in last block')"
         },
         {
           "datasource": {
@@ -868,7 +846,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.gauges.estimates.estimator.maxUsableEstimate$node, 'max usable target (blocks)')"
+          "target": "alias(stats.gauges.estimates.estimator.maxUsableEstimate, 'max usable target (blocks)')"
         }
       ],
       "title": "Fee Estimator Coverage",
@@ -903,7 +881,7 @@
   "links": [
     {
       "title": "Home",
-      "url": "/d/statoshi-home",
+      "url": "d/default-home-dashboard",
       "type": "link",
       "keepTime": true,
       "includeVars": true,

@@ -16,29 +16,7 @@
     ]
   },
   "templating": {
-    "list": [
-      {
-        "name": "node",
-        "label": "Node suffix",
-        "description": "The suffix that -statshostname appends to every node-emitted metric key, including the leading dot (e.g. \".mynode\"). Leave empty for a node started without -statshostname, which is how statoshi.info runs.",
-        "type": "textbox",
-        "query": "",
-        "current": {
-          "selected": false,
-          "text": "",
-          "value": ""
-        },
-        "options": [
-          {
-            "selected": true,
-            "text": "",
-            "value": ""
-          }
-        ],
-        "hide": 0,
-        "skipUrlSync": false
-      }
-    ]
+    "list": []
   },
   "description": "Storage, LevelDB and chainstate persistence health: volume capacity, per-database read/write latency and hit rate, chainstate flush cost and triggers, block file I/O, pruning, snapshots and optional indexes. The layer every chainstate stall is attributable to.",
   "editable": true,
@@ -329,7 +307,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.timers.leveldb.read_us.chainstate.mean$node, 'chainstate')"
+          "target": "alias(stats.timers.leveldb.read_us.chainstate.mean, 'chainstate')"
         },
         {
           "datasource": {
@@ -337,7 +315,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.timers.leveldb.read_us.index.mean$node, 'index')"
+          "target": "alias(stats.timers.leveldb.read_us.index.mean, 'index')"
         },
         {
           "datasource": {
@@ -345,7 +323,7 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "alias(stats.timers.leveldb.read_us.txindex.mean$node, 'txindex')"
+          "target": "alias(stats.timers.leveldb.read_us.txindex.mean, 'txindex')"
         }
       ],
       "title": "Read Latency by Database",
@@ -440,7 +418,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(divideSeries(stats.leveldb.readHit.chainstate$node, sumSeries(stats.leveldb.readHit.chainstate$node, stats.leveldb.readMiss.chainstate$node)), 'chainstate')"
+          "target": "alias(divideSeries(stats.leveldb.readHit.chainstate, sumSeries(stats.leveldb.readHit.chainstate, stats.leveldb.readMiss.chainstate)), 'chainstate')"
         },
         {
           "datasource": {
@@ -448,7 +426,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(divideSeries(stats.leveldb.readHit.index$node, sumSeries(stats.leveldb.readHit.index$node, stats.leveldb.readMiss.index$node)), 'index')"
+          "target": "alias(divideSeries(stats.leveldb.readHit.index, sumSeries(stats.leveldb.readHit.index, stats.leveldb.readMiss.index)), 'index')"
         },
         {
           "datasource": {
@@ -456,7 +434,7 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "alias(divideSeries(stats.leveldb.readHit.txindex$node, sumSeries(stats.leveldb.readHit.txindex$node, stats.leveldb.readMiss.txindex$node)), 'txindex')"
+          "target": "alias(divideSeries(stats.leveldb.readHit.txindex, sumSeries(stats.leveldb.readHit.txindex, stats.leveldb.readMiss.txindex)), 'txindex')"
         }
       ],
       "title": "Read Hit Rate by Database",
@@ -550,7 +528,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.timers.leveldb.writeBatch_us.chainstate.mean$node, 'chainstate')"
+          "target": "alias(stats.timers.leveldb.writeBatch_us.chainstate.mean, 'chainstate')"
         },
         {
           "datasource": {
@@ -558,7 +536,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.timers.leveldb.writeBatch_us.index.mean$node, 'index')"
+          "target": "alias(stats.timers.leveldb.writeBatch_us.index.mean, 'index')"
         },
         {
           "datasource": {
@@ -566,7 +544,7 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "alias(stats.timers.leveldb.writeBatch_us.txindex.mean$node, 'txindex')"
+          "target": "alias(stats.timers.leveldb.writeBatch_us.txindex.mean, 'txindex')"
         }
       ],
       "title": "Write Batch Latency",
@@ -662,7 +640,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(sumSeries(stats.leveldb.writeBatch.chainstate$node), 'batches/s')"
+          "target": "alias(sumSeries(stats.leveldb.writeBatch.chainstate), 'batches/s')"
         },
         {
           "datasource": {
@@ -670,7 +648,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(sumSeries(stats.leveldb.syncWrite.chainstate$node), 'sync writes/s')"
+          "target": "alias(sumSeries(stats.leveldb.syncWrite.chainstate), 'sync writes/s')"
         },
         {
           "datasource": {
@@ -678,7 +656,7 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "alias(stats.leveldb.readFailed.chainstate$node, 'read failures/s')"
+          "target": "alias(stats.leveldb.readFailed.chainstate, 'read failures/s')"
         }
       ],
       "title": "Write Batches & Sync Writes",
@@ -784,7 +762,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.timers.chainstate.flush_us.mean$node, 'flush (mean)')"
+          "target": "alias(stats.timers.chainstate.flush_us.mean, 'flush (mean)')"
         },
         {
           "datasource": {
@@ -792,7 +770,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.timers.chainstate.flush_us.upper$node, 'flush (90th pct)')"
+          "target": "alias(stats.timers.chainstate.flush_us.upper, 'flush (90th pct)')"
         }
       ],
       "title": "Flush Duration",
@@ -888,7 +866,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByNode(stats.chainstate.flush.mode.*$node, 4)"
+          "target": "aliasByNode(stats.chainstate.flush.mode.*, 4)"
         },
         {
           "datasource": {
@@ -896,7 +874,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(scale(stats.chainstate.flush.forPrune$node, 1000), 'for prune (x1000)')"
+          "target": "alias(scale(stats.chainstate.flush.forPrune, 1000), 'for prune (x1000)')"
         }
       ],
       "title": "Flush Trigger",
@@ -991,7 +969,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.gauges.chainstate.flushCoins$node, 'coins flushed')"
+          "target": "alias(stats.gauges.chainstate.flushCoins, 'coins flushed')"
         },
         {
           "datasource": {
@@ -999,7 +977,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.gauges.chainstate.flushCoinsDirty$node, 'dirty at flush')"
+          "target": "alias(stats.gauges.chainstate.flushCoinsDirty, 'dirty at flush')"
         }
       ],
       "title": "Coins Written per Flush",
@@ -1095,7 +1073,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.gauges.chainstate.flushCoinsMemoryBytes$node, 'cache memory')"
+          "target": "alias(stats.gauges.chainstate.flushCoinsMemoryBytes, 'cache memory')"
         }
       ],
       "title": "Coins Cache Memory at Flush",
@@ -1201,7 +1179,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.blocks.readBytes$node, 'read')"
+          "target": "alias(stats.blocks.readBytes, 'read')"
         },
         {
           "datasource": {
@@ -1209,7 +1187,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.blocks.writeBytes$node, 'write')"
+          "target": "alias(stats.blocks.writeBytes, 'write')"
         }
       ],
       "title": "Block Read & Write Throughput",
@@ -1303,7 +1281,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.timers.blocks.read_us.mean$node, 'read (mean)')"
+          "target": "alias(stats.timers.blocks.read_us.mean, 'read (mean)')"
         },
         {
           "datasource": {
@@ -1311,7 +1289,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.timers.blocks.write_us.mean$node, 'write (mean)')"
+          "target": "alias(stats.timers.blocks.write_us.mean, 'write (mean)')"
         }
       ],
       "title": "Block Read & Write Latency",
@@ -1405,7 +1383,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.timers.blocks.indexWrite_us.mean$node, 'index write')"
+          "target": "alias(stats.timers.blocks.indexWrite_us.mean, 'index write')"
         },
         {
           "datasource": {
@@ -1413,7 +1391,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.timers.blocks.undoWrite_us.mean$node, 'undo write')"
+          "target": "alias(stats.timers.blocks.undoWrite_us.mean, 'undo write')"
         }
       ],
       "title": "Index & Undo Write Latency",
@@ -1509,7 +1487,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.blocks.readFailed$node, 'read failures')"
+          "target": "alias(stats.blocks.readFailed, 'read failures')"
         },
         {
           "datasource": {
@@ -1517,7 +1495,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.blocks.writeFailed$node, 'write failures')"
+          "target": "alias(stats.blocks.writeFailed, 'write failures')"
         }
       ],
       "title": "Block File Failures",
@@ -1634,7 +1612,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.blocks.indexWriteEntries$node, 'index entries/s')"
+          "target": "alias(stats.blocks.indexWriteEntries, 'index entries/s')"
         },
         {
           "datasource": {
@@ -1642,7 +1620,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.blocks.indexWriteFiles$node, 'block files/s')"
+          "target": "alias(stats.blocks.indexWriteFiles, 'block files/s')"
         },
         {
           "datasource": {
@@ -1650,7 +1628,7 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "alias(stats.blocks.undoWriteBytes$node, 'undo bytes/s')"
+          "target": "alias(stats.blocks.undoWriteBytes, 'undo bytes/s')"
         }
       ],
       "title": "Index Write Volume",
@@ -1746,7 +1724,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.blocks.prunedFiles$node, 'files pruned/s')"
+          "target": "alias(stats.blocks.prunedFiles, 'files pruned/s')"
         },
         {
           "datasource": {
@@ -1754,7 +1732,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.gauges.blocks.pruneCandidates$node, 'prune candidates')"
+          "target": "alias(stats.gauges.blocks.pruneCandidates, 'prune candidates')"
         }
       ],
       "title": "Pruning Activity",
@@ -1850,7 +1828,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.timers.blocks.findFilesToPrune_us.mean$node, 'scan for files')"
+          "target": "alias(stats.timers.blocks.findFilesToPrune_us.mean, 'scan for files')"
         },
         {
           "datasource": {
@@ -1858,7 +1836,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.timers.blocks.unlinkPrunedFiles_us.mean$node, 'unlink files')"
+          "target": "alias(stats.timers.blocks.unlinkPrunedFiles_us.mean, 'unlink files')"
         },
         {
           "datasource": {
@@ -1866,7 +1844,7 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "alias(stats.timers.blocks.findFilesToPrune_us.manual.mean$node, 'manual scan')"
+          "target": "alias(stats.timers.blocks.findFilesToPrune_us.manual.mean, 'manual scan')"
         }
       ],
       "title": "Prune Scan Cost",
@@ -1972,7 +1950,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.timers.snapshot.flush_us.mean$node, 'snapshot flush')"
+          "target": "alias(stats.timers.snapshot.flush_us.mean, 'snapshot flush')"
         }
       ],
       "title": "Snapshot Flush",
@@ -2089,7 +2067,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.timers.snapshot.validation.computeStats_us.mean$node, 'compute stats cost')"
+          "target": "alias(stats.timers.snapshot.validation.computeStats_us.mean, 'compute stats cost')"
         },
         {
           "datasource": {
@@ -2097,7 +2075,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.snapshot.validation.statsAborted$node, 'aborted/s')"
+          "target": "alias(stats.snapshot.validation.statsAborted, 'aborted/s')"
         }
       ],
       "title": "Snapshot Stats & Aborts",
@@ -2191,7 +2169,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.gauges.index.txindex.height$node, 'txindex height')"
+          "target": "alias(stats.gauges.index.txindex.height, 'txindex height')"
         },
         {
           "datasource": {
@@ -2199,7 +2177,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.gauges.index.coinstatsindex.height$node, 'coinstatsindex height')"
+          "target": "alias(stats.gauges.index.coinstatsindex.height, 'coinstatsindex height')"
         }
       ],
       "title": "Index Sync Progress",
@@ -2316,7 +2294,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.timers.index.txindex.block_us.mean$node, 'txindex block cost')"
+          "target": "alias(stats.timers.index.txindex.block_us.mean, 'txindex block cost')"
         },
         {
           "datasource": {
@@ -2324,7 +2302,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.index.reorgRewind$node, 'reorg rewinds/s')"
+          "target": "alias(stats.index.reorgRewind, 'reorg rewinds/s')"
         }
       ],
       "title": "Index Block Cost & Reorg Rewinds",
@@ -2365,7 +2343,7 @@
   "links": [
     {
       "title": "Home",
-      "url": "/d/statoshi-home",
+      "url": "d/default-home-dashboard",
       "type": "link",
       "keepTime": true,
       "includeVars": true,

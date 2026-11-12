@@ -33,6 +33,37 @@ import sys
 ROW_HEIGHT = 1  # gridPos units are already 24-wide grid units
 
 
+# Every field the v2 DashboardLink schema marks as required. Classic
+# dashboards only set a subset, so missing ones are filled from here.
+LINK_DEFAULTS = {
+    "title": "",
+    "type": "link",
+    "icon": "",
+    "tooltip": "",
+    "tags": [],
+    "asDropdown": False,
+    "targetBlank": False,
+    "includeVars": False,
+    "keepTime": False,
+}
+
+# Panel links use the much narrower DataLink schema, which defines only these
+# three fields, so dashboard-link defaults must not be added to them.
+DATA_LINK_FIELDS = ("title", "url", "targetBlank")
+
+
+def _convert_panel_links(links):
+    """Reduce panel links to the v2 DataLink fields."""
+    out = []
+    for link in links or []:
+        out.append({
+            "title": link.get("title", ""),
+            "url": link.get("url", ""),
+            "targetBlank": bool(link.get("targetBlank", False)),
+        })
+    return out
+
+
 def _fix_thresholds(defaults):
     """Coerce null threshold step values to numbers.
 
@@ -110,6 +141,29 @@ def split_rows(panels):
     if not groups:
         groups.append({"title": "", "panels": [], "row": None})
     return groups
+
+
+def _convert_links(links):
+    """Fill in the fields the v2 DashboardLink schema requires.
+
+    Classic dashboards store a minimal link object:
+
+        {"title": "Blocks", "url": "/d/000000002", "type": "link",
+         "keepTime": true, "includeVars": true, "tags": [], "targetBlank": false}
+
+    but the v2 resource schema marks nine fields as required, so a passthrough
+    is rejected by the editor with:
+
+        The required property `icon` is missing at ...
+        The required property `tooltip` is missing at ...
+        The required property `asDropdown` is missing at ...
+    """
+    out = []
+    for link in links or []:
+        merged = dict(LINK_DEFAULTS)
+        merged.update({k: v for k, v in link.items() if v is not None})
+        out.append(merged)
+    return out
 
 
 def convert_dashboard(classic, uid=None):
@@ -194,7 +248,7 @@ def convert_dashboard(classic, uid=None):
                 "spec": {
                     "id": p.get("id", panel_id),
                     "title": p.get("title", ""),
-                    "links": p.get("links", []),
+                    "links": _convert_panel_links(p.get("links")),
                     "data": {
                         "kind": "QueryGroup",
                         "spec": {
@@ -218,8 +272,21 @@ def convert_dashboard(classic, uid=None):
             # string as a difference from absent, and Grafana omits it.
             if p.get("description"):
                 element["spec"]["description"] = p["description"]
-            if datasource:
-                element["spec"]["data"]["spec"]["queryOptions"] = {}
+            # Classic panels carry a per-panel time override as top-level
+            # timeFrom/timeTo. The v2 model has no such top-level fields: the
+            # override lives in the panel's queryOptions, and Grafana only
+            # honours it when BOTH keys are present. Dropping them silently
+            # reverts the panel to the dashboard time range.
+            query_options = {}
+            if p.get("timeFrom") and p.get("timeTo"):
+                query_options["timeFrom"] = p["timeFrom"]
+                query_options["timeTo"] = p["timeTo"]
+            if p.get("maxDataPoints"):
+                query_options["maxDataPoints"] = p["maxDataPoints"]
+            if p.get("interval"):
+                query_options["minInterval"] = p["interval"]
+            if datasource or query_options:
+                element["spec"]["data"]["spec"]["queryOptions"] = query_options
             elements[el_name] = element
             items.append({
                 "kind": "GridLayoutItem",
@@ -289,7 +356,7 @@ def convert_dashboard(classic, uid=None):
         "editable": bool(classic.get("editable", True)),
         "elements": elements,
         "layout": layout,
-        "links": classic.get("links", []),
+        "links": _convert_links(classic.get("links")),
         "liveNow": bool(classic.get("liveNow", False)),
         "preload": bool(classic.get("preload", False)),
         "tags": classic.get("tags", []),
@@ -409,7 +476,34 @@ def validate(doc):
             if not isinstance(tr.get("spec"), dict):
                 errors.append(f"{name}: transformation {i} is missing a 'spec' "
                               f"object")
+        # Panel links are DataLink resources: only title/url/targetBlank are
+        # defined, so anything else would be dropped rather than emitted.
+        for i, link in enumerate(el.get("spec", {}).get("links") or []):
+            if not isinstance(link, dict):
+                errors.append(f"{name}: panel link {i} is not an object")
+                continue
+            for key in DATA_LINK_FIELDS:
+                if key not in link:
+                    errors.append(f"{name}: panel link {i} is missing "
+                                  f"required '{key}'")
+            extra = sorted(set(link) - set(DATA_LINK_FIELDS))
+            if extra:
+                errors.append(f"{name}: panel link {i} has fields not in the "
+                              f"v2 DataLink schema: {extra}")
+
+    # Dashboard links are the other common paste-time failure: the v2
+    # DashboardLink schema requires icon, tooltip and asDropdown, which the
+    # classic shape omits.
+    for i, link in enumerate(spec.get("links") or []):
+        if not isinstance(link, dict):
+            errors.append(f"dashboard link {i} is not an object")
+            continue
+        for key in LINK_DEFAULTS:
+            if key not in link:
+                errors.append(f"dashboard link {i} ({link.get('title')!r}) is "
+                              f"missing required '{key}'")
     return errors
+
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__,

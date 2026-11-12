@@ -16,29 +16,7 @@
     ]
   },
   "templating": {
-    "list": [
-      {
-        "name": "node",
-        "label": "Node suffix",
-        "description": "The suffix that -statshostname appends to every node-emitted metric key, including the leading dot (e.g. \".mynode\"). Leave empty for a node started without -statshostname, which is how statoshi.info runs.",
-        "type": "textbox",
-        "query": "",
-        "current": {
-          "selected": false,
-          "text": "",
-          "value": ""
-        },
-        "options": [
-          {
-            "selected": true,
-            "text": "",
-            "value": ""
-          }
-        ],
-        "hide": 0,
-        "skipUrlSync": false
-      }
-    ]
+    "list": []
   },
   "editable": true,
   "fiscalYearStartMonth": 0,
@@ -230,7 +208,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "stats.statsd.graphiteStats.calculationtime$node"
+          "target": "stats.statsd.graphiteStats.calculationtime"
         },
         {
           "datasource": {
@@ -238,7 +216,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "stats.statsd.graphiteStats.flush_time$node"
+          "target": "stats.statsd.graphiteStats.flush_time"
         }
       ],
       "title": "Graphite Flush Timing",
@@ -348,7 +326,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.statsd.processing_time$node, 'processing time')"
+          "target": "alias(stats.statsd.processing_time, 'processing time')"
         }
       ],
       "title": "StatsD Processing Cost",
@@ -469,7 +447,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.statsd.metrics_received$node, 'metrics/s')"
+          "target": "alias(stats.statsd.metrics_received, 'metrics/s')"
         },
         {
           "datasource": {
@@ -477,7 +455,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.statsd.packets_received$node, 'packets/s')"
+          "target": "alias(stats.statsd.packets_received, 'packets/s')"
         },
         {
           "datasource": {
@@ -485,7 +463,7 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "alias(stats.statsd.bad_lines_seen$node, 'malformed lines/s')"
+          "target": "alias(stats.statsd.bad_lines_seen, 'malformed lines/s')"
         }
       ],
       "title": "StatsD Ingest Volume",
@@ -652,7 +630,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.statsd.graphiteStats.last_exception$node, 'exceptions')"
+          "target": "alias(stats.statsd.graphiteStats.last_exception, 'exceptions')"
         }
       ],
       "title": "Graphite Flush Exceptions",
@@ -750,7 +728,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.statsd.graphiteStats.flush_length$node, 'flush payload')"
+          "target": "alias(stats.statsd.graphiteStats.flush_length, 'flush payload')"
         }
       ],
       "title": "Graphite Flush Payload",
@@ -1364,7 +1342,7 @@
   "links": [
     {
       "title": "Home",
-      "url": "/d/statoshi-home",
+      "url": "d/default-home-dashboard",
       "type": "link",
       "keepTime": true,
       "includeVars": true,

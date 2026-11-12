@@ -16,29 +16,7 @@
     ]
   },
   "templating": {
-    "list": [
-      {
-        "name": "node",
-        "label": "Node suffix",
-        "description": "The suffix that -statshostname appends to every node-emitted metric key, including the leading dot (e.g. \".mynode\"). Leave empty for a node started without -statshostname, which is how statoshi.info runs.",
-        "type": "textbox",
-        "query": "",
-        "current": {
-          "selected": false,
-          "text": "",
-          "value": ""
-        },
-        "options": [
-          {
-            "selected": true,
-            "text": "",
-            "value": ""
-          }
-        ],
-        "hide": 0,
-        "skipUrlSync": false
-      }
-    ]
+    "list": []
   },
   "editable": true,
   "fiscalYearStartMonth": 0,
@@ -135,7 +113,7 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "alias(stats.gauges.peers.inboundConnections$node, 'inbound')"
+          "target": "alias(stats.gauges.peers.inboundConnections, 'inbound')"
         },
         {
           "datasource": {
@@ -143,7 +121,7 @@
             "uid": "000000001"
           },
           "refId": "D",
-          "target": "alias(stats.gauges.peers.outboundConnections$node, 'outbound')"
+          "target": "alias(stats.gauges.peers.outboundConnections, 'outbound')"
         },
         {
           "datasource": {
@@ -151,7 +129,7 @@
             "uid": "000000001"
           },
           "refId": "H",
-          "target": "alias(stats.gauges.peers.totalConnections$node, 'total')"
+          "target": "alias(stats.gauges.peers.totalConnections, 'total')"
         }
       ],
       "title": "Peers",
@@ -203,7 +181,6 @@
               "mode": "off"
             }
           },
-          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -248,7 +225,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.gauges.peers.knownAddresses$node, 'known addresses')"
+          "target": "alias(stats.gauges.peers.knownAddresses, 'known addresses')"
         }
       ],
       "title": "Known Addresses",
@@ -270,7 +247,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "ping latency (\u00b5s)",
+            "axisLabel": "ping latency",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -313,13 +290,14 @@
               }
             ]
           },
-          "unit": "\u00b5s"
+          "unit": "ns",
+          "description": "Round-trip ping latency to peers at the lower bound, median and upper bound. The values are nanoseconds: stats.timers.peers.ping_us carries the raw NodeClock tick count, and NodeClock is nanosecond-resolution, so the series were historically emitted as nanoseconds despite the '_us' name. Grafana scales ns to ms/s automatically."
         },
         "overrides": [
           {
             "matcher": {
               "id": "byName",
-              "options": "lower"
+              "options": "min"
             },
             "properties": [
               {
@@ -334,7 +312,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "median"
+              "options": "median (p50)"
             },
             "properties": [
               {
@@ -349,7 +327,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "upper"
+              "options": "max"
             },
             "properties": [
               {
@@ -393,7 +371,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.timers.peers.ping_us.lower$node, 'min')"
+          "target": "alias(stats.timers.peers.ping_us.lower, 'min')"
         },
         {
           "datasource": {
@@ -401,7 +379,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.timers.peers.ping_us.median$node, 'median (p50)')"
+          "target": "alias(stats.timers.peers.ping_us.median, 'median (p50)')"
         },
         {
           "datasource": {
@@ -409,7 +387,7 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "alias(stats.timers.peers.ping_us.upper$node, 'max')"
+          "target": "alias(stats.timers.peers.ping_us.upper, 'max')"
         }
       ],
       "title": "Peer Pings",
@@ -531,7 +509,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.message.sent.reject$node, 'all rejects')"
+          "target": "alias(stats.message.sent.reject, 'all rejects')"
         },
         {
           "datasource": {
@@ -539,7 +517,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.message.sent.reject_tx_duplicate$node, 'tx: duplicate')"
+          "target": "alias(stats.message.sent.reject_tx_duplicate, 'tx: duplicate')"
         },
         {
           "datasource": {
@@ -547,7 +525,7 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "alias(stats.message.sent.reject_tx_invalid$node, 'tx: invalid')"
+          "target": "alias(stats.message.sent.reject_tx_invalid, 'tx: invalid')"
         },
         {
           "datasource": {
@@ -555,7 +533,7 @@
             "uid": "000000001"
           },
           "refId": "D",
-          "target": "alias(stats.message.sent.reject_tx_nonstandard$node, 'tx: nonstandard')"
+          "target": "alias(stats.message.sent.reject_tx_nonstandard, 'tx: nonstandard')"
         },
         {
           "datasource": {
@@ -563,7 +541,7 @@
             "uid": "000000001"
           },
           "refId": "E",
-          "target": "alias(stats.message.sent.reject_tx_malformed$node, 'tx: malformed')"
+          "target": "alias(stats.message.sent.reject_tx_malformed, 'tx: malformed')"
         },
         {
           "datasource": {
@@ -571,7 +549,7 @@
             "uid": "000000001"
           },
           "refId": "F",
-          "target": "alias(stats.message.sent.reject_tx_dust$node, 'tx: dust')"
+          "target": "alias(stats.message.sent.reject_tx_dust, 'tx: dust')"
         },
         {
           "datasource": {
@@ -579,7 +557,7 @@
             "uid": "000000001"
           },
           "refId": "G",
-          "target": "alias(stats.message.sent.reject_tx_insufficientfee$node, 'tx: insufficient fee')"
+          "target": "alias(stats.message.sent.reject_tx_insufficientfee, 'tx: insufficient fee')"
         },
         {
           "datasource": {
@@ -587,7 +565,7 @@
             "uid": "000000001"
           },
           "refId": "H",
-          "target": "alias(stats.message.sent.reject_block_invalid$node, 'block: invalid')"
+          "target": "alias(stats.message.sent.reject_block_invalid, 'block: invalid')"
         },
         {
           "datasource": {
@@ -595,7 +573,7 @@
             "uid": "000000001"
           },
           "refId": "I",
-          "target": "alias(stats.message.sent.reject_block_obsolete$node, 'block: obsolete')"
+          "target": "alias(stats.message.sent.reject_block_obsolete, 'block: obsolete')"
         },
         {
           "datasource": {
@@ -603,7 +581,7 @@
             "uid": "000000001"
           },
           "refId": "J",
-          "target": "alias(stats.message.sent.reject_block_checkpoint$node, 'block: checkpoint')"
+          "target": "alias(stats.message.sent.reject_block_checkpoint, 'block: checkpoint')"
         },
         {
           "datasource": {
@@ -611,7 +589,7 @@
             "uid": "000000001"
           },
           "refId": "K",
-          "target": "alias(stats.message.sent.reject_block_$node, 'block: other')"
+          "target": "alias(stats.message.sent.reject_block_, 'block: other')"
         },
         {
           "datasource": {
@@ -619,7 +597,7 @@
             "uid": "000000001"
           },
           "refId": "L",
-          "target": "alias(stats.message.sent.reject_headers_malformed$node, 'headers: malformed')"
+          "target": "alias(stats.message.sent.reject_headers_malformed, 'headers: malformed')"
         },
         {
           "datasource": {
@@ -627,7 +605,7 @@
             "uid": "000000001"
           },
           "refId": "M",
-          "target": "alias(stats.message.sent.reject_getheaders_malformed$node, 'getheaders: malformed')"
+          "target": "alias(stats.message.sent.reject_getheaders_malformed, 'getheaders: malformed')"
         },
         {
           "datasource": {
@@ -635,7 +613,7 @@
             "uid": "000000001"
           },
           "refId": "N",
-          "target": "alias(stats.message.sent.reject_ping_malformed$node, 'ping: malformed')"
+          "target": "alias(stats.message.sent.reject_ping_malformed, 'ping: malformed')"
         },
         {
           "datasource": {
@@ -643,7 +621,7 @@
             "uid": "000000001"
           },
           "refId": "O",
-          "target": "alias(stats.message.sent.reject_sendcmpct_malformed$node, 'sendcmpct: malformed')"
+          "target": "alias(stats.message.sent.reject_sendcmpct_malformed, 'sendcmpct: malformed')"
         },
         {
           "datasource": {
@@ -651,7 +629,7 @@
             "uid": "000000001"
           },
           "refId": "P",
-          "target": "alias(stats.message.sent.reject_addr_malformed$node, 'addr: malformed')"
+          "target": "alias(stats.message.sent.reject_addr_malformed, 'addr: malformed')"
         },
         {
           "datasource": {
@@ -659,7 +637,7 @@
             "uid": "000000001"
           },
           "refId": "Q",
-          "target": "alias(stats.message.sent.reject_version_duplicate$node, 'version: duplicate')"
+          "target": "alias(stats.message.sent.reject_version_duplicate, 'version: duplicate')"
         },
         {
           "datasource": {
@@ -667,7 +645,7 @@
             "uid": "000000001"
           },
           "refId": "R",
-          "target": "alias(stats.message.sent.reject_version_nonstandard$node, 'version: nonstandard')"
+          "target": "alias(stats.message.sent.reject_version_nonstandard, 'version: nonstandard')"
         },
         {
           "datasource": {
@@ -675,7 +653,7 @@
             "uid": "000000001"
           },
           "refId": "S",
-          "target": "alias(stats.message.sent.reject_version_obsolete$node, 'version: obsolete')"
+          "target": "alias(stats.message.sent.reject_version_obsolete, 'version: obsolete')"
         }
       ],
       "title": "Reject Messages Sent",
@@ -785,7 +763,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.peers.connect$node, 'outbound connect')"
+          "target": "alias(stats.peers.connect, 'outbound connect')"
         },
         {
           "datasource": {
@@ -793,7 +771,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.peers.disconnect$node, 'disconnect (all types)')"
+          "target": "alias(stats.peers.disconnect, 'disconnect (all types)')"
         },
         {
           "datasource": {
@@ -801,7 +779,7 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "alias(stats.peers.inbound.accepted$node, 'inbound accepted')"
+          "target": "alias(stats.peers.inbound.accepted, 'inbound accepted')"
         }
       ],
       "title": "Connection Churn",
@@ -899,7 +877,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.peers.closed.inbound$node, 'inbound')"
+          "target": "alias(stats.peers.closed.inbound, 'inbound')"
         },
         {
           "datasource": {
@@ -907,7 +885,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.peers.closed.outbound-full-relay$node, 'outbound full relay')"
+          "target": "alias(stats.peers.closed.outbound-full-relay, 'outbound full relay')"
         },
         {
           "datasource": {
@@ -915,7 +893,7 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "alias(stats.peers.closed.block-relay-only$node, 'block relay only')"
+          "target": "alias(stats.peers.closed.block-relay-only, 'block relay only')"
         },
         {
           "datasource": {
@@ -923,7 +901,7 @@
             "uid": "000000001"
           },
           "refId": "D",
-          "target": "alias(stats.peers.closed.manual$node, 'manual')"
+          "target": "alias(stats.peers.closed.manual, 'manual')"
         },
         {
           "datasource": {
@@ -931,7 +909,7 @@
             "uid": "000000001"
           },
           "refId": "E",
-          "target": "alias(stats.peers.closed.feeler$node, 'feeler')"
+          "target": "alias(stats.peers.closed.feeler, 'feeler')"
         },
         {
           "datasource": {
@@ -939,7 +917,7 @@
             "uid": "000000001"
           },
           "refId": "F",
-          "target": "alias(stats.peers.closed.addr-fetch$node, 'addr fetch')"
+          "target": "alias(stats.peers.closed.addr-fetch, 'addr fetch')"
         }
       ],
       "title": "Connections Closed by Type",
@@ -1037,7 +1015,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(divideSeries(stats.peers.closed.inbound.lifetimeSeconds$node, stats.peers.closed.inbound$node), 'inbound')"
+          "target": "alias(divideSeries(stats.peers.closed.inbound.lifetimeSeconds, stats.peers.closed.inbound), 'inbound')"
         },
         {
           "datasource": {
@@ -1045,7 +1023,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(divideSeries(stats.peers.closed.outbound-full-relay.lifetimeSeconds$node, stats.peers.closed.outbound-full-relay$node), 'outbound full relay')"
+          "target": "alias(divideSeries(stats.peers.closed.outbound-full-relay.lifetimeSeconds, stats.peers.closed.outbound-full-relay), 'outbound full relay')"
         },
         {
           "datasource": {
@@ -1053,7 +1031,7 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "alias(divideSeries(stats.peers.closed.block-relay-only.lifetimeSeconds$node, stats.peers.closed.block-relay-only$node), 'block relay only')"
+          "target": "alias(divideSeries(stats.peers.closed.block-relay-only.lifetimeSeconds, stats.peers.closed.block-relay-only), 'block relay only')"
         }
       ],
       "title": "Connection Lifetime at Close",
@@ -1185,7 +1163,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.peers.evicted.inbound$node, 'evictions/s')"
+          "target": "alias(stats.peers.evicted.inbound, 'evictions/s')"
         },
         {
           "datasource": {
@@ -1193,7 +1171,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(divideSeries(stats.peers.evicted.inbound.ageSeconds$node, stats.peers.evicted.inbound$node), 'age at eviction (s)')"
+          "target": "alias(divideSeries(stats.peers.evicted.inbound.ageSeconds, stats.peers.evicted.inbound), 'age at eviction (s)')"
         }
       ],
       "title": "Inbound Evictions",
@@ -1292,7 +1270,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.gauges.peers.inboundSlotsFree$node, 'free inbound slots')"
+          "target": "alias(stats.gauges.peers.inboundSlotsFree, 'free inbound slots')"
         },
         {
           "datasource": {
@@ -1300,7 +1278,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.gauges.peers.maxInbound$node, 'max inbound')"
+          "target": "alias(stats.gauges.peers.maxInbound, 'max inbound')"
         },
         {
           "datasource": {
@@ -1308,7 +1286,7 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "alias(stats.gauges.peers.totalConnections$node, 'total connections')"
+          "target": "alias(stats.gauges.peers.totalConnections, 'total connections')"
         }
       ],
       "title": "Inbound Capacity",
@@ -1403,7 +1381,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByNode(stats.gauges.peers.connectionType.*$node, 4)"
+          "target": "aliasByNode(stats.gauges.peers.connectionType.*, 4)"
         }
       ],
       "title": "Peers by Connection Type (current)",
@@ -1496,7 +1474,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.gauges.peers.transport.v2$node, 'v2 (BIP324)')"
+          "target": "alias(stats.gauges.peers.transport.v2, 'v2 (BIP324)')"
         },
         {
           "datasource": {
@@ -1504,7 +1482,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.gauges.peers.transport.v1$node, 'v1 (cleartext)')"
+          "target": "alias(stats.gauges.peers.transport.v1, 'v1 (cleartext)')"
         },
         {
           "datasource": {
@@ -1512,7 +1490,7 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "alias(stats.gauges.peers.transport.detecting$node, 'detecting')"
+          "target": "alias(stats.gauges.peers.transport.detecting, 'detecting')"
         }
       ],
       "title": "Peers by Transport Protocol (stacked share)",
@@ -1609,7 +1587,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByNode(stats.gauges.peers.connectionType.*$node, 4)"
+          "target": "aliasByNode(stats.gauges.peers.connectionType.*, 4)"
         }
       ],
       "title": "Peers by Connection Type",
@@ -1707,7 +1685,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.gauges.peers.transport.v1$node, 'v1 (cleartext)')"
+          "target": "alias(stats.gauges.peers.transport.v1, 'v1 (cleartext)')"
         },
         {
           "datasource": {
@@ -1715,7 +1693,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.gauges.peers.transport.v2$node, 'v2 (BIP324)')"
+          "target": "alias(stats.gauges.peers.transport.v2, 'v2 (BIP324)')"
         },
         {
           "datasource": {
@@ -1723,7 +1701,7 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "alias(stats.gauges.peers.transport.detecting$node, 'detecting')"
+          "target": "alias(stats.gauges.peers.transport.detecting, 'detecting')"
         }
       ],
       "title": "Peers by Transport Protocol",
@@ -1821,7 +1799,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.gauges.peers.oldestConnectionAgeSeconds$node, 'oldest')"
+          "target": "alias(stats.gauges.peers.oldestConnectionAgeSeconds, 'oldest')"
         },
         {
           "datasource": {
@@ -1829,7 +1807,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.gauges.peers.newestConnectionAgeSeconds$node, 'newest')"
+          "target": "alias(stats.gauges.peers.newestConnectionAgeSeconds, 'newest')"
         }
       ],
       "title": "Connection Age",
@@ -1927,7 +1905,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByNode(stats.peers.inbound.network.*$node, 4)"
+          "target": "aliasByNode(stats.peers.inbound.network.*, 4)"
         }
       ],
       "title": "Inbound Connections by Network",
@@ -2025,7 +2003,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByNode(stats.peers.outbound.connected.*.network.*$node, 4, 6)"
+          "target": "aliasByNode(stats.peers.outbound.connected.*.network.*, 4, 6)"
         }
       ],
       "title": "Outbound Connections by Type and Network",
@@ -2135,7 +2113,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.gauges.addrman.newSize$node, 'new table')"
+          "target": "alias(stats.gauges.addrman.newSize, 'new table')"
         },
         {
           "datasource": {
@@ -2143,7 +2121,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.gauges.addrman.triedSize$node, 'tried table')"
+          "target": "alias(stats.gauges.addrman.triedSize, 'tried table')"
         }
       ],
       "title": "Address Manager Size",
@@ -2241,7 +2219,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.addrman.added$node, 'added/s')"
+          "target": "alias(stats.addrman.added, 'added/s')"
         },
         {
           "datasource": {
@@ -2249,7 +2227,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.addrman.rejected.stale$node, 'rejected: stale')"
+          "target": "alias(stats.addrman.rejected.stale, 'rejected: stale')"
         },
         {
           "datasource": {
@@ -2257,7 +2235,7 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "alias(stats.addrman.rejected.notRoutable$node, 'rejected: not routable')"
+          "target": "alias(stats.addrman.rejected.notRoutable, 'rejected: not routable')"
         },
         {
           "datasource": {
@@ -2265,7 +2243,7 @@
             "uid": "000000001"
           },
           "refId": "D",
-          "target": "alias(stats.addrman.rejected.inTried$node, 'rejected: already in tried')"
+          "target": "alias(stats.addrman.rejected.inTried, 'rejected: already in tried')"
         },
         {
           "datasource": {
@@ -2273,7 +2251,7 @@
             "uid": "000000001"
           },
           "refId": "E",
-          "target": "alias(stats.addrman.rejected.refCountMax$node, 'rejected: ref count max')"
+          "target": "alias(stats.addrman.rejected.refCountMax, 'rejected: ref count max')"
         },
         {
           "datasource": {
@@ -2281,7 +2259,7 @@
             "uid": "000000001"
           },
           "refId": "F",
-          "target": "alias(stats.addrman.rejected.stochastic$node, 'rejected: stochastic')"
+          "target": "alias(stats.addrman.rejected.stochastic, 'rejected: stochastic')"
         }
       ],
       "title": "Address Manager Ingest",
@@ -2379,7 +2357,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.addrman.selectMiss.newTableEmpty$node, 'new table empty')"
+          "target": "alias(stats.addrman.selectMiss.newTableEmpty, 'new table empty')"
         },
         {
           "datasource": {
@@ -2387,7 +2365,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.addrman.selectMiss.noAddresses$node, 'no addresses available')"
+          "target": "alias(stats.addrman.selectMiss.noAddresses, 'no addresses available')"
         }
       ],
       "title": "Address Selection Misses",
@@ -2485,7 +2463,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.peers.dnsSeed.queryOk$node, 'queries ok')"
+          "target": "alias(stats.peers.dnsSeed.queryOk, 'queries ok')"
         },
         {
           "datasource": {
@@ -2493,7 +2471,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.peers.dnsSeed.queryEmpty$node, 'queries returned nothing')"
+          "target": "alias(stats.peers.dnsSeed.queryEmpty, 'queries returned nothing')"
         },
         {
           "datasource": {
@@ -2501,7 +2479,7 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "alias(stats.peers.dnsSeed.addressesFound$node, 'addresses found/s')"
+          "target": "alias(stats.peers.dnsSeed.addressesFound, 'addresses found/s')"
         }
       ],
       "title": "DNS Seed Results",
@@ -2599,7 +2577,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.banman.banned$node, 'bans applied')"
+          "target": "alias(stats.banman.banned, 'bans applied')"
         },
         {
           "datasource": {
@@ -2607,7 +2585,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.banman.discouraged$node, 'discouraged')"
+          "target": "alias(stats.banman.discouraged, 'discouraged')"
         }
       ],
       "title": "Bans & Discouragement",
@@ -2705,7 +2683,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByNode(exclude(stats.misbehavior.*$node, 'amount'), 2)"
+          "target": "aliasByNode(exclude(stats.misbehavior.*, 'amount'), 2)"
         }
       ],
       "title": "Misbehavior by Reason",
@@ -2740,7 +2718,7 @@
   "links": [
     {
       "title": "Home",
-      "url": "/d/statoshi-home",
+      "url": "d/default-home-dashboard",
       "type": "link",
       "keepTime": true,
       "includeVars": true,

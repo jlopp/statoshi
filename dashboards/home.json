@@ -16,29 +16,7 @@
     ]
   },
   "templating": {
-    "list": [
-      {
-        "name": "node",
-        "label": "Node suffix",
-        "description": "The suffix that -statshostname appends to every node-emitted metric key, including the leading dot (e.g. \".mynode\"). Leave empty for a node started without -statshostname, which is how statoshi.info runs.",
-        "type": "textbox",
-        "query": "",
-        "current": {
-          "selected": false,
-          "text": "",
-          "value": ""
-        },
-        "options": [
-          {
-            "selected": true,
-            "text": "",
-            "value": ""
-          }
-        ],
-        "hide": 0,
-        "skipUrlSync": false
-      }
-    ]
+    "list": []
   },
   "editable": false,
   "fiscalYearStartMonth": 0,
@@ -48,7 +26,7 @@
     {
       "gridPos": {
         "h": 5,
-        "w": 24,
+        "w": 12,
         "x": 0,
         "y": 0
       },
@@ -202,7 +180,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.gauges.blocks.currentHeight$node, 'Block Height')"
+          "target": "alias(stats.gauges.blocks.currentHeight, 'Block Height')"
         },
         {
           "datasource": {
@@ -210,38 +188,12 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.transactions.accepted$node, 'Transactions Per Second')"
+          "target": "alias(stats.transactions.accepted, 'Transactions Per Second')"
         }
       ],
       "title": "Blocks & Transactions",
       "type": "timeseries",
       "maxDataPoints": 720
-    },
-    {
-      "gridPos": {
-        "h": 17,
-        "w": 12,
-        "x": 12,
-        "y": 20
-      },
-      "id": 3,
-      "options": {
-        "folderUID": "",
-        "includeVars": false,
-        "keepTime": false,
-        "maxItems": 30,
-        "query": "",
-        "showFolderNames": true,
-        "showHeadings": true,
-        "showRecentlyViewed": false,
-        "showSearch": true,
-        "showStarred": false,
-        "tags": []
-      },
-      "pluginVersion": "13.3.1",
-      "targets": [],
-      "title": "",
-      "type": "dashlist"
     },
     {
       "datasource": {
@@ -250,10 +202,10 @@
       },
       "description": "Live node topology. Every figure is bound to a Graphite field and the connections are animated, so the diagram updates with the dashboard refresh instead of being a static picture.",
       "gridPos": {
-        "h": 17,
+        "h": 15,
         "w": 12,
-        "x": 0,
-        "y": 20
+        "x": 12,
+        "y": 5
       },
       "id": 4,
       "maxDataPoints": 200,
@@ -687,7 +639,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.gauges.peers.totalConnections$node, 'total connections')"
+          "target": "alias(stats.gauges.peers.totalConnections, 'total connections')"
         },
         {
           "datasource": {
@@ -695,7 +647,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.gauges.peers.inboundConnections$node, 'inbound connections')"
+          "target": "alias(stats.gauges.peers.inboundConnections, 'inbound connections')"
         },
         {
           "datasource": {
@@ -703,7 +655,7 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "alias(stats.gauges.peers.outboundConnections$node, 'outbound connections')"
+          "target": "alias(stats.gauges.peers.outboundConnections, 'outbound connections')"
         },
         {
           "datasource": {
@@ -711,11 +663,156 @@
             "uid": "000000001"
           },
           "refId": "D",
-          "target": "alias(scale(stats.gauges.transactions.mempool.memoryUsageBytes$node, 0.00000095367431640625), 'mempool MB')"
+          "target": "alias(scale(stats.gauges.transactions.mempool.memoryUsageBytes, 0.00000095367431640625), 'mempool MB')"
         }
       ],
       "title": "Live Node Topology",
       "type": "canvas"
+    },
+    {
+      "datasource": {
+        "type": "graphite",
+        "uid": "000000001"
+      },
+      "description": "Aggregate P2P messages processed per second, sent and received, over a rolling 5 minute window so each refresh advances a single 10 second bucket. Counts every message handed to or emitted by the message processor regardless of type. The per-inventory-item counters (inv_tx and inv_block) are excluded: they are incremented once per transaction or block announced inside a single inv message, so including them would count those messages twice and inflate received traffic roughly threefold.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "messages per second",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "showValues": false,
+            "spanNulls": true,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "received/s"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "#73BF69",
+                  "mode": "fixed"
+                }
+              },
+              {
+                "id": "unit",
+                "value": "short"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "sent/s"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "#FADE2A",
+                  "mode": "fixed"
+                }
+              },
+              {
+                "id": "unit",
+                "value": "short"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "id": 5,
+      "interval": "10s",
+      "maxDataPoints": 30,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "decreasing"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "graphite",
+            "uid": "000000001"
+          },
+          "refId": "A",
+          "target": "alias(sumSeries(exclude(stats.message.received.*, 'inv_block|inv_tx')), 'received/s')"
+        },
+        {
+          "datasource": {
+            "type": "graphite",
+            "uid": "000000001"
+          },
+          "refId": "B",
+          "target": "alias(sumSeries(stats.message.sent.*), 'sent/s')"
+        }
+      ],
+      "timeFrom": "now-5m",
+      "title": "P2P Messages Processed",
+      "type": "timeseries",
+      "timeTo": "now"
     }
   ],
   "preload": false,
@@ -746,7 +843,7 @@
   "links": [
     {
       "title": "Home",
-      "url": "/d/statoshi-home",
+      "url": "d/default-home-dashboard",
       "type": "link",
       "keepTime": true,
       "includeVars": true,

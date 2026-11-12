@@ -16,29 +16,7 @@
     ]
   },
   "templating": {
-    "list": [
-      {
-        "name": "node",
-        "label": "Node suffix",
-        "description": "The suffix that -statshostname appends to every node-emitted metric key, including the leading dot (e.g. \".mynode\"). Leave empty for a node started without -statshostname, which is how statoshi.info runs.",
-        "type": "textbox",
-        "query": "",
-        "current": {
-          "selected": false,
-          "text": "",
-          "value": ""
-        },
-        "options": [
-          {
-            "selected": true,
-            "text": "",
-            "value": ""
-          }
-        ],
-        "hide": 0,
-        "skipUrlSync": false
-      }
-    ]
+    "list": []
   },
   "editable": true,
   "fiscalYearStartMonth": 0,
@@ -153,7 +131,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByMetric(stats.gauges.network.difficulty$node)"
+          "target": "aliasByMetric(stats.gauges.network.difficulty)"
         }
       ],
       "title": "Mining Difficulty",
@@ -251,7 +229,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByMetric(stats.gauges.network.exahashesPerSecond$node)"
+          "target": "aliasByMetric(stats.gauges.network.exahashesPerSecond)"
         }
       ],
       "title": "Estimated Network Hashrate (trailing 120 blocks)",
@@ -350,7 +328,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.gauges.mining.templateTxCount$node, 'transactions')"
+          "target": "alias(stats.gauges.mining.templateTxCount, 'transactions')"
         }
       ],
       "title": "Block Template Transactions",
@@ -453,7 +431,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.gauges.mining.templateWeight$node, 'template weight')"
+          "target": "alias(stats.gauges.mining.templateWeight, 'template weight')"
         }
       ],
       "title": "Block Template Weight",
@@ -551,7 +529,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.gauges.mining.templateFees$node, 'template fees (sat)')"
+          "target": "alias(stats.gauges.mining.templateFees, 'template fees (sat)')"
         }
       ],
       "title": "Block Template Fees",
@@ -649,7 +627,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.timers.mining.createTemplateUs.mean$node, 'total')"
+          "target": "alias(stats.timers.mining.createTemplateUs.mean, 'total')"
         },
         {
           "datasource": {
@@ -657,7 +635,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.timers.mining.assembleChunksUs.mean$node, 'assemble chunks')"
+          "target": "alias(stats.timers.mining.assembleChunksUs.mean, 'assemble chunks')"
         },
         {
           "datasource": {
@@ -665,7 +643,7 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "alias(stats.timers.mining.testValidityUs.mean$node, 'test validity')"
+          "target": "alias(stats.timers.mining.testValidityUs.mean, 'test validity')"
         }
       ],
       "title": "Block Template Assembly Cost",
@@ -677,7 +655,7 @@
   "refresh": "10s",
   "schemaVersion": 42,
   "time": {
-    "from": "now-6h",
+    "from": "now-30d",
     "to": "now"
   },
   "timepicker": {
@@ -700,7 +678,7 @@
   "links": [
     {
       "title": "Home",
-      "url": "/d/statoshi-home",
+      "url": "d/default-home-dashboard",
       "type": "link",
       "keepTime": true,
       "includeVars": true,

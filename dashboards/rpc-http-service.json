@@ -16,29 +16,7 @@
     ]
   },
   "templating": {
-    "list": [
-      {
-        "name": "node",
-        "label": "Node suffix",
-        "description": "The suffix that -statshostname appends to every node-emitted metric key, including the leading dot (e.g. \".mynode\"). Leave empty for a node started without -statshostname, which is how statoshi.info runs.",
-        "type": "textbox",
-        "query": "",
-        "current": {
-          "selected": false,
-          "text": "",
-          "value": ""
-        },
-        "options": [
-          {
-            "selected": true,
-            "text": "",
-            "value": ""
-          }
-        ],
-        "hide": 0,
-        "skipUrlSync": false
-      }
-    ]
+    "list": []
   },
   "description": "RPC and HTTP service health: request volume and per-method latency across roughly 110 registered RPC methods, error and abort rates, plus HTTP work queue depth and rejections.",
   "editable": true,
@@ -146,7 +124,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(sumSeries(stats.rpc.calls.*$node), 'all methods')"
+          "target": "alias(sumSeries(stats.rpc.calls.*), 'all methods')"
         }
       ],
       "title": "Total RPC Calls",
@@ -158,7 +136,7 @@
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "The eight busiest RPC methods, ranked. A bar gauge rather than a time series, because this is a ranking question, not a trend question.",
+      "description": "RPC calls per minute in the selected window, ranked by the highest rate reached. Bar length is calls/min at peak; the label is the method name. Source is stats.rpc.calls, a StatsD counter on a 10s interval, which StatsD reports as calls/sec; it is scaled to per-minute so the numbers read as whole call counts rather than fractions of one call.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -193,7 +171,7 @@
         "orientation": "horizontal",
         "reduceOptions": {
           "calcs": [
-            "lastNotNull"
+            "max"
           ],
           "fields": "",
           "values": false
@@ -210,7 +188,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByNode(limit(sortByMaxima(stats.rpc.calls.*$node), 8), 3)"
+          "target": "aliasByNode(limit(sortByMaxima(consolidateBy(scale(stats.rpc.calls.*, 60), 'max')), 8), 3)"
         }
       ],
       "title": "Busiest RPC Methods",
@@ -218,76 +196,12 @@
       "maxDataPoints": 720
     },
     {
-      "datasource": {
-        "type": "graphite",
-        "uid": "000000001"
-      },
-      "description": "Every RPC method that received traffic in the selected window, ranked by call rate. A bar gauge is the natural shape for 'who is hammering the node'; as a time series with dozens of overlapping methods it was very hard to read.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "blue",
-                "value": null
-              }
-            ]
-          },
-          "unit": "short"
-        }
-      },
-      "gridPos": {
-        "h": 9,
-        "w": 24,
-        "x": 0,
-        "y": 8
-      },
-      "id": 203,
-      "options": {
-        "displayMode": "gradient",
-        "maxVizHeight": 300,
-        "minVizHeight": 16,
-        "minVizWidth": 8,
-        "namePlacement": "auto",
-        "orientation": "horizontal",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showUnfilled": true,
-        "sizing": "auto",
-        "valueMode": "color"
-      },
-      "pluginVersion": "13.3.1",
-      "targets": [
-        {
-          "datasource": {
-            "type": "graphite",
-            "uid": "000000001"
-          },
-          "refId": "A",
-          "target": "aliasByNode(stats.rpc.calls.*$node, 3)"
-        }
-      ],
-      "title": "Per-Method Call Rate (all methods, ranked)",
-      "type": "bargauge",
-      "maxDataPoints": 1440
-    },
-    {
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 17
+        "y": 8
       },
       "id": 235,
       "title": "Latency",
@@ -354,7 +268,7 @@
         "h": 7,
         "w": 12,
         "x": 0,
-        "y": 18
+        "y": 9
       },
       "id": 212,
       "options": {
@@ -381,7 +295,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByNode(stats.timers.rpc.duration_us.*.upper_90$node, 4)"
+          "target": "aliasByNode(stats.timers.rpc.duration_us.*.upper_90, 4)"
         }
       ],
       "title": "P90 Latency by Method",
@@ -415,7 +329,7 @@
         "h": 7,
         "w": 12,
         "x": 12,
-        "y": 18
+        "y": 9
       },
       "id": 213,
       "options": {
@@ -444,7 +358,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByNode(highestAverage(stats.timers.rpc.duration_us.*.mean$node, 5), 4)"
+          "target": "aliasByNode(highestAverage(stats.timers.rpc.duration_us.*.mean, 5), 4)"
         }
       ],
       "title": "Slowest Methods",
@@ -512,7 +426,7 @@
         "h": 7,
         "w": 12,
         "x": 0,
-        "y": 25
+        "y": 16
       },
       "id": 214,
       "options": {
@@ -538,7 +452,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(divideSeries(sumSeries(stats.timers.rpc.duration_us.*.mean$node), sumSeries(stats.rpc.calls.*$node)), 'mean us per call')"
+          "target": "alias(divideSeries(sumSeries(stats.timers.rpc.duration_us.*.mean), sumSeries(stats.rpc.calls.*)), 'mean us per call')"
         }
       ],
       "title": "Calls vs Latency (request cost)",
@@ -551,193 +465,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 32
-      },
-      "id": 236,
-      "title": "Errors",
-      "type": "row"
-    },
-    {
-      "datasource": {
-        "type": "graphite",
-        "uid": "000000001"
-      },
-      "description": "Errors per second, split into errors raised with a typed RPC error code and everything else. Typed errors are usually caller mistakes; 'other' is the bucket to investigate.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "errors per second",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "showValues": false,
-            "spanNulls": true,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "short"
-        }
-      },
-      "gridPos": {
-        "h": 7,
-        "w": 12,
-        "x": 0,
-        "y": 33
-      },
-      "id": 221,
-      "options": {
-        "legend": {
-          "calcs": [
-            "lastNotNull",
-            "max"
-          ],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "pluginVersion": "13.3.1",
-      "targets": [
-        {
-          "datasource": {
-            "type": "graphite",
-            "uid": "000000001"
-          },
-          "refId": "A",
-          "target": "alias(stats.rpc.errors.type$node, 'typed error')"
-        },
-        {
-          "datasource": {
-            "type": "graphite",
-            "uid": "000000001"
-          },
-          "refId": "B",
-          "target": "alias(stats.rpc.errors.other$node, 'other error')"
-        }
-      ],
-      "title": "RPC Errors",
-      "type": "timeseries",
-      "maxDataPoints": 720
-    },
-    {
-      "datasource": {
-        "type": "graphite",
-        "uid": "000000001"
-      },
-      "description": "Errors as a fraction of all RPC calls. A gauge with a threshold makes the difference between a healthy zero, background noise and a real failure obvious at a glance.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "max": 0.1,
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              },
-              {
-                "color": "yellow",
-                "value": 0.01
-              },
-              {
-                "color": "red",
-                "value": 0.05
-              }
-            ]
-          },
-          "unit": "percentunit"
-        }
-      },
-      "gridPos": {
-        "h": 7,
-        "w": 12,
-        "x": 12,
-        "y": 33
-      },
-      "id": 222,
-      "options": {
-        "minVizHeight": 75,
-        "minVizWidth": 75,
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showThresholdLabels": false,
-        "showThresholdMarkers": true,
-        "sizing": "auto"
-      },
-      "pluginVersion": "13.3.1",
-      "targets": [
-        {
-          "datasource": {
-            "type": "graphite",
-            "uid": "000000001"
-          },
-          "refId": "A",
-          "target": "alias(divideSeries(sumSeries(stats.rpc.errors.*$node), sumSeries(stats.rpc.calls.*$node)), 'errors per call')"
-        }
-      ],
-      "title": "Error Rate",
-      "type": "gauge",
-      "maxDataPoints": 720
-    },
-    {
-      "collapsed": false,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 40
+        "y": 23
       },
       "id": 237,
       "title": "HTTP service",
@@ -805,7 +533,7 @@
         "h": 7,
         "w": 12,
         "x": 0,
-        "y": 41
+        "y": 24
       },
       "id": 231,
       "options": {
@@ -831,7 +559,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.gauges.http.workQueueDepth$node, 'queue depth')"
+          "target": "alias(stats.gauges.http.workQueueDepth, 'queue depth')"
         },
         {
           "datasource": {
@@ -839,7 +567,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.gauges.http.maxQueueDepth$node, 'configured max')"
+          "target": "alias(stats.gauges.http.maxQueueDepth, 'configured max')"
         }
       ],
       "title": "Work Queue Depth",
@@ -908,7 +636,7 @@
         "h": 7,
         "w": 12,
         "x": 12,
-        "y": 41
+        "y": 24
       },
       "id": 232,
       "options": {
@@ -934,7 +662,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.http.queueDepthRejected$node, 'rejected/s')"
+          "target": "alias(stats.http.queueDepthRejected, 'rejected/s')"
         }
       ],
       "title": "Rejected Requests",
@@ -978,7 +706,7 @@
         "h": 7,
         "w": 12,
         "x": 0,
-        "y": 48
+        "y": 31
       },
       "id": 233,
       "options": {
@@ -1004,10 +732,196 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(divideSeries(stats.gauges.http.workQueueDepth$node, stats.gauges.http.maxQueueDepth$node), 'saturation')"
+          "target": "alias(divideSeries(stats.gauges.http.workQueueDepth, stats.gauges.http.maxQueueDepth), 'saturation')"
         }
       ],
       "title": "Queue Saturation",
+      "type": "gauge",
+      "maxDataPoints": 720
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 38
+      },
+      "id": 236,
+      "title": "Errors",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "graphite",
+        "uid": "000000001"
+      },
+      "description": "Errors per second, split into errors raised with a typed RPC error code and everything else. Typed errors are usually caller mistakes; 'other' is the bucket to investigate.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "errors per second",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "showValues": false,
+            "spanNulls": true,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        }
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 39
+      },
+      "id": 221,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "13.3.1",
+      "targets": [
+        {
+          "datasource": {
+            "type": "graphite",
+            "uid": "000000001"
+          },
+          "refId": "A",
+          "target": "alias(stats.rpc.errors.type, 'typed error')"
+        },
+        {
+          "datasource": {
+            "type": "graphite",
+            "uid": "000000001"
+          },
+          "refId": "B",
+          "target": "alias(stats.rpc.errors.other, 'other error')"
+        }
+      ],
+      "title": "RPC Errors",
+      "type": "timeseries",
+      "maxDataPoints": 720
+    },
+    {
+      "datasource": {
+        "type": "graphite",
+        "uid": "000000001"
+      },
+      "description": "Errors as a fraction of all RPC calls. A gauge with a threshold makes the difference between a healthy zero, background noise and a real failure obvious at a glance.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "max": 0.1,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "yellow",
+                "value": 0.01
+              },
+              {
+                "color": "red",
+                "value": 0.05
+              }
+            ]
+          },
+          "unit": "percentunit"
+        }
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 39
+      },
+      "id": 222,
+      "options": {
+        "minVizHeight": 75,
+        "minVizWidth": 75,
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true,
+        "sizing": "auto"
+      },
+      "pluginVersion": "13.3.1",
+      "targets": [
+        {
+          "datasource": {
+            "type": "graphite",
+            "uid": "000000001"
+          },
+          "refId": "A",
+          "target": "alias(divideSeries(sumSeries(stats.rpc.errors.*), sumSeries(stats.rpc.calls.*)), 'errors per call')"
+        }
+      ],
+      "title": "Error Rate",
       "type": "gauge",
       "maxDataPoints": 720
     }
@@ -1044,7 +958,7 @@
   "links": [
     {
       "title": "Home",
-      "url": "/d/statoshi-home",
+      "url": "d/default-home-dashboard",
       "type": "link",
       "keepTime": true,
       "includeVars": true,
