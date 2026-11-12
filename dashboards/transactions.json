@@ -15,6 +15,31 @@
       }
     ]
   },
+  "templating": {
+    "list": [
+      {
+        "name": "node",
+        "label": "Node suffix",
+        "description": "The suffix that -statshostname appends to every node-emitted metric key, including the leading dot (e.g. \".mynode\"). Leave empty for a node started without -statshostname, which is how statoshi.info runs.",
+        "type": "textbox",
+        "query": "",
+        "current": {
+          "selected": false,
+          "text": "",
+          "value": ""
+        },
+        "options": [
+          {
+            "selected": true,
+            "text": "",
+            "value": ""
+          }
+        ],
+        "hide": 0,
+        "skipUrlSync": false
+      }
+    ]
+  },
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
@@ -144,7 +169,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByMetric(stats.gauges.transactions.txCacheSize)"
+          "target": "aliasByMetric(stats.gauges.transactions.txCacheSize$node)"
         },
         {
           "datasource": {
@@ -152,11 +177,12 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "aliasByMetric(stats.gauges.transactions.txInMemoryPool)"
+          "target": "aliasByMetric(stats.gauges.transactions.txInMemoryPool$node)"
         }
       ],
       "title": "Transaction Sets",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -268,7 +294,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.transactions.accepted, 'txAccepted')"
+          "target": "alias(stats.transactions.accepted$node, 'txAccepted')"
         },
         {
           "datasource": {
@@ -276,11 +302,12 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.gauges.transactions.txRate, 'TX/S trailing month average')"
+          "target": "alias(stats.gauges.transactions.txRate$node, 'TX/S trailing month average')"
         }
       ],
       "title": "Transactions Accepted Per Second",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -393,7 +420,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.transactions.accepted, 'txAccepted')"
+          "target": "alias(stats.transactions.accepted$node, 'txAccepted')"
         },
         {
           "datasource": {
@@ -401,11 +428,12 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(removeBelowValue(diffSeries(stats.message.received.tx, stats.transactions.accepted), 0), 'txMessagesRejected')"
+          "target": "alias(removeBelowValue(diffSeries(stats.message.received.tx$node, stats.transactions.accepted$node), 0), 'txMessagesRejected')"
         }
       ],
       "title": "Transactions Accepted vs Rejected",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -529,7 +557,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByMetric(stats.transactions.inputs)"
+          "target": "aliasByMetric(stats.transactions.inputs$node)"
         },
         {
           "datasource": {
@@ -537,11 +565,12 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "aliasByMetric(stats.transactions.outputs)"
+          "target": "aliasByMetric(stats.transactions.outputs$node)"
         }
       ],
       "title": "Inputs vs Outputs per Second",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -656,7 +685,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(divideSeries(stats.transactions.sizeBytes, stats.transactions.accepted), 'vbytes per tx')"
+          "target": "alias(divideSeries(stats.transactions.sizeBytes$node, stats.transactions.accepted$node), 'vbytes per tx')"
         },
         {
           "datasource": {
@@ -665,11 +694,12 @@
           },
           "hide": true,
           "refId": "B",
-          "target": "alias(stats.transactions.accepted, 'tx accepted/s')"
+          "target": "alias(stats.transactions.accepted$node, 'tx accepted/s')"
         }
       ],
       "title": "vbytes Per Transaction",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -784,7 +814,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(divideSeries(stats.transactions.fees, stats.transactions.accepted), 'fees per tx (sat)')"
+          "target": "alias(divideSeries(stats.transactions.fees$node, stats.transactions.accepted$node), 'fees per tx (sat)')"
         },
         {
           "datasource": {
@@ -793,11 +823,12 @@
           },
           "hide": true,
           "refId": "B",
-          "target": "alias(stats.transactions.accepted, 'tx accepted/s')"
+          "target": "alias(stats.transactions.accepted$node, 'tx accepted/s')"
         }
       ],
       "title": "Fees (satoshis) Paid Per Transaction",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -914,7 +945,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(divideSeries(stats.transactions.fees, scale(stats.transactions.sizeBytes, 0.976563)), 'sat per vbyte')"
+          "target": "alias(divideSeries(stats.transactions.fees$node, scale(stats.transactions.sizeBytes$node, 0.976563)), 'sat per vbyte')"
         },
         {
           "datasource": {
@@ -923,11 +954,12 @@
           },
           "hide": true,
           "refId": "B",
-          "target": "alias(scale(stats.transactions.sizeBytes, 0.976563), 'vbytes/s')"
+          "target": "alias(scale(stats.transactions.sizeBytes$node, 0.976563), 'vbytes/s')"
         }
       ],
       "title": "Transaction Fees (satoshis) Paid Per vbyte",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -1037,11 +1069,12 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByMetric(stats.transactions.sigOps)"
+          "target": "aliasByMetric(stats.transactions.sigOps$node)"
         }
       ],
       "title": "Signature Operations",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -1060,10 +1093,6 @@
               {
                 "color": "green",
                 "value": 0
-              },
-              {
-                "color": "red",
-                "value": 80
               }
             ]
           },
@@ -1095,7 +1124,7 @@
       },
       "id": 10,
       "options": {
-        "colorMode": "value",
+        "colorMode": "none",
         "graphMode": "area",
         "justifyMode": "auto",
         "orientation": "auto",
@@ -1118,11 +1147,12 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "stats.gauges.transactions.totalCount"
+          "target": "stats.gauges.transactions.totalCount$node"
         }
       ],
       "title": "Total Historical Transactions",
-      "type": "stat"
+      "type": "stat",
+      "maxDataPoints": 1440
     },
     {
       "collapsed": false,
@@ -1227,7 +1257,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(scale(stats.transactions.outputValue, 1e-8), 'BTC moved per second')"
+          "target": "alias(scale(stats.transactions.outputValue$node, 1e-8), 'BTC moved per second')"
         },
         {
           "datasource": {
@@ -1235,11 +1265,12 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(scale(stats.transactions.inputValue, 1e-8), 'BTC spent per second')"
+          "target": "alias(scale(stats.transactions.inputValue$node, 1e-8), 'BTC spent per second')"
         }
       ],
       "title": "Transaction Output Value",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -1332,7 +1363,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.transactions.duplicate, 'duplicate')"
+          "target": "alias(stats.transactions.duplicate$node, 'duplicate')"
         },
         {
           "datasource": {
@@ -1340,11 +1371,12 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.transactions.replaced, 'replaced')"
+          "target": "alias(stats.transactions.replaced$node, 'replaced')"
         }
       ],
       "title": "Duplicate & Replaced Transactions",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "collapsed": false,
@@ -1449,11 +1481,12 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.transactions.rejected, 'all rejected')"
+          "target": "alias(stats.transactions.rejected$node, 'all rejected')"
         }
       ],
       "title": "Rejected Transactions",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -1546,11 +1579,12 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByNode(stats.transactions.rejected.reason.*, 4)"
+          "target": "aliasByNode(stats.transactions.rejected.reason.*$node, 4)"
         }
       ],
       "title": "Rejection Reasons",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -1657,7 +1691,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.transactions.package.received, 'packages received')"
+          "target": "alias(stats.transactions.package.received$node, 'packages received')"
         },
         {
           "datasource": {
@@ -1665,7 +1699,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.transactions.package.rejected, 'packages rejected')"
+          "target": "alias(stats.transactions.package.rejected$node, 'packages rejected')"
         },
         {
           "datasource": {
@@ -1673,11 +1707,12 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "alias(divideSeries(stats.transactions.package.txCount, stats.transactions.package.received), 'txs per package')"
+          "target": "alias(divideSeries(stats.transactions.package.txCount$node, stats.transactions.package.received$node), 'txs per package')"
         }
       ],
       "title": "Package Relay Outcomes",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -1770,7 +1805,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.transactions.download.timedOut, 'all')"
+          "target": "alias(stats.transactions.download.timedOut$node, 'all')"
         },
         {
           "datasource": {
@@ -1778,7 +1813,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.transactions.download.timedOut.tx, 'by txid')"
+          "target": "alias(stats.transactions.download.timedOut.tx$node, 'by txid')"
         },
         {
           "datasource": {
@@ -1786,11 +1821,12 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "alias(stats.transactions.download.timedOut.wtx, 'by wtxid')"
+          "target": "alias(stats.transactions.download.timedOut.wtx$node, 'by wtxid')"
         }
       ],
       "title": "Transaction Download Timeouts",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "collapsed": false,
@@ -1867,7 +1903,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(divideSeries(stats.script.sigcache.hit.ecdsa, sumSeries(stats.script.sigcache.hit.ecdsa, stats.script.sigcache.miss.ecdsa)), 'ecdsa')"
+          "target": "alias(divideSeries(stats.script.sigcache.hit.ecdsa$node, sumSeries(stats.script.sigcache.hit.ecdsa$node, stats.script.sigcache.miss.ecdsa$node)), 'ecdsa')"
         },
         {
           "datasource": {
@@ -1875,11 +1911,12 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(divideSeries(stats.script.sigcache.hit.schnorr, sumSeries(stats.script.sigcache.hit.schnorr, stats.script.sigcache.miss.schnorr)), 'schnorr')"
+          "target": "alias(divideSeries(stats.script.sigcache.hit.schnorr$node, sumSeries(stats.script.sigcache.hit.schnorr$node, stats.script.sigcache.miss.schnorr$node)), 'schnorr')"
         }
       ],
       "title": "Signature Cache Hit Rate",
-      "type": "gauge"
+      "type": "gauge",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -1972,7 +2009,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.script.executionCache.hit, 'hits/s')"
+          "target": "alias(stats.script.executionCache.hit$node, 'hits/s')"
         },
         {
           "datasource": {
@@ -1980,15 +2017,16 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.script.executionCache.miss, 'misses/s')"
+          "target": "alias(stats.script.executionCache.miss$node, 'misses/s')"
         }
       ],
       "title": "Script Execution Cache",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     }
   ],
   "preload": false,
-  "refresh": "",
+  "refresh": "30s",
   "schemaVersion": 42,
   "time": {
     "from": "now-24h",
@@ -2010,5 +2048,152 @@
   },
   "timezone": "browser",
   "title": "Transactions",
-  "uid": "000000006"
+  "uid": "000000006",
+  "links": [
+    {
+      "title": "Home",
+      "url": "/d/statoshi-home",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Blocks",
+      "url": "/d/000000002",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Transactions",
+      "url": "/d/000000006",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Unspent Transaction Output Set",
+      "url": "/d/000000009",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Memory Pool",
+      "url": "/d/000000020",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Fee Estimates",
+      "url": "/d/000000017",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Mining",
+      "url": "/d/000000018",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Peers",
+      "url": "/d/000000008",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "P2P Messages",
+      "url": "/d/000000010",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Bandwidth Usage",
+      "url": "/d/000000001",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Function Timings",
+      "url": "/d/000000003",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "System Metrics",
+      "url": "/d/000000005",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Storage & Database Health",
+      "url": "/d/statoshi-storage",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "RPC & HTTP Service",
+      "url": "/d/statoshi-rpc-http",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Telemetry Pipeline",
+      "url": "/d/000000004",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "asDropdown": true,
+      "title": "All dashboards",
+      "type": "dashboards",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false,
+      "icon": "external link"
+    }
+  ]
 }

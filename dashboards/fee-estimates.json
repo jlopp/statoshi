@@ -15,6 +15,31 @@
       }
     ]
   },
+  "templating": {
+    "list": [
+      {
+        "name": "node",
+        "label": "Node suffix",
+        "description": "The suffix that -statshostname appends to every node-emitted metric key, including the leading dot (e.g. \".mynode\"). Leave empty for a node started without -statshostname, which is how statoshi.info runs.",
+        "type": "textbox",
+        "query": "",
+        "current": {
+          "selected": false,
+          "text": "",
+          "value": ""
+        },
+        "options": [
+          {
+            "selected": true,
+            "text": "",
+            "value": ""
+          }
+        ],
+        "hide": 0,
+        "skipUrlSync": false
+      }
+    ]
+  },
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
@@ -112,7 +137,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(aliasByNode(scale(stats.gauges.estimates.fee.block1, 0.001), 4), 'within 1 blocks')"
+          "target": "alias(aliasByNode(scale(stats.gauges.estimates.fee.block1$node, 0.001), 4), 'within 1 blocks')"
         },
         {
           "datasource": {
@@ -120,7 +145,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(aliasByNode(scale(stats.gauges.estimates.fee.block2, 0.001), 4), 'within 2 blocks')"
+          "target": "alias(aliasByNode(scale(stats.gauges.estimates.fee.block2$node, 0.001), 4), 'within 2 blocks')"
         },
         {
           "datasource": {
@@ -128,7 +153,7 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "alias(aliasByNode(scale(stats.gauges.estimates.fee.block3, 0.001), 4), 'within 3 blocks')"
+          "target": "alias(aliasByNode(scale(stats.gauges.estimates.fee.block3$node, 0.001), 4), 'within 3 blocks')"
         },
         {
           "datasource": {
@@ -136,7 +161,7 @@
             "uid": "000000001"
           },
           "refId": "D",
-          "target": "alias(aliasByNode(scale(stats.gauges.estimates.fee.block4, 0.001), 4), 'within 4 blocks')"
+          "target": "alias(aliasByNode(scale(stats.gauges.estimates.fee.block4$node, 0.001), 4), 'within 4 blocks')"
         },
         {
           "datasource": {
@@ -144,7 +169,7 @@
             "uid": "000000001"
           },
           "refId": "E",
-          "target": "alias(aliasByNode(scale(stats.gauges.estimates.fee.block5, 0.001), 4), 'within 5 blocks')"
+          "target": "alias(aliasByNode(scale(stats.gauges.estimates.fee.block5$node, 0.001), 4), 'within 5 blocks')"
         },
         {
           "datasource": {
@@ -152,7 +177,7 @@
             "uid": "000000001"
           },
           "refId": "F",
-          "target": "alias(aliasByNode(scale(stats.gauges.estimates.fee.block10, 0.001), 4), 'within 10 blocks')"
+          "target": "alias(aliasByNode(scale(stats.gauges.estimates.fee.block10$node, 0.001), 4), 'within 10 blocks')"
         },
         {
           "datasource": {
@@ -160,7 +185,7 @@
             "uid": "000000001"
           },
           "refId": "G",
-          "target": "alias(aliasByNode(scale(stats.gauges.estimates.fee.block20, 0.001), 4), 'within 20 blocks')"
+          "target": "alias(aliasByNode(scale(stats.gauges.estimates.fee.block20$node, 0.001), 4), 'within 20 blocks')"
         },
         {
           "datasource": {
@@ -168,7 +193,7 @@
             "uid": "000000001"
           },
           "refId": "H",
-          "target": "alias(aliasByNode(scale(stats.gauges.estimates.fee.block100, 0.001), 4), 'within 100 blocks')"
+          "target": "alias(aliasByNode(scale(stats.gauges.estimates.fee.block100$node, 0.001), 4), 'within 100 blocks')"
         },
         {
           "datasource": {
@@ -176,11 +201,12 @@
             "uid": "000000001"
           },
           "refId": "I",
-          "target": "alias(aliasByNode(scale(stats.gauges.estimates.fee.block1000, 0.001), 4), 'within 1000 blocks')"
+          "target": "alias(aliasByNode(scale(stats.gauges.estimates.fee.block1000$node, 0.001), 4), 'within 1000 blocks')"
         }
       ],
       "title": "Recommended Transaction Fee for Target Confirmation in X Blocks",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -296,7 +322,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(divideSeries(stats.transactions.fees, scale(stats.transactions.sizeBytes, 0.976563)), 'fee rate (sat/vB)')"
+          "target": "alias(divideSeries(stats.transactions.fees$node, scale(stats.transactions.sizeBytes$node, 0.976563)), 'fee rate (sat/vB)')"
         },
         {
           "datasource": {
@@ -305,11 +331,12 @@
           },
           "hide": true,
           "refId": "B",
-          "target": "alias(scale(stats.transactions.sizeBytes, 0.976563), 'vbytes/s')"
+          "target": "alias(scale(stats.transactions.sizeBytes$node, 0.976563), 'vbytes/s')"
         }
       ],
       "title": "Average Network Transaction Fees per Byte",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -425,7 +452,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(removeAbovePercentile(divideSeries(stats.transactions.fees, scale(stats.transactions.sizeBytes, 0.976563)), 1), 'lowest percentile fee rate')"
+          "target": "alias(removeAbovePercentile(divideSeries(stats.transactions.fees$node, scale(stats.transactions.sizeBytes$node, 0.976563)), 1), 'lowest percentile fee rate')"
         },
         {
           "datasource": {
@@ -434,7 +461,7 @@
           },
           "hide": true,
           "refId": "B",
-          "target": "alias(scale(stats.transactions.sizeBytes, 0.976563), 'vbytes/s')"
+          "target": "alias(scale(stats.transactions.sizeBytes$node, 0.976563), 'vbytes/s')"
         },
         {
           "datasource": {
@@ -442,11 +469,146 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "alias(removeBelowPercentile(divideSeries(stats.transactions.fees, scale(stats.transactions.sizeBytes, 0.976563)), 99), 'highest percentile fee rate')"
+          "target": "alias(removeBelowPercentile(divideSeries(stats.transactions.fees$node, scale(stats.transactions.sizeBytes$node, 0.976563)), 99), 'highest percentile fee rate')"
         }
       ],
       "title": "Network Transaction Fees per Byte Range",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
+    },
+    {
+      "datasource": {
+        "type": "graphite",
+        "uid": "000000001"
+      },
+      "description": "Hourly open/high/low/close of the realized fee rate (sat/vB), with vbytes confirmed as the volume bars. A single line hides how volatile the fee market was within each hour; the candle shows the intra-hour spread.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "showValues": false,
+            "spanNulls": true,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 21
+      },
+      "id": 40,
+      "maxDataPoints": 900,
+      "options": {
+        "candleStyle": "candles",
+        "colorStrategy": "open-close",
+        "colors": {
+          "down": "#F2495C",
+          "flat": "#8e8e8e",
+          "up": "#73BF69"
+        },
+        "fields": {
+          "open": "open",
+          "high": "high",
+          "low": "low",
+          "close": "close",
+          "volume": "volume"
+        },
+        "includeAllFields": false,
+        "mode": "candles",
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "13.3.1",
+      "targets": [
+        {
+          "datasource": {
+            "type": "graphite",
+            "uid": "000000001"
+          },
+          "refId": "A",
+          "target": "alias(timeShift(summarize(divideSeries(stats.transactions.fees$node, scale(stats.transactions.sizeBytes$node, 0.976563)),'1h','last'),'-1h'), 'open')"
+        },
+        {
+          "datasource": {
+            "type": "graphite",
+            "uid": "000000001"
+          },
+          "refId": "B",
+          "target": "alias(summarize(divideSeries(stats.transactions.fees$node, scale(stats.transactions.sizeBytes$node, 0.976563)),'1h','max'), 'high')"
+        },
+        {
+          "datasource": {
+            "type": "graphite",
+            "uid": "000000001"
+          },
+          "refId": "C",
+          "target": "alias(summarize(divideSeries(stats.transactions.fees$node, scale(stats.transactions.sizeBytes$node, 0.976563)),'1h','min'), 'low')"
+        },
+        {
+          "datasource": {
+            "type": "graphite",
+            "uid": "000000001"
+          },
+          "refId": "D",
+          "target": "alias(summarize(divideSeries(stats.transactions.fees$node, scale(stats.transactions.sizeBytes$node, 0.976563)),'1h','last'), 'close')"
+        }
+      ],
+      "title": "Fee Rate OHLC (hourly candles)",
+      "type": "candlestick"
     },
     {
       "collapsed": false,
@@ -454,7 +616,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 21
+        "y": 31
       },
       "id": 22,
       "title": "Estimator health",
@@ -526,7 +688,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 22
+        "y": 32
       },
       "id": 20,
       "options": {
@@ -553,7 +715,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.gauges.estimates.estimator.trackedTxs, 'tracked')"
+          "target": "alias(stats.gauges.estimates.estimator.trackedTxs$node, 'tracked')"
         },
         {
           "datasource": {
@@ -561,7 +723,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.gauges.estimates.estimator.untrackedTxs, 'untracked')"
+          "target": "alias(stats.gauges.estimates.estimator.untrackedTxs$node, 'untracked')"
         },
         {
           "datasource": {
@@ -569,11 +731,12 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "alias(stats.gauges.estimates.estimator.mapMemPoolTxs, 'mempool entries tracked')"
+          "target": "alias(stats.gauges.estimates.estimator.mapMemPoolTxs$node, 'mempool entries tracked')"
         }
       ],
       "title": "Fee Estimator Tracked vs Untracked",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -670,7 +833,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 29
+        "y": 39
       },
       "id": 21,
       "options": {
@@ -697,7 +860,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.gauges.estimates.estimator.countedTxs, 'txs counted in last block')"
+          "target": "alias(stats.gauges.estimates.estimator.countedTxs$node, 'txs counted in last block')"
         },
         {
           "datasource": {
@@ -705,15 +868,16 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.gauges.estimates.estimator.maxUsableEstimate, 'max usable target (blocks)')"
+          "target": "alias(stats.gauges.estimates.estimator.maxUsableEstimate$node, 'max usable target (blocks)')"
         }
       ],
       "title": "Fee Estimator Coverage",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     }
   ],
   "preload": false,
-  "refresh": "",
+  "refresh": "30s",
   "schemaVersion": 42,
   "time": {
     "from": "now-7d",
@@ -735,5 +899,152 @@
   },
   "timezone": "browser",
   "title": "Fee Estimates",
-  "uid": "000000017"
+  "uid": "000000017",
+  "links": [
+    {
+      "title": "Home",
+      "url": "/d/statoshi-home",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Blocks",
+      "url": "/d/000000002",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Transactions",
+      "url": "/d/000000006",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Unspent Transaction Output Set",
+      "url": "/d/000000009",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Memory Pool",
+      "url": "/d/000000020",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Fee Estimates",
+      "url": "/d/000000017",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Mining",
+      "url": "/d/000000018",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Peers",
+      "url": "/d/000000008",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "P2P Messages",
+      "url": "/d/000000010",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Bandwidth Usage",
+      "url": "/d/000000001",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Function Timings",
+      "url": "/d/000000003",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "System Metrics",
+      "url": "/d/000000005",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Storage & Database Health",
+      "url": "/d/statoshi-storage",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "RPC & HTTP Service",
+      "url": "/d/statoshi-rpc-http",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Telemetry Pipeline",
+      "url": "/d/000000004",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "asDropdown": true,
+      "title": "All dashboards",
+      "type": "dashboards",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false,
+      "icon": "external link"
+    }
+  ]
 }

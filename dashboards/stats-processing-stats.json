@@ -15,6 +15,31 @@
       }
     ]
   },
+  "templating": {
+    "list": [
+      {
+        "name": "node",
+        "label": "Node suffix",
+        "description": "The suffix that -statshostname appends to every node-emitted metric key, including the leading dot (e.g. \".mynode\"). Leave empty for a node started without -statshostname, which is how statoshi.info runs.",
+        "type": "textbox",
+        "query": "",
+        "current": {
+          "selected": false,
+          "text": "",
+          "value": ""
+        },
+        "options": [
+          {
+            "selected": true,
+            "text": "",
+            "value": ""
+          }
+        ],
+        "hide": 0,
+        "skipUrlSync": false
+      }
+    ]
+  },
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
@@ -113,7 +138,8 @@
         }
       ],
       "title": "Carbon Memory Usage",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -204,7 +230,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "stats.statsd.graphiteStats.calculationtime"
+          "target": "stats.statsd.graphiteStats.calculationtime$node"
         },
         {
           "datasource": {
@@ -212,11 +238,12 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "stats.statsd.graphiteStats.flush_time"
+          "target": "stats.statsd.graphiteStats.flush_time$node"
         }
       ],
       "title": "Graphite Flush Timing",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "collapsed": false,
@@ -321,11 +348,12 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.statsd.processing_time, 'processing time')"
+          "target": "alias(stats.statsd.processing_time$node, 'processing time')"
         }
       ],
       "title": "StatsD Processing Cost",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -441,7 +469,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.statsd.metrics_received, 'metrics/s')"
+          "target": "alias(stats.statsd.metrics_received$node, 'metrics/s')"
         },
         {
           "datasource": {
@@ -449,7 +477,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.statsd.packets_received, 'packets/s')"
+          "target": "alias(stats.statsd.packets_received$node, 'packets/s')"
         },
         {
           "datasource": {
@@ -457,11 +485,12 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "alias(stats.statsd.bad_lines_seen, 'malformed lines/s')"
+          "target": "alias(stats.statsd.bad_lines_seen$node, 'malformed lines/s')"
         }
       ],
       "title": "StatsD Ingest Volume",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -562,7 +591,8 @@
         }
       ],
       "title": "Pipeline Freshness",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 960
     },
     {
       "datasource": {
@@ -622,11 +652,12 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.statsd.graphiteStats.last_exception, 'exceptions')"
+          "target": "alias(stats.statsd.graphiteStats.last_exception$node, 'exceptions')"
         }
       ],
       "title": "Graphite Flush Exceptions",
-      "type": "stat"
+      "type": "stat",
+      "maxDataPoints": 480
     },
     {
       "datasource": {
@@ -719,11 +750,12 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.statsd.graphiteStats.flush_length, 'flush payload')"
+          "target": "alias(stats.statsd.graphiteStats.flush_length$node, 'flush payload')"
         }
       ],
       "title": "Graphite Flush Payload",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "collapsed": false,
@@ -849,7 +881,8 @@
         }
       ],
       "title": "Carbon Write Health",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -946,7 +979,8 @@
         }
       ],
       "title": "Carbon Load",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 720
     },
     {
       "datasource": {
@@ -1065,7 +1099,8 @@
         }
       ],
       "title": "Carbon Update Cost",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 720
     },
     {
       "datasource": {
@@ -1178,7 +1213,8 @@
         }
       ],
       "title": "Carbon Ingestion vs Commit Rate",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -1297,11 +1333,12 @@
         }
       ],
       "title": "Carbon Cache Efficiency",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     }
   ],
   "preload": false,
-  "refresh": "",
+  "refresh": "30s",
   "schemaVersion": 42,
   "time": {
     "from": "now-2d",
@@ -1323,5 +1360,152 @@
   },
   "timezone": "browser",
   "title": "Telemetry Pipeline",
-  "uid": "000000004"
+  "uid": "000000004",
+  "links": [
+    {
+      "title": "Home",
+      "url": "/d/statoshi-home",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Blocks",
+      "url": "/d/000000002",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Transactions",
+      "url": "/d/000000006",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Unspent Transaction Output Set",
+      "url": "/d/000000009",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Memory Pool",
+      "url": "/d/000000020",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Fee Estimates",
+      "url": "/d/000000017",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Mining",
+      "url": "/d/000000018",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Peers",
+      "url": "/d/000000008",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "P2P Messages",
+      "url": "/d/000000010",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Bandwidth Usage",
+      "url": "/d/000000001",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Function Timings",
+      "url": "/d/000000003",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "System Metrics",
+      "url": "/d/000000005",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Storage & Database Health",
+      "url": "/d/statoshi-storage",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "RPC & HTTP Service",
+      "url": "/d/statoshi-rpc-http",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Telemetry Pipeline",
+      "url": "/d/000000004",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "asDropdown": true,
+      "title": "All dashboards",
+      "type": "dashboards",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false,
+      "icon": "external link"
+    }
+  ]
 }

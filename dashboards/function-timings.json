@@ -15,6 +15,31 @@
       }
     ]
   },
+  "templating": {
+    "list": [
+      {
+        "name": "node",
+        "label": "Node suffix",
+        "description": "The suffix that -statshostname appends to every node-emitted metric key, including the leading dot (e.g. \".mynode\"). Leave empty for a node started without -statshostname, which is how statoshi.info runs.",
+        "type": "textbox",
+        "query": "",
+        "current": {
+          "selected": false,
+          "text": "",
+          "value": ""
+        },
+        "options": [
+          {
+            "selected": true,
+            "text": "",
+            "value": ""
+          }
+        ],
+        "hide": 0,
+        "skipUrlSync": false
+      }
+    ]
+  },
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
@@ -128,11 +153,12 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByMetric(stats.timers.AcceptBlock_us.mean)"
+          "target": "aliasByMetric(stats.timers.AcceptBlock_us.mean$node)"
         }
       ],
       "title": "AcceptBlock",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -242,11 +268,12 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByMetric(stats.timers.CheckBlock_us.mean)"
+          "target": "aliasByMetric(stats.timers.CheckBlock_us.mean$node)"
         }
       ],
       "title": "CheckBlock",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -356,11 +383,12 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByMetric(stats.timers.ConnectBlock_ms.mean)"
+          "target": "aliasByMetric(stats.timers.ConnectBlock_ms.mean$node)"
         }
       ],
       "title": "ConnectBlock",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -470,11 +498,12 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByMetric(stats.timers.ConnectTip_ms.mean)"
+          "target": "aliasByMetric(stats.timers.ConnectTip_ms.mean$node)"
         }
       ],
       "title": "ConnectTip",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -584,7 +613,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByMetric(stats.timers.AcceptToMemoryPool_ms.lower)"
+          "target": "aliasByMetric(stats.timers.AcceptToMemoryPool_ms.lower$node)"
         },
         {
           "datasource": {
@@ -592,7 +621,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "aliasByMetric(stats.timers.AcceptToMemoryPool_ms.median)"
+          "target": "aliasByMetric(stats.timers.AcceptToMemoryPool_ms.median$node)"
         },
         {
           "datasource": {
@@ -600,11 +629,12 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "aliasByMetric(stats.timers.AcceptToMemoryPool_ms.upper)"
+          "target": "aliasByMetric(stats.timers.AcceptToMemoryPool_ms.upper$node)"
         }
       ],
       "title": "AcceptToMemoryPool",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -714,7 +744,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByMetric(stats.timers.CheckInputs_ms.lower)"
+          "target": "aliasByMetric(stats.timers.CheckInputs_ms.lower$node)"
         },
         {
           "datasource": {
@@ -722,7 +752,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "aliasByMetric(stats.timers.CheckInputs_ms.median)"
+          "target": "aliasByMetric(stats.timers.CheckInputs_ms.median$node)"
         },
         {
           "datasource": {
@@ -730,11 +760,12 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "aliasByMetric(stats.timers.CheckInputs_ms.upper)"
+          "target": "aliasByMetric(stats.timers.CheckInputs_ms.upper$node)"
         }
       ],
       "title": "CheckInputs",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -844,7 +875,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByMetric(stats.timers.CheckTransaction_us.lower)"
+          "target": "aliasByMetric(stats.timers.CheckTransaction_us.lower$node)"
         },
         {
           "datasource": {
@@ -852,7 +883,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "aliasByMetric(stats.timers.CheckTransaction_us.median)"
+          "target": "aliasByMetric(stats.timers.CheckTransaction_us.median$node)"
         },
         {
           "datasource": {
@@ -860,11 +891,12 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "aliasByMetric(stats.timers.CheckTransaction_us.upper)"
+          "target": "aliasByMetric(stats.timers.CheckTransaction_us.upper$node)"
         }
       ],
       "title": "CheckTransaction",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "collapsed": false,
@@ -969,7 +1001,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(divideSeries(stats.validation.connectBlock.sanityChecks_us, stats.blocks.connected), 'sanity checks')"
+          "target": "alias(divideSeries(stats.validation.connectBlock.sanityChecks_us$node, stats.blocks.connected$node), 'sanity checks')"
         },
         {
           "datasource": {
@@ -977,7 +1009,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(divideSeries(stats.validation.connectBlock.forkChecks_us, stats.blocks.connected), 'fork checks')"
+          "target": "alias(divideSeries(stats.validation.connectBlock.forkChecks_us$node, stats.blocks.connected$node), 'fork checks')"
         },
         {
           "datasource": {
@@ -985,7 +1017,7 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "alias(divideSeries(stats.validation.connectBlock.connect_us, stats.blocks.connected), 'connect loop')"
+          "target": "alias(divideSeries(stats.validation.connectBlock.connect_us$node, stats.blocks.connected$node), 'connect loop')"
         },
         {
           "datasource": {
@@ -993,7 +1025,7 @@
             "uid": "000000001"
           },
           "refId": "D",
-          "target": "alias(divideSeries(stats.validation.connectBlock.scriptVerify_us, stats.blocks.connected), 'script verify')"
+          "target": "alias(divideSeries(stats.validation.connectBlock.scriptVerify_us$node, stats.blocks.connected$node), 'script verify')"
         },
         {
           "datasource": {
@@ -1001,7 +1033,7 @@
             "uid": "000000001"
           },
           "refId": "E",
-          "target": "alias(divideSeries(stats.validation.connectBlock.undoWrite_us, stats.blocks.connected), 'undo write')"
+          "target": "alias(divideSeries(stats.validation.connectBlock.undoWrite_us$node, stats.blocks.connected$node), 'undo write')"
         },
         {
           "datasource": {
@@ -1009,11 +1041,12 @@
             "uid": "000000001"
           },
           "refId": "F",
-          "target": "alias(divideSeries(stats.validation.connectBlock.indexWrite_us, stats.blocks.connected), 'index write')"
+          "target": "alias(divideSeries(stats.validation.connectBlock.indexWrite_us$node, stats.blocks.connected$node), 'index write')"
         }
       ],
       "title": "ConnectBlock Stages",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -1106,7 +1139,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(divideSeries(stats.validation.connectTip.loadBlock_us, stats.blocks.connected), 'load block')"
+          "target": "alias(divideSeries(stats.validation.connectTip.loadBlock_us$node, stats.blocks.connected$node), 'load block')"
         },
         {
           "datasource": {
@@ -1114,7 +1147,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(divideSeries(stats.validation.connectTip.connect_us, stats.blocks.connected), 'connect')"
+          "target": "alias(divideSeries(stats.validation.connectTip.connect_us$node, stats.blocks.connected$node), 'connect')"
         },
         {
           "datasource": {
@@ -1122,7 +1155,7 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "alias(divideSeries(stats.validation.connectTip.coinsFlush_us, stats.blocks.connected), 'coins flush')"
+          "target": "alias(divideSeries(stats.validation.connectTip.coinsFlush_us$node, stats.blocks.connected$node), 'coins flush')"
         },
         {
           "datasource": {
@@ -1130,7 +1163,7 @@
             "uid": "000000001"
           },
           "refId": "D",
-          "target": "alias(divideSeries(stats.validation.connectTip.chainstateWrite_us, stats.blocks.connected), 'chainstate write')"
+          "target": "alias(divideSeries(stats.validation.connectTip.chainstateWrite_us$node, stats.blocks.connected$node), 'chainstate write')"
         },
         {
           "datasource": {
@@ -1138,11 +1171,12 @@
             "uid": "000000001"
           },
           "refId": "E",
-          "target": "alias(divideSeries(stats.validation.connectTip.postConnect_us, stats.blocks.connected), 'post connect')"
+          "target": "alias(divideSeries(stats.validation.connectTip.postConnect_us$node, stats.blocks.connected$node), 'post connect')"
         }
       ],
       "title": "ConnectTip Stages",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -1235,7 +1269,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.timers.DisconnectTip_ms.mean, 'DisconnectTip')"
+          "target": "alias(stats.timers.DisconnectTip_ms.mean$node, 'DisconnectTip')"
         },
         {
           "datasource": {
@@ -1243,7 +1277,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.timers.DisconnectBlock_ms.mean, 'DisconnectBlock')"
+          "target": "alias(stats.timers.DisconnectBlock_ms.mean$node, 'DisconnectBlock')"
         },
         {
           "datasource": {
@@ -1251,11 +1285,12 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "alias(stats.timers.ActivateBestChain_ms.mean, 'ActivateBestChain')"
+          "target": "alias(stats.timers.ActivateBestChain_ms.mean$node, 'ActivateBestChain')"
         }
       ],
       "title": "DisconnectTip & ActivateBestChain",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "collapsed": false,
@@ -1360,15 +1395,16 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.timers.estimates.processBlock_us.mean, 'process block')"
+          "target": "alias(stats.timers.estimates.processBlock_us.mean$node, 'process block')"
         }
       ],
       "title": "Fee Estimator Update Cost",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     }
   ],
   "preload": false,
-  "refresh": "",
+  "refresh": "30s",
   "schemaVersion": 42,
   "time": {
     "from": "now-12h",
@@ -1390,5 +1426,152 @@
   },
   "timezone": "browser",
   "title": "Function Timings",
-  "uid": "000000003"
+  "uid": "000000003",
+  "links": [
+    {
+      "title": "Home",
+      "url": "/d/statoshi-home",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Blocks",
+      "url": "/d/000000002",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Transactions",
+      "url": "/d/000000006",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Unspent Transaction Output Set",
+      "url": "/d/000000009",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Memory Pool",
+      "url": "/d/000000020",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Fee Estimates",
+      "url": "/d/000000017",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Mining",
+      "url": "/d/000000018",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Peers",
+      "url": "/d/000000008",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "P2P Messages",
+      "url": "/d/000000010",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Bandwidth Usage",
+      "url": "/d/000000001",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Function Timings",
+      "url": "/d/000000003",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "System Metrics",
+      "url": "/d/000000005",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Storage & Database Health",
+      "url": "/d/statoshi-storage",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "RPC & HTTP Service",
+      "url": "/d/statoshi-rpc-http",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Telemetry Pipeline",
+      "url": "/d/000000004",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "asDropdown": true,
+      "title": "All dashboards",
+      "type": "dashboards",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false,
+      "icon": "external link"
+    }
+  ]
 }

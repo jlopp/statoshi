@@ -15,6 +15,31 @@
       }
     ]
   },
+  "templating": {
+    "list": [
+      {
+        "name": "node",
+        "label": "Node suffix",
+        "description": "The suffix that -statshostname appends to every node-emitted metric key, including the leading dot (e.g. \".mynode\"). Leave empty for a node started without -statshostname, which is how statoshi.info runs.",
+        "type": "textbox",
+        "query": "",
+        "current": {
+          "selected": false,
+          "text": "",
+          "value": ""
+        },
+        "options": [
+          {
+            "selected": true,
+            "text": "",
+            "value": ""
+          }
+        ],
+        "hide": 0,
+        "skipUrlSync": false
+      }
+    ]
+  },
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
@@ -136,7 +161,8 @@
         }
       ],
       "title": "CPU Usage",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 720
     },
     {
       "datasource": {
@@ -252,7 +278,8 @@
         }
       ],
       "title": "Load",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 720
     },
     {
       "datasource": {
@@ -364,7 +391,8 @@
         }
       ],
       "title": "Memory Usage",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 720
     },
     {
       "datasource": {
@@ -467,7 +495,8 @@
         }
       ],
       "title": "Disk Throughput",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 720
     },
     {
       "collapsed": false,
@@ -600,7 +629,8 @@
         }
       ],
       "title": "CPU Usage Breakdown",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -713,7 +743,8 @@
         }
       ],
       "title": "CPU Scheduling Activity",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "collapsed": false,
@@ -846,7 +877,8 @@
         }
       ],
       "title": "Memory Detail",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -915,7 +947,8 @@
         }
       ],
       "title": "Memory Used Percent",
-      "type": "gauge"
+      "type": "gauge",
+      "maxDataPoints": 720
     },
     {
       "datasource": {
@@ -984,7 +1017,8 @@
         }
       ],
       "title": "Swap Used Percent",
-      "type": "gauge"
+      "type": "gauge",
+      "maxDataPoints": 720
     },
     {
       "datasource": {
@@ -1089,7 +1123,8 @@
         }
       ],
       "title": "Swap Usage",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -1194,7 +1229,8 @@
         }
       ],
       "title": "Swap Page Activity",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "collapsed": false,
@@ -1323,7 +1359,8 @@
         }
       ],
       "title": "Disk Saturation",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -1428,7 +1465,8 @@
         }
       ],
       "title": "Disk Operations",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -1533,7 +1571,8 @@
         }
       ],
       "title": "Host Network Throughput",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -1655,7 +1694,8 @@
         }
       ],
       "title": "Host Network Errors & Drops",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "collapsed": false,
@@ -1760,11 +1800,12 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.gauges.process.memoryUsedBytes, 'RSS')"
+          "target": "alias(stats.gauges.process.memoryUsedBytes$node, 'RSS')"
         }
       ],
       "title": "Node Process Footprint",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -1828,11 +1869,12 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.gauges.process.fdsOpen, 'open fds')"
+          "target": "alias(stats.gauges.process.fdsOpen$node, 'open fds')"
         }
       ],
       "title": "Open File Descriptors",
-      "type": "gauge"
+      "type": "gauge",
+      "maxDataPoints": 720
     },
     {
       "datasource": {
@@ -1851,10 +1893,6 @@
               {
                 "color": "green",
                 "value": 0
-              },
-              {
-                "color": "red",
-                "value": 80
               }
             ]
           },
@@ -1869,7 +1907,7 @@
       },
       "id": 26,
       "options": {
-        "colorMode": "value",
+        "colorMode": "none",
         "graphMode": "area",
         "justifyMode": "auto",
         "orientation": "auto",
@@ -1896,11 +1934,12 @@
         }
       ],
       "title": "System Uptime",
-      "type": "stat"
+      "type": "stat",
+      "maxDataPoints": 720
     }
   ],
   "preload": false,
-  "refresh": "",
+  "refresh": "30s",
   "schemaVersion": 42,
   "time": {
     "from": "now-24h",
@@ -1922,5 +1961,152 @@
   },
   "timezone": "browser",
   "title": "System Metrics",
-  "uid": "000000005"
+  "uid": "000000005",
+  "links": [
+    {
+      "title": "Home",
+      "url": "/d/statoshi-home",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Blocks",
+      "url": "/d/000000002",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Transactions",
+      "url": "/d/000000006",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Unspent Transaction Output Set",
+      "url": "/d/000000009",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Memory Pool",
+      "url": "/d/000000020",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Fee Estimates",
+      "url": "/d/000000017",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Mining",
+      "url": "/d/000000018",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Peers",
+      "url": "/d/000000008",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "P2P Messages",
+      "url": "/d/000000010",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Bandwidth Usage",
+      "url": "/d/000000001",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Function Timings",
+      "url": "/d/000000003",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "System Metrics",
+      "url": "/d/000000005",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Storage & Database Health",
+      "url": "/d/statoshi-storage",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "RPC & HTTP Service",
+      "url": "/d/statoshi-rpc-http",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Telemetry Pipeline",
+      "url": "/d/000000004",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "asDropdown": true,
+      "title": "All dashboards",
+      "type": "dashboards",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false,
+      "icon": "external link"
+    }
+  ]
 }

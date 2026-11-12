@@ -15,6 +15,31 @@
       }
     ]
   },
+  "templating": {
+    "list": [
+      {
+        "name": "node",
+        "label": "Node suffix",
+        "description": "The suffix that -statshostname appends to every node-emitted metric key, including the leading dot (e.g. \".mynode\"). Leave empty for a node started without -statshostname, which is how statoshi.info runs.",
+        "type": "textbox",
+        "query": "",
+        "current": {
+          "selected": false,
+          "text": "",
+          "value": ""
+        },
+        "options": [
+          {
+            "selected": true,
+            "text": "",
+            "value": ""
+          }
+        ],
+        "hide": 0,
+        "skipUrlSync": false
+      }
+    ]
+  },
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -110,7 +135,7 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "alias(stats.gauges.peers.inboundConnections, 'inbound')"
+          "target": "alias(stats.gauges.peers.inboundConnections$node, 'inbound')"
         },
         {
           "datasource": {
@@ -118,7 +143,7 @@
             "uid": "000000001"
           },
           "refId": "D",
-          "target": "alias(stats.gauges.peers.outboundConnections, 'outbound')"
+          "target": "alias(stats.gauges.peers.outboundConnections$node, 'outbound')"
         },
         {
           "datasource": {
@@ -126,11 +151,12 @@
             "uid": "000000001"
           },
           "refId": "H",
-          "target": "alias(stats.gauges.peers.totalConnections, 'total')"
+          "target": "alias(stats.gauges.peers.totalConnections$node, 'total')"
         }
       ],
       "title": "Peers",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -222,11 +248,12 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.gauges.peers.knownAddresses, 'known addresses')"
+          "target": "alias(stats.gauges.peers.knownAddresses$node, 'known addresses')"
         }
       ],
       "title": "Known Addresses",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -366,7 +393,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.timers.peers.ping_us.lower, 'min')"
+          "target": "alias(stats.timers.peers.ping_us.lower$node, 'min')"
         },
         {
           "datasource": {
@@ -374,7 +401,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.timers.peers.ping_us.median, 'median (p50)')"
+          "target": "alias(stats.timers.peers.ping_us.median$node, 'median (p50)')"
         },
         {
           "datasource": {
@@ -382,11 +409,12 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "alias(stats.timers.peers.ping_us.upper, 'max')"
+          "target": "alias(stats.timers.peers.ping_us.upper$node, 'max')"
         }
       ],
       "title": "Peer Pings",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -503,7 +531,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.message.sent.reject, 'all rejects')"
+          "target": "alias(stats.message.sent.reject$node, 'all rejects')"
         },
         {
           "datasource": {
@@ -511,7 +539,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.message.sent.reject_tx_duplicate, 'tx: duplicate')"
+          "target": "alias(stats.message.sent.reject_tx_duplicate$node, 'tx: duplicate')"
         },
         {
           "datasource": {
@@ -519,7 +547,7 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "alias(stats.message.sent.reject_tx_invalid, 'tx: invalid')"
+          "target": "alias(stats.message.sent.reject_tx_invalid$node, 'tx: invalid')"
         },
         {
           "datasource": {
@@ -527,7 +555,7 @@
             "uid": "000000001"
           },
           "refId": "D",
-          "target": "alias(stats.message.sent.reject_tx_nonstandard, 'tx: nonstandard')"
+          "target": "alias(stats.message.sent.reject_tx_nonstandard$node, 'tx: nonstandard')"
         },
         {
           "datasource": {
@@ -535,7 +563,7 @@
             "uid": "000000001"
           },
           "refId": "E",
-          "target": "alias(stats.message.sent.reject_tx_malformed, 'tx: malformed')"
+          "target": "alias(stats.message.sent.reject_tx_malformed$node, 'tx: malformed')"
         },
         {
           "datasource": {
@@ -543,7 +571,7 @@
             "uid": "000000001"
           },
           "refId": "F",
-          "target": "alias(stats.message.sent.reject_tx_dust, 'tx: dust')"
+          "target": "alias(stats.message.sent.reject_tx_dust$node, 'tx: dust')"
         },
         {
           "datasource": {
@@ -551,7 +579,7 @@
             "uid": "000000001"
           },
           "refId": "G",
-          "target": "alias(stats.message.sent.reject_tx_insufficientfee, 'tx: insufficient fee')"
+          "target": "alias(stats.message.sent.reject_tx_insufficientfee$node, 'tx: insufficient fee')"
         },
         {
           "datasource": {
@@ -559,7 +587,7 @@
             "uid": "000000001"
           },
           "refId": "H",
-          "target": "alias(stats.message.sent.reject_block_invalid, 'block: invalid')"
+          "target": "alias(stats.message.sent.reject_block_invalid$node, 'block: invalid')"
         },
         {
           "datasource": {
@@ -567,7 +595,7 @@
             "uid": "000000001"
           },
           "refId": "I",
-          "target": "alias(stats.message.sent.reject_block_obsolete, 'block: obsolete')"
+          "target": "alias(stats.message.sent.reject_block_obsolete$node, 'block: obsolete')"
         },
         {
           "datasource": {
@@ -575,7 +603,7 @@
             "uid": "000000001"
           },
           "refId": "J",
-          "target": "alias(stats.message.sent.reject_block_checkpoint, 'block: checkpoint')"
+          "target": "alias(stats.message.sent.reject_block_checkpoint$node, 'block: checkpoint')"
         },
         {
           "datasource": {
@@ -583,7 +611,7 @@
             "uid": "000000001"
           },
           "refId": "K",
-          "target": "alias(stats.message.sent.reject_block_, 'block: other')"
+          "target": "alias(stats.message.sent.reject_block_$node, 'block: other')"
         },
         {
           "datasource": {
@@ -591,7 +619,7 @@
             "uid": "000000001"
           },
           "refId": "L",
-          "target": "alias(stats.message.sent.reject_headers_malformed, 'headers: malformed')"
+          "target": "alias(stats.message.sent.reject_headers_malformed$node, 'headers: malformed')"
         },
         {
           "datasource": {
@@ -599,7 +627,7 @@
             "uid": "000000001"
           },
           "refId": "M",
-          "target": "alias(stats.message.sent.reject_getheaders_malformed, 'getheaders: malformed')"
+          "target": "alias(stats.message.sent.reject_getheaders_malformed$node, 'getheaders: malformed')"
         },
         {
           "datasource": {
@@ -607,7 +635,7 @@
             "uid": "000000001"
           },
           "refId": "N",
-          "target": "alias(stats.message.sent.reject_ping_malformed, 'ping: malformed')"
+          "target": "alias(stats.message.sent.reject_ping_malformed$node, 'ping: malformed')"
         },
         {
           "datasource": {
@@ -615,7 +643,7 @@
             "uid": "000000001"
           },
           "refId": "O",
-          "target": "alias(stats.message.sent.reject_sendcmpct_malformed, 'sendcmpct: malformed')"
+          "target": "alias(stats.message.sent.reject_sendcmpct_malformed$node, 'sendcmpct: malformed')"
         },
         {
           "datasource": {
@@ -623,7 +651,7 @@
             "uid": "000000001"
           },
           "refId": "P",
-          "target": "alias(stats.message.sent.reject_addr_malformed, 'addr: malformed')"
+          "target": "alias(stats.message.sent.reject_addr_malformed$node, 'addr: malformed')"
         },
         {
           "datasource": {
@@ -631,7 +659,7 @@
             "uid": "000000001"
           },
           "refId": "Q",
-          "target": "alias(stats.message.sent.reject_version_duplicate, 'version: duplicate')"
+          "target": "alias(stats.message.sent.reject_version_duplicate$node, 'version: duplicate')"
         },
         {
           "datasource": {
@@ -639,7 +667,7 @@
             "uid": "000000001"
           },
           "refId": "R",
-          "target": "alias(stats.message.sent.reject_version_nonstandard, 'version: nonstandard')"
+          "target": "alias(stats.message.sent.reject_version_nonstandard$node, 'version: nonstandard')"
         },
         {
           "datasource": {
@@ -647,11 +675,12 @@
             "uid": "000000001"
           },
           "refId": "S",
-          "target": "alias(stats.message.sent.reject_version_obsolete, 'version: obsolete')"
+          "target": "alias(stats.message.sent.reject_version_obsolete$node, 'version: obsolete')"
         }
       ],
       "title": "Reject Messages Sent",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "collapsed": false,
@@ -756,7 +785,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.peers.connect, 'outbound connect')"
+          "target": "alias(stats.peers.connect$node, 'outbound connect')"
         },
         {
           "datasource": {
@@ -764,7 +793,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.peers.disconnect, 'disconnect (all types)')"
+          "target": "alias(stats.peers.disconnect$node, 'disconnect (all types)')"
         },
         {
           "datasource": {
@@ -772,11 +801,12 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "alias(stats.peers.inbound.accepted, 'inbound accepted')"
+          "target": "alias(stats.peers.inbound.accepted$node, 'inbound accepted')"
         }
       ],
       "title": "Connection Churn",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -869,7 +899,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.peers.closed.inbound, 'inbound')"
+          "target": "alias(stats.peers.closed.inbound$node, 'inbound')"
         },
         {
           "datasource": {
@@ -877,7 +907,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.peers.closed.outbound-full-relay, 'outbound full relay')"
+          "target": "alias(stats.peers.closed.outbound-full-relay$node, 'outbound full relay')"
         },
         {
           "datasource": {
@@ -885,7 +915,7 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "alias(stats.peers.closed.block-relay-only, 'block relay only')"
+          "target": "alias(stats.peers.closed.block-relay-only$node, 'block relay only')"
         },
         {
           "datasource": {
@@ -893,7 +923,7 @@
             "uid": "000000001"
           },
           "refId": "D",
-          "target": "alias(stats.peers.closed.manual, 'manual')"
+          "target": "alias(stats.peers.closed.manual$node, 'manual')"
         },
         {
           "datasource": {
@@ -901,7 +931,7 @@
             "uid": "000000001"
           },
           "refId": "E",
-          "target": "alias(stats.peers.closed.feeler, 'feeler')"
+          "target": "alias(stats.peers.closed.feeler$node, 'feeler')"
         },
         {
           "datasource": {
@@ -909,11 +939,12 @@
             "uid": "000000001"
           },
           "refId": "F",
-          "target": "alias(stats.peers.closed.addr-fetch, 'addr fetch')"
+          "target": "alias(stats.peers.closed.addr-fetch$node, 'addr fetch')"
         }
       ],
       "title": "Connections Closed by Type",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -1006,7 +1037,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(divideSeries(stats.peers.closed.inbound.lifetimeSeconds, stats.peers.closed.inbound), 'inbound')"
+          "target": "alias(divideSeries(stats.peers.closed.inbound.lifetimeSeconds$node, stats.peers.closed.inbound$node), 'inbound')"
         },
         {
           "datasource": {
@@ -1014,7 +1045,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(divideSeries(stats.peers.closed.outbound-full-relay.lifetimeSeconds, stats.peers.closed.outbound-full-relay), 'outbound full relay')"
+          "target": "alias(divideSeries(stats.peers.closed.outbound-full-relay.lifetimeSeconds$node, stats.peers.closed.outbound-full-relay$node), 'outbound full relay')"
         },
         {
           "datasource": {
@@ -1022,11 +1053,12 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "alias(divideSeries(stats.peers.closed.block-relay-only.lifetimeSeconds, stats.peers.closed.block-relay-only), 'block relay only')"
+          "target": "alias(divideSeries(stats.peers.closed.block-relay-only.lifetimeSeconds$node, stats.peers.closed.block-relay-only$node), 'block relay only')"
         }
       ],
       "title": "Connection Lifetime at Close",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -1153,7 +1185,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.peers.evicted.inbound, 'evictions/s')"
+          "target": "alias(stats.peers.evicted.inbound$node, 'evictions/s')"
         },
         {
           "datasource": {
@@ -1161,11 +1193,12 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(divideSeries(stats.peers.evicted.inbound.ageSeconds, stats.peers.evicted.inbound), 'age at eviction (s)')"
+          "target": "alias(divideSeries(stats.peers.evicted.inbound.ageSeconds$node, stats.peers.evicted.inbound$node), 'age at eviction (s)')"
         }
       ],
       "title": "Inbound Evictions",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -1259,7 +1292,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.gauges.peers.inboundSlotsFree, 'free inbound slots')"
+          "target": "alias(stats.gauges.peers.inboundSlotsFree$node, 'free inbound slots')"
         },
         {
           "datasource": {
@@ -1267,7 +1300,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.gauges.peers.maxInbound, 'max inbound')"
+          "target": "alias(stats.gauges.peers.maxInbound$node, 'max inbound')"
         },
         {
           "datasource": {
@@ -1275,11 +1308,12 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "alias(stats.gauges.peers.totalConnections, 'total connections')"
+          "target": "alias(stats.gauges.peers.totalConnections$node, 'total connections')"
         }
       ],
       "title": "Inbound Capacity",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "collapsed": false,
@@ -1292,6 +1326,197 @@
       "id": 31,
       "title": "Connection composition",
       "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "graphite",
+        "uid": "000000001"
+      },
+      "description": "Current peer count split by connection type. A donut reads the composition at a glance; the timeseries below still shows how it changed over time.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 0,
+        "y": 65
+      },
+      "id": 40,
+      "maxDataPoints": 200,
+      "options": {
+        "displayLabels": [
+          "name",
+          "percent"
+        ],
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "right",
+          "showLegend": true,
+          "values": [
+            "value"
+          ]
+        },
+        "pieType": "donut",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "sort": "desc",
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "13.3.1",
+      "targets": [
+        {
+          "datasource": {
+            "type": "graphite",
+            "uid": "000000001"
+          },
+          "refId": "A",
+          "target": "aliasByNode(stats.gauges.peers.connectionType.*$node, 4)"
+        }
+      ],
+      "title": "Peers by Connection Type (current)",
+      "type": "piechart"
+    },
+    {
+      "datasource": {
+        "type": "graphite",
+        "uid": "000000001"
+      },
+      "description": "Peer transport protocol mix over time, stacked to show the whole. BIP324 (v2) adoption is easier to read as a filled share than as three overlapping lines.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "peers",
+            "axisPlacement": "auto",
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineWidth": 1,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 16,
+        "x": 8,
+        "y": 65
+      },
+      "id": 41,
+      "maxDataPoints": 600,
+      "options": {
+        "barRadius": 0,
+        "barWidth": 0.8,
+        "fullHighlight": false,
+        "groupWidth": 0.7,
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "orientation": "vertical",
+        "showValue": "never",
+        "stacking": "normal",
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        },
+        "xField": "",
+        "xTickLabelMaxLength": 0,
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 0
+      },
+      "pluginVersion": "13.3.1",
+      "targets": [
+        {
+          "datasource": {
+            "type": "graphite",
+            "uid": "000000001"
+          },
+          "refId": "A",
+          "target": "alias(stats.gauges.peers.transport.v2$node, 'v2 (BIP324)')"
+        },
+        {
+          "datasource": {
+            "type": "graphite",
+            "uid": "000000001"
+          },
+          "refId": "B",
+          "target": "alias(stats.gauges.peers.transport.v1$node, 'v1 (cleartext)')"
+        },
+        {
+          "datasource": {
+            "type": "graphite",
+            "uid": "000000001"
+          },
+          "refId": "C",
+          "target": "alias(stats.gauges.peers.transport.detecting$node, 'detecting')"
+        }
+      ],
+      "title": "Peers by Transport Protocol (stacked share)",
+      "type": "barchart"
     },
     {
       "datasource": {
@@ -1358,7 +1583,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 65
+        "y": 72
       },
       "id": 17,
       "options": {
@@ -1384,11 +1609,12 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByNode(stats.gauges.peers.connectionType.*, 4)"
+          "target": "aliasByNode(stats.gauges.peers.connectionType.*$node, 4)"
         }
       ],
       "title": "Peers by Connection Type",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -1455,7 +1681,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 72
+        "y": 79
       },
       "id": 18,
       "options": {
@@ -1481,7 +1707,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.gauges.peers.transport.v1, 'v1 (cleartext)')"
+          "target": "alias(stats.gauges.peers.transport.v1$node, 'v1 (cleartext)')"
         },
         {
           "datasource": {
@@ -1489,7 +1715,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.gauges.peers.transport.v2, 'v2 (BIP324)')"
+          "target": "alias(stats.gauges.peers.transport.v2$node, 'v2 (BIP324)')"
         },
         {
           "datasource": {
@@ -1497,11 +1723,12 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "alias(stats.gauges.peers.transport.detecting, 'detecting')"
+          "target": "alias(stats.gauges.peers.transport.detecting$node, 'detecting')"
         }
       ],
       "title": "Peers by Transport Protocol",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -1568,7 +1795,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 79
+        "y": 86
       },
       "id": 19,
       "options": {
@@ -1594,7 +1821,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.gauges.peers.oldestConnectionAgeSeconds, 'oldest')"
+          "target": "alias(stats.gauges.peers.oldestConnectionAgeSeconds$node, 'oldest')"
         },
         {
           "datasource": {
@@ -1602,11 +1829,12 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.gauges.peers.newestConnectionAgeSeconds, 'newest')"
+          "target": "alias(stats.gauges.peers.newestConnectionAgeSeconds$node, 'newest')"
         }
       ],
       "title": "Connection Age",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -1673,7 +1901,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 86
+        "y": 93
       },
       "id": 20,
       "options": {
@@ -1699,11 +1927,12 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByNode(stats.peers.inbound.network.*, 4)"
+          "target": "aliasByNode(stats.peers.inbound.network.*$node, 4)"
         }
       ],
       "title": "Inbound Connections by Network",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -1770,7 +1999,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 93
+        "y": 100
       },
       "id": 21,
       "options": {
@@ -1796,11 +2025,12 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByNode(stats.peers.outbound.connected.*.network.*, 4, 6)"
+          "target": "aliasByNode(stats.peers.outbound.connected.*.network.*$node, 4, 6)"
         }
       ],
       "title": "Outbound Connections by Type and Network",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "collapsed": false,
@@ -1808,7 +2038,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 100
+        "y": 107
       },
       "id": 32,
       "title": "Peer discovery & enforcement",
@@ -1879,7 +2109,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 101
+        "y": 108
       },
       "id": 23,
       "options": {
@@ -1905,7 +2135,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.gauges.addrman.newSize, 'new table')"
+          "target": "alias(stats.gauges.addrman.newSize$node, 'new table')"
         },
         {
           "datasource": {
@@ -1913,11 +2143,12 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.gauges.addrman.triedSize, 'tried table')"
+          "target": "alias(stats.gauges.addrman.triedSize$node, 'tried table')"
         }
       ],
       "title": "Address Manager Size",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -1984,7 +2215,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 108
+        "y": 115
       },
       "id": 24,
       "options": {
@@ -2010,7 +2241,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.addrman.added, 'added/s')"
+          "target": "alias(stats.addrman.added$node, 'added/s')"
         },
         {
           "datasource": {
@@ -2018,7 +2249,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.addrman.rejected.stale, 'rejected: stale')"
+          "target": "alias(stats.addrman.rejected.stale$node, 'rejected: stale')"
         },
         {
           "datasource": {
@@ -2026,7 +2257,7 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "alias(stats.addrman.rejected.notRoutable, 'rejected: not routable')"
+          "target": "alias(stats.addrman.rejected.notRoutable$node, 'rejected: not routable')"
         },
         {
           "datasource": {
@@ -2034,7 +2265,7 @@
             "uid": "000000001"
           },
           "refId": "D",
-          "target": "alias(stats.addrman.rejected.inTried, 'rejected: already in tried')"
+          "target": "alias(stats.addrman.rejected.inTried$node, 'rejected: already in tried')"
         },
         {
           "datasource": {
@@ -2042,7 +2273,7 @@
             "uid": "000000001"
           },
           "refId": "E",
-          "target": "alias(stats.addrman.rejected.refCountMax, 'rejected: ref count max')"
+          "target": "alias(stats.addrman.rejected.refCountMax$node, 'rejected: ref count max')"
         },
         {
           "datasource": {
@@ -2050,11 +2281,12 @@
             "uid": "000000001"
           },
           "refId": "F",
-          "target": "alias(stats.addrman.rejected.stochastic, 'rejected: stochastic')"
+          "target": "alias(stats.addrman.rejected.stochastic$node, 'rejected: stochastic')"
         }
       ],
       "title": "Address Manager Ingest",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -2121,7 +2353,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 115
+        "y": 122
       },
       "id": 25,
       "options": {
@@ -2147,7 +2379,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.addrman.selectMiss.newTableEmpty, 'new table empty')"
+          "target": "alias(stats.addrman.selectMiss.newTableEmpty$node, 'new table empty')"
         },
         {
           "datasource": {
@@ -2155,11 +2387,12 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.addrman.selectMiss.noAddresses, 'no addresses available')"
+          "target": "alias(stats.addrman.selectMiss.noAddresses$node, 'no addresses available')"
         }
       ],
       "title": "Address Selection Misses",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -2226,7 +2459,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 122
+        "y": 129
       },
       "id": 26,
       "options": {
@@ -2252,7 +2485,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.peers.dnsSeed.queryOk, 'queries ok')"
+          "target": "alias(stats.peers.dnsSeed.queryOk$node, 'queries ok')"
         },
         {
           "datasource": {
@@ -2260,7 +2493,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.peers.dnsSeed.queryEmpty, 'queries returned nothing')"
+          "target": "alias(stats.peers.dnsSeed.queryEmpty$node, 'queries returned nothing')"
         },
         {
           "datasource": {
@@ -2268,11 +2501,12 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "alias(stats.peers.dnsSeed.addressesFound, 'addresses found/s')"
+          "target": "alias(stats.peers.dnsSeed.addressesFound$node, 'addresses found/s')"
         }
       ],
       "title": "DNS Seed Results",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -2339,7 +2573,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 129
+        "y": 136
       },
       "id": 27,
       "options": {
@@ -2365,7 +2599,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.banman.banned, 'bans applied')"
+          "target": "alias(stats.banman.banned$node, 'bans applied')"
         },
         {
           "datasource": {
@@ -2373,11 +2607,12 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.banman.discouraged, 'discouraged')"
+          "target": "alias(stats.banman.discouraged$node, 'discouraged')"
         }
       ],
       "title": "Bans & Discouragement",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -2444,7 +2679,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 136
+        "y": 143
       },
       "id": 28,
       "options": {
@@ -2470,15 +2705,16 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByNode(exclude(stats.misbehavior.*, 'amount'), 2)"
+          "target": "aliasByNode(exclude(stats.misbehavior.*$node, 'amount'), 2)"
         }
       ],
       "title": "Misbehavior by Reason",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     }
   ],
   "preload": false,
-  "refresh": "10m",
+  "refresh": "10s",
   "schemaVersion": 42,
   "time": {
     "from": "now-6h",
@@ -2500,5 +2736,152 @@
   },
   "timezone": "browser",
   "title": "Peers",
-  "uid": "000000008"
+  "uid": "000000008",
+  "links": [
+    {
+      "title": "Home",
+      "url": "/d/statoshi-home",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Blocks",
+      "url": "/d/000000002",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Transactions",
+      "url": "/d/000000006",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Unspent Transaction Output Set",
+      "url": "/d/000000009",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Memory Pool",
+      "url": "/d/000000020",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Fee Estimates",
+      "url": "/d/000000017",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Mining",
+      "url": "/d/000000018",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Peers",
+      "url": "/d/000000008",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "P2P Messages",
+      "url": "/d/000000010",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Bandwidth Usage",
+      "url": "/d/000000001",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Function Timings",
+      "url": "/d/000000003",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "System Metrics",
+      "url": "/d/000000005",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Storage & Database Health",
+      "url": "/d/statoshi-storage",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "RPC & HTTP Service",
+      "url": "/d/statoshi-rpc-http",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Telemetry Pipeline",
+      "url": "/d/000000004",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "asDropdown": true,
+      "title": "All dashboards",
+      "type": "dashboards",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false,
+      "icon": "external link"
+    }
+  ]
 }

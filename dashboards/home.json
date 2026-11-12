@@ -15,6 +15,31 @@
       }
     ]
   },
+  "templating": {
+    "list": [
+      {
+        "name": "node",
+        "label": "Node suffix",
+        "description": "The suffix that -statshostname appends to every node-emitted metric key, including the leading dot (e.g. \".mynode\"). Leave empty for a node started without -statshostname, which is how statoshi.info runs.",
+        "type": "textbox",
+        "query": "",
+        "current": {
+          "selected": false,
+          "text": "",
+          "value": ""
+        },
+        "options": [
+          {
+            "selected": true,
+            "text": "",
+            "value": ""
+          }
+        ],
+        "hide": 0,
+        "skipUrlSync": false
+      }
+    ]
+  },
   "editable": false,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
@@ -177,7 +202,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.gauges.blocks.currentHeight, 'Block Height')"
+          "target": "alias(stats.gauges.blocks.currentHeight$node, 'Block Height')"
         },
         {
           "datasource": {
@@ -185,18 +210,19 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.transactions.accepted, 'Transactions Per Second')"
+          "target": "alias(stats.transactions.accepted$node, 'Transactions Per Second')"
         }
       ],
       "title": "Blocks & Transactions",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 720
     },
     {
       "gridPos": {
-        "h": 15,
+        "h": 17,
         "w": 12,
         "x": 12,
-        "y": 5
+        "y": 20
       },
       "id": 3,
       "options": {
@@ -216,10 +242,484 @@
       "targets": [],
       "title": "",
       "type": "dashlist"
+    },
+    {
+      "datasource": {
+        "type": "graphite",
+        "uid": "000000001"
+      },
+      "description": "Live node topology. Every figure is bound to a Graphite field and the connections are animated, so the diagram updates with the dashboard refresh instead of being a static picture.",
+      "gridPos": {
+        "h": 17,
+        "w": 12,
+        "x": 0,
+        "y": 20
+      },
+      "id": 4,
+      "maxDataPoints": 200,
+      "options": {
+        "inlineEditing": false,
+        "panZoom": false,
+        "showAdvancedTypes": false,
+        "tooltip": {
+          "mode": "single"
+        },
+        "zoomToContent": true,
+        "root": {
+          "name": "root",
+          "type": "frame",
+          "elements": [
+            {
+              "type": "rectangle",
+              "name": "node",
+              "background": {
+                "color": {
+                  "fixed": "#1F60C4"
+                }
+              },
+              "border": {
+                "color": {
+                  "fixed": "#73BF69"
+                },
+                "width": 1
+              },
+              "config": {
+                "align": "center",
+                "valign": "middle",
+                "size": 15
+              },
+              "placement": {
+                "left": 330,
+                "top": 10,
+                "width": 300,
+                "height": 74
+              },
+              "connections": [
+                {
+                  "source": {
+                    "x": 0,
+                    "y": 0
+                  },
+                  "target": {
+                    "x": 0,
+                    "y": 0
+                  },
+                  "targetName": "inbox",
+                  "color": {
+                    "fixed": "#73BF69"
+                  },
+                  "size": {
+                    "fixed": 3
+                  },
+                  "path": "straight",
+                  "lineStyle": {
+                    "style": "dashed",
+                    "animate": true
+                  }
+                },
+                {
+                  "source": {
+                    "x": 0,
+                    "y": 0
+                  },
+                  "target": {
+                    "x": 0,
+                    "y": 0
+                  },
+                  "targetName": "outbox",
+                  "color": {
+                    "fixed": "#FF9830"
+                  },
+                  "size": {
+                    "fixed": 3
+                  },
+                  "path": "straight",
+                  "lineStyle": {
+                    "style": "dashed",
+                    "animate": true
+                  }
+                },
+                {
+                  "source": {
+                    "x": 0,
+                    "y": 0
+                  },
+                  "target": {
+                    "x": 0,
+                    "y": 0
+                  },
+                  "targetName": "mempool",
+                  "color": {
+                    "fixed": "#B877D9"
+                  },
+                  "size": {
+                    "fixed": 3
+                  },
+                  "path": "straight",
+                  "lineStyle": {
+                    "style": "dashed",
+                    "animate": true
+                  }
+                }
+              ]
+            },
+            {
+              "type": "metric-value",
+              "name": "v_peers",
+              "background": {
+                "color": {
+                  "fixed": "rgba(31,96,196,0.35)"
+                }
+              },
+              "border": {
+                "color": {
+                  "fixed": "#3274D9"
+                },
+                "width": 1
+              },
+              "config": {
+                "align": "center",
+                "valign": "middle",
+                "color": {
+                  "fixed": "#FFFFFF"
+                },
+                "size": 22,
+                "text": {
+                  "mode": "field",
+                  "fixed": "",
+                  "field": "total connections"
+                }
+              },
+              "placement": {
+                "left": 340,
+                "top": 20,
+                "width": 280,
+                "height": 54
+              },
+              "connections": []
+            },
+            {
+              "type": "text",
+              "name": "node label",
+              "config": {
+                "align": "center",
+                "valign": "middle",
+                "size": 14,
+                "color": {
+                  "fixed": "#FFFFFF"
+                },
+                "text": {
+                  "mode": "fixed",
+                  "fixed": "statoshi node"
+                }
+              },
+              "placement": {
+                "left": 330,
+                "top": 86,
+                "width": 300,
+                "height": 26
+              },
+              "connections": []
+            },
+            {
+              "type": "rectangle",
+              "name": "inbox",
+              "background": {
+                "color": {
+                  "fixed": "#2D6B33"
+                }
+              },
+              "border": {
+                "color": {
+                  "fixed": "#73BF69"
+                },
+                "width": 1
+              },
+              "config": {
+                "align": "center",
+                "valign": "middle",
+                "size": 15
+              },
+              "placement": {
+                "left": 40,
+                "top": 190,
+                "width": 240,
+                "height": 74
+              },
+              "connections": []
+            },
+            {
+              "type": "metric-value",
+              "name": "v_in",
+              "background": {
+                "color": {
+                  "fixed": "rgba(31,96,196,0.35)"
+                }
+              },
+              "border": {
+                "color": {
+                  "fixed": "#3274D9"
+                },
+                "width": 1
+              },
+              "config": {
+                "align": "center",
+                "valign": "middle",
+                "color": {
+                  "fixed": "#FFFFFF"
+                },
+                "size": 20,
+                "text": {
+                  "mode": "field",
+                  "fixed": "",
+                  "field": "inbound connections"
+                }
+              },
+              "placement": {
+                "left": 50,
+                "top": 200,
+                "width": 220,
+                "height": 54
+              },
+              "connections": []
+            },
+            {
+              "type": "text",
+              "name": "in label",
+              "config": {
+                "align": "center",
+                "valign": "middle",
+                "size": 13,
+                "color": {
+                  "fixed": "#FFFFFF"
+                },
+                "text": {
+                  "mode": "fixed",
+                  "fixed": "inbound"
+                }
+              },
+              "placement": {
+                "left": 40,
+                "top": 264,
+                "width": 240,
+                "height": 24
+              },
+              "connections": []
+            },
+            {
+              "type": "rectangle",
+              "name": "outbox",
+              "background": {
+                "color": {
+                  "fixed": "#7A3E00"
+                }
+              },
+              "border": {
+                "color": {
+                  "fixed": "#73BF69"
+                },
+                "width": 1
+              },
+              "config": {
+                "align": "center",
+                "valign": "middle",
+                "size": 15
+              },
+              "placement": {
+                "left": 680,
+                "top": 190,
+                "width": 240,
+                "height": 74
+              },
+              "connections": []
+            },
+            {
+              "type": "metric-value",
+              "name": "v_out",
+              "background": {
+                "color": {
+                  "fixed": "rgba(31,96,196,0.35)"
+                }
+              },
+              "border": {
+                "color": {
+                  "fixed": "#3274D9"
+                },
+                "width": 1
+              },
+              "config": {
+                "align": "center",
+                "valign": "middle",
+                "color": {
+                  "fixed": "#FFFFFF"
+                },
+                "size": 20,
+                "text": {
+                  "mode": "field",
+                  "fixed": "",
+                  "field": "outbound connections"
+                }
+              },
+              "placement": {
+                "left": 690,
+                "top": 200,
+                "width": 220,
+                "height": 54
+              },
+              "connections": []
+            },
+            {
+              "type": "text",
+              "name": "out label",
+              "config": {
+                "align": "center",
+                "valign": "middle",
+                "size": 13,
+                "color": {
+                  "fixed": "#FFFFFF"
+                },
+                "text": {
+                  "mode": "fixed",
+                  "fixed": "outbound"
+                }
+              },
+              "placement": {
+                "left": 680,
+                "top": 264,
+                "width": 240,
+                "height": 24
+              },
+              "connections": []
+            },
+            {
+              "type": "rectangle",
+              "name": "mempool",
+              "background": {
+                "color": {
+                  "fixed": "#5B3F8C"
+                }
+              },
+              "border": {
+                "color": {
+                  "fixed": "#73BF69"
+                },
+                "width": 1
+              },
+              "config": {
+                "align": "center",
+                "valign": "middle",
+                "size": 15
+              },
+              "placement": {
+                "left": 330,
+                "top": 300,
+                "width": 300,
+                "height": 74
+              },
+              "connections": []
+            },
+            {
+              "type": "metric-value",
+              "name": "v_mempool",
+              "background": {
+                "color": {
+                  "fixed": "rgba(31,96,196,0.35)"
+                }
+              },
+              "border": {
+                "color": {
+                  "fixed": "#3274D9"
+                },
+                "width": 1
+              },
+              "config": {
+                "align": "center",
+                "valign": "middle",
+                "color": {
+                  "fixed": "#FFFFFF"
+                },
+                "size": 20,
+                "text": {
+                  "mode": "field",
+                  "fixed": "",
+                  "field": "mempool MB"
+                }
+              },
+              "placement": {
+                "left": 340,
+                "top": 310,
+                "width": 280,
+                "height": 54
+              },
+              "connections": []
+            },
+            {
+              "type": "text",
+              "name": "mp label",
+              "config": {
+                "align": "center",
+                "valign": "middle",
+                "size": 13,
+                "color": {
+                  "fixed": "#FFFFFF"
+                },
+                "text": {
+                  "mode": "fixed",
+                  "fixed": "mempool size (MB)"
+                }
+              },
+              "placement": {
+                "left": 330,
+                "top": 374,
+                "width": 300,
+                "height": 24
+              },
+              "connections": []
+            }
+          ]
+        }
+      },
+      "pluginVersion": "13.3.1",
+      "targets": [
+        {
+          "datasource": {
+            "type": "graphite",
+            "uid": "000000001"
+          },
+          "refId": "A",
+          "target": "alias(stats.gauges.peers.totalConnections$node, 'total connections')"
+        },
+        {
+          "datasource": {
+            "type": "graphite",
+            "uid": "000000001"
+          },
+          "refId": "B",
+          "target": "alias(stats.gauges.peers.inboundConnections$node, 'inbound connections')"
+        },
+        {
+          "datasource": {
+            "type": "graphite",
+            "uid": "000000001"
+          },
+          "refId": "C",
+          "target": "alias(stats.gauges.peers.outboundConnections$node, 'outbound connections')"
+        },
+        {
+          "datasource": {
+            "type": "graphite",
+            "uid": "000000001"
+          },
+          "refId": "D",
+          "target": "alias(scale(stats.gauges.transactions.mempool.memoryUsageBytes$node, 0.00000095367431640625), 'mempool MB')"
+        }
+      ],
+      "title": "Live Node Topology",
+      "type": "canvas"
     }
   ],
   "preload": false,
-  "refresh": "",
+  "refresh": "10s",
   "schemaVersion": 42,
   "time": {
     "from": "now-6h",
@@ -242,5 +742,152 @@
   },
   "timezone": "browser",
   "title": "Home",
-  "uid": "statoshi-home"
+  "uid": "statoshi-home",
+  "links": [
+    {
+      "title": "Home",
+      "url": "/d/statoshi-home",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Blocks",
+      "url": "/d/000000002",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Transactions",
+      "url": "/d/000000006",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Unspent Transaction Output Set",
+      "url": "/d/000000009",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Memory Pool",
+      "url": "/d/000000020",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Fee Estimates",
+      "url": "/d/000000017",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Mining",
+      "url": "/d/000000018",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Peers",
+      "url": "/d/000000008",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "P2P Messages",
+      "url": "/d/000000010",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Bandwidth Usage",
+      "url": "/d/000000001",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Function Timings",
+      "url": "/d/000000003",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "System Metrics",
+      "url": "/d/000000005",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Storage & Database Health",
+      "url": "/d/statoshi-storage",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "RPC & HTTP Service",
+      "url": "/d/statoshi-rpc-http",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Telemetry Pipeline",
+      "url": "/d/000000004",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "asDropdown": true,
+      "title": "All dashboards",
+      "type": "dashboards",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false,
+      "icon": "external link"
+    }
+  ]
 }

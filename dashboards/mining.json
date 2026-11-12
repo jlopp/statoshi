@@ -15,6 +15,31 @@
       }
     ]
   },
+  "templating": {
+    "list": [
+      {
+        "name": "node",
+        "label": "Node suffix",
+        "description": "The suffix that -statshostname appends to every node-emitted metric key, including the leading dot (e.g. \".mynode\"). Leave empty for a node started without -statshostname, which is how statoshi.info runs.",
+        "type": "textbox",
+        "query": "",
+        "current": {
+          "selected": false,
+          "text": "",
+          "value": ""
+        },
+        "options": [
+          {
+            "selected": true,
+            "text": "",
+            "value": ""
+          }
+        ],
+        "hide": 0,
+        "skipUrlSync": false
+      }
+    ]
+  },
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
@@ -128,11 +153,12 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByMetric(stats.gauges.network.difficulty)"
+          "target": "aliasByMetric(stats.gauges.network.difficulty$node)"
         }
       ],
       "title": "Mining Difficulty",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -225,11 +251,12 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByMetric(stats.gauges.network.exahashesPerSecond)"
+          "target": "aliasByMetric(stats.gauges.network.exahashesPerSecond$node)"
         }
       ],
       "title": "Estimated Network Hashrate (trailing 120 blocks)",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -323,11 +350,12 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.gauges.mining.templateTxCount, 'transactions')"
+          "target": "alias(stats.gauges.mining.templateTxCount$node, 'transactions')"
         }
       ],
       "title": "Block Template Transactions",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -425,11 +453,12 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.gauges.mining.templateWeight, 'template weight')"
+          "target": "alias(stats.gauges.mining.templateWeight$node, 'template weight')"
         }
       ],
       "title": "Block Template Weight",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -522,11 +551,12 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.gauges.mining.templateFees, 'template fees (sat)')"
+          "target": "alias(stats.gauges.mining.templateFees$node, 'template fees (sat)')"
         }
       ],
       "title": "Block Template Fees",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -619,7 +649,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.timers.mining.createTemplateUs.mean, 'total')"
+          "target": "alias(stats.timers.mining.createTemplateUs.mean$node, 'total')"
         },
         {
           "datasource": {
@@ -627,7 +657,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.timers.mining.assembleChunksUs.mean, 'assemble chunks')"
+          "target": "alias(stats.timers.mining.assembleChunksUs.mean$node, 'assemble chunks')"
         },
         {
           "datasource": {
@@ -635,15 +665,16 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "alias(stats.timers.mining.testValidityUs.mean, 'test validity')"
+          "target": "alias(stats.timers.mining.testValidityUs.mean$node, 'test validity')"
         }
       ],
       "title": "Block Template Assembly Cost",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     }
   ],
   "preload": false,
-  "refresh": "",
+  "refresh": "10s",
   "schemaVersion": 42,
   "time": {
     "from": "now-6h",
@@ -665,5 +696,152 @@
   },
   "timezone": "browser",
   "title": "Mining",
-  "uid": "000000018"
+  "uid": "000000018",
+  "links": [
+    {
+      "title": "Home",
+      "url": "/d/statoshi-home",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Blocks",
+      "url": "/d/000000002",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Transactions",
+      "url": "/d/000000006",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Unspent Transaction Output Set",
+      "url": "/d/000000009",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Memory Pool",
+      "url": "/d/000000020",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Fee Estimates",
+      "url": "/d/000000017",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Mining",
+      "url": "/d/000000018",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Peers",
+      "url": "/d/000000008",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "P2P Messages",
+      "url": "/d/000000010",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Bandwidth Usage",
+      "url": "/d/000000001",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Function Timings",
+      "url": "/d/000000003",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "System Metrics",
+      "url": "/d/000000005",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Storage & Database Health",
+      "url": "/d/statoshi-storage",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "RPC & HTTP Service",
+      "url": "/d/statoshi-rpc-http",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Telemetry Pipeline",
+      "url": "/d/000000004",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "asDropdown": true,
+      "title": "All dashboards",
+      "type": "dashboards",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false,
+      "icon": "external link"
+    }
+  ]
 }

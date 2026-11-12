@@ -15,6 +15,31 @@
       }
     ]
   },
+  "templating": {
+    "list": [
+      {
+        "name": "node",
+        "label": "Node suffix",
+        "description": "The suffix that -statshostname appends to every node-emitted metric key, including the leading dot (e.g. \".mynode\"). Leave empty for a node started without -statshostname, which is how statoshi.info runs.",
+        "type": "textbox",
+        "query": "",
+        "current": {
+          "selected": false,
+          "text": "",
+          "value": ""
+        },
+        "options": [
+          {
+            "selected": true,
+            "text": "",
+            "value": ""
+          }
+        ],
+        "hide": 0,
+        "skipUrlSync": false
+      }
+    ]
+  },
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
@@ -144,7 +169,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByMetric(stats.bandwidth.bytesReceived)"
+          "target": "aliasByMetric(stats.bandwidth.bytesReceived$node)"
         },
         {
           "datasource": {
@@ -152,11 +177,12 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "aliasByMetric(stats.bandwidth.bytesSent)"
+          "target": "aliasByMetric(stats.bandwidth.bytesSent$node)"
         }
       ],
       "title": "Incoming & Outgoing Bandwidth Usage per second",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -175,10 +201,6 @@
               {
                 "color": "green",
                 "value": 0
-              },
-              {
-                "color": "red",
-                "value": 80
               }
             ]
           },
@@ -225,7 +247,7 @@
       },
       "id": 2,
       "options": {
-        "colorMode": "value",
+        "colorMode": "none",
         "graphMode": "area",
         "justifyMode": "auto",
         "orientation": "auto",
@@ -248,7 +270,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByMetric(stats.gauges.bandwidth.totalBytesReceived)"
+          "target": "aliasByMetric(stats.gauges.bandwidth.totalBytesReceived$node)"
         },
         {
           "datasource": {
@@ -256,11 +278,12 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "aliasByMetric(stats.gauges.bandwidth.totalBytesSent)"
+          "target": "aliasByMetric(stats.gauges.bandwidth.totalBytesSent$node)"
         }
       ],
       "title": "Total Bandwidth Used Since Last Restart",
-      "type": "stat"
+      "type": "stat",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -354,11 +377,12 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByNode(stats.bandwidth.message.*.bytesReceived, 3)"
+          "target": "aliasByNode(stats.bandwidth.message.*.bytesReceived$node, 3)"
         }
       ],
       "title": "Incoming Bandwidth Usage by Message",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 720
     },
     {
       "datasource": {
@@ -452,11 +476,12 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByNode(stats.bandwidth.message.*.bytesSent, 3)"
+          "target": "aliasByNode(stats.bandwidth.message.*.bytesSent$node, 3)"
         }
       ],
       "title": "Outgoing Bandwidth Usage by Message",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 720
     },
     {
       "datasource": {
@@ -537,7 +562,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByNode(highestCurrent(stats.gauges.bandwidth.message.*.totalBytesReceived, 1000), 4)"
+          "target": "aliasByNode(highestCurrent(stats.gauges.bandwidth.message.*.totalBytesReceived$node, 1000), 4)"
         },
         {
           "datasource": {
@@ -545,7 +570,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(sumSeries(stats.gauges.bandwidth.message.*.totalBytesReceived), 'aggregate')"
+          "target": "alias(sumSeries(stats.gauges.bandwidth.message.*.totalBytesReceived$node), 'aggregate')"
         }
       ],
       "title": "Total Incoming Bandwidth Usage by Message (currently connected peers)",
@@ -567,7 +592,8 @@
             }
           }
         }
-      ]
+      ],
+      "maxDataPoints": 720
     },
     {
       "datasource": {
@@ -648,7 +674,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByNode(highestCurrent(stats.gauges.bandwidth.message.*.totalBytesSent, 1000), 4)"
+          "target": "aliasByNode(highestCurrent(stats.gauges.bandwidth.message.*.totalBytesSent$node, 1000), 4)"
         },
         {
           "datasource": {
@@ -656,7 +682,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(sumSeries(stats.gauges.bandwidth.message.*.totalBytesSent), 'aggregate')"
+          "target": "alias(sumSeries(stats.gauges.bandwidth.message.*.totalBytesSent$node), 'aggregate')"
         }
       ],
       "title": "Total Outgoing Bandwidth Usage by Message (currently connected peers)",
@@ -678,7 +704,8 @@
             }
           }
         }
-      ]
+      ],
+      "maxDataPoints": 720
     },
     {
       "datasource": {
@@ -769,11 +796,12 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(removeBelowPercentile(sumSeries(stats.bandwidth.*), 95), 'Top 5% Bandwidth Spikes')"
+          "target": "alias(removeBelowPercentile(sumSeries(stats.bandwidth.*$node), 95), 'Top 5% Bandwidth Spikes')"
         }
       ],
       "title": "95th Percentile Bandwidth Usage",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -866,7 +894,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(sumSeries(stats.bandwidth.message.*.bytesReceived), 'sum of per-message recv')"
+          "target": "alias(sumSeries(stats.bandwidth.message.*.bytesReceived$node), 'sum of per-message recv')"
         },
         {
           "datasource": {
@@ -874,7 +902,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.bandwidth.bytesReceived, 'aggregate recv counter')"
+          "target": "alias(stats.bandwidth.bytesReceived$node, 'aggregate recv counter')"
         },
         {
           "datasource": {
@@ -882,7 +910,7 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "alias(sumSeries(stats.bandwidth.message.*.bytesSent), 'sum of per-message sent')"
+          "target": "alias(sumSeries(stats.bandwidth.message.*.bytesSent$node), 'sum of per-message sent')"
         },
         {
           "datasource": {
@@ -890,11 +918,12 @@
             "uid": "000000001"
           },
           "refId": "D",
-          "target": "alias(stats.bandwidth.bytesSent, 'aggregate sent counter')"
+          "target": "alias(stats.bandwidth.bytesSent$node, 'aggregate sent counter')"
         }
       ],
       "title": "Per-Message Sum vs Aggregate Counter",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -988,7 +1017,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(countSeries(stats.bandwidth.message.*.bytesReceived), 'distinct received message types')"
+          "target": "alias(countSeries(stats.bandwidth.message.*.bytesReceived$node), 'distinct received message types')"
         },
         {
           "datasource": {
@@ -996,15 +1025,16 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(countSeries(stats.bandwidth.message.*.bytesSent), 'distinct sent message types')"
+          "target": "alias(countSeries(stats.bandwidth.message.*.bytesSent$node), 'distinct sent message types')"
         }
       ],
       "title": "Unexpected Message Type Keys",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     }
   ],
   "preload": false,
-  "refresh": "",
+  "refresh": "30s",
   "schemaVersion": 42,
   "time": {
     "from": "now-12h",
@@ -1026,5 +1056,152 @@
   },
   "timezone": "browser",
   "title": "Bandwidth Usage",
-  "uid": "000000001"
+  "uid": "000000001",
+  "links": [
+    {
+      "title": "Home",
+      "url": "/d/statoshi-home",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Blocks",
+      "url": "/d/000000002",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Transactions",
+      "url": "/d/000000006",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Unspent Transaction Output Set",
+      "url": "/d/000000009",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Memory Pool",
+      "url": "/d/000000020",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Fee Estimates",
+      "url": "/d/000000017",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Mining",
+      "url": "/d/000000018",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Peers",
+      "url": "/d/000000008",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "P2P Messages",
+      "url": "/d/000000010",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Bandwidth Usage",
+      "url": "/d/000000001",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Function Timings",
+      "url": "/d/000000003",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "System Metrics",
+      "url": "/d/000000005",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Storage & Database Health",
+      "url": "/d/statoshi-storage",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "RPC & HTTP Service",
+      "url": "/d/statoshi-rpc-http",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Telemetry Pipeline",
+      "url": "/d/000000004",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "asDropdown": true,
+      "title": "All dashboards",
+      "type": "dashboards",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false,
+      "icon": "external link"
+    }
+  ]
 }

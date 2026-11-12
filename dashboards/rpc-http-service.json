@@ -15,6 +15,31 @@
       }
     ]
   },
+  "templating": {
+    "list": [
+      {
+        "name": "node",
+        "label": "Node suffix",
+        "description": "The suffix that -statshostname appends to every node-emitted metric key, including the leading dot (e.g. \".mynode\"). Leave empty for a node started without -statshostname, which is how statoshi.info runs.",
+        "type": "textbox",
+        "query": "",
+        "current": {
+          "selected": false,
+          "text": "",
+          "value": ""
+        },
+        "options": [
+          {
+            "selected": true,
+            "text": "",
+            "value": ""
+          }
+        ],
+        "hide": 0,
+        "skipUrlSync": false
+      }
+    ]
+  },
   "description": "RPC and HTTP service health: request volume and per-method latency across roughly 110 registered RPC methods, error and abort rates, plus HTTP work queue depth and rejections.",
   "editable": true,
   "fiscalYearStartMonth": 0,
@@ -121,11 +146,12 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(sumSeries(stats.rpc.calls.*), 'all methods')"
+          "target": "alias(sumSeries(stats.rpc.calls.*$node), 'all methods')"
         }
       ],
       "title": "Total RPC Calls",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 720
     },
     {
       "datasource": {
@@ -184,11 +210,12 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByNode(limit(sortByMaxima(stats.rpc.calls.*), 8), 3)"
+          "target": "aliasByNode(limit(sortByMaxima(stats.rpc.calls.*$node), 8), 3)"
         }
       ],
       "title": "Busiest RPC Methods",
-      "type": "bargauge"
+      "type": "bargauge",
+      "maxDataPoints": 720
     },
     {
       "datasource": {
@@ -247,11 +274,12 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByNode(stats.rpc.calls.*, 3)"
+          "target": "aliasByNode(stats.rpc.calls.*$node, 3)"
         }
       ],
       "title": "Per-Method Call Rate (all methods, ranked)",
-      "type": "bargauge"
+      "type": "bargauge",
+      "maxDataPoints": 1440
     },
     {
       "collapsed": false,
@@ -353,11 +381,12 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByNode(stats.timers.rpc.duration_us.*.upper_90, 4)"
+          "target": "aliasByNode(stats.timers.rpc.duration_us.*.upper_90$node, 4)"
         }
       ],
       "title": "P90 Latency by Method",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 720
     },
     {
       "datasource": {
@@ -415,11 +444,12 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByNode(highestAverage(stats.timers.rpc.duration_us.*.mean, 5), 4)"
+          "target": "aliasByNode(highestAverage(stats.timers.rpc.duration_us.*.mean$node, 5), 4)"
         }
       ],
       "title": "Slowest Methods",
-      "type": "bargauge"
+      "type": "bargauge",
+      "maxDataPoints": 720
     },
     {
       "datasource": {
@@ -508,11 +538,12 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(divideSeries(sumSeries(stats.timers.rpc.duration_us.*.mean), sumSeries(stats.rpc.calls.*)), 'mean us per call')"
+          "target": "alias(divideSeries(sumSeries(stats.timers.rpc.duration_us.*.mean$node), sumSeries(stats.rpc.calls.*$node)), 'mean us per call')"
         }
       ],
       "title": "Calls vs Latency (request cost)",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 720
     },
     {
       "collapsed": false,
@@ -615,7 +646,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.rpc.errors.type, 'typed error')"
+          "target": "alias(stats.rpc.errors.type$node, 'typed error')"
         },
         {
           "datasource": {
@@ -623,11 +654,12 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.rpc.errors.other, 'other error')"
+          "target": "alias(stats.rpc.errors.other$node, 'other error')"
         }
       ],
       "title": "RPC Errors",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 720
     },
     {
       "datasource": {
@@ -692,11 +724,12 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(divideSeries(sumSeries(stats.rpc.errors.*), sumSeries(stats.rpc.calls.*)), 'errors per call')"
+          "target": "alias(divideSeries(sumSeries(stats.rpc.errors.*$node), sumSeries(stats.rpc.calls.*$node)), 'errors per call')"
         }
       ],
       "title": "Error Rate",
-      "type": "gauge"
+      "type": "gauge",
+      "maxDataPoints": 720
     },
     {
       "collapsed": false,
@@ -798,7 +831,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.gauges.http.workQueueDepth, 'queue depth')"
+          "target": "alias(stats.gauges.http.workQueueDepth$node, 'queue depth')"
         },
         {
           "datasource": {
@@ -806,11 +839,12 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.gauges.http.maxQueueDepth, 'configured max')"
+          "target": "alias(stats.gauges.http.maxQueueDepth$node, 'configured max')"
         }
       ],
       "title": "Work Queue Depth",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 720
     },
     {
       "datasource": {
@@ -900,11 +934,12 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.http.queueDepthRejected, 'rejected/s')"
+          "target": "alias(stats.http.queueDepthRejected$node, 'rejected/s')"
         }
       ],
       "title": "Rejected Requests",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 720
     },
     {
       "datasource": {
@@ -969,15 +1004,16 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(divideSeries(stats.gauges.http.workQueueDepth, stats.gauges.http.maxQueueDepth), 'saturation')"
+          "target": "alias(divideSeries(stats.gauges.http.workQueueDepth$node, stats.gauges.http.maxQueueDepth$node), 'saturation')"
         }
       ],
       "title": "Queue Saturation",
-      "type": "gauge"
+      "type": "gauge",
+      "maxDataPoints": 720
     }
   ],
   "preload": false,
-  "refresh": "1m",
+  "refresh": "10s",
   "schemaVersion": 42,
   "tags": [
     "statoshi",
@@ -1004,5 +1040,152 @@
   },
   "timezone": "browser",
   "title": "RPC & HTTP Service",
-  "uid": "statoshi-rpc-http"
+  "uid": "statoshi-rpc-http",
+  "links": [
+    {
+      "title": "Home",
+      "url": "/d/statoshi-home",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Blocks",
+      "url": "/d/000000002",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Transactions",
+      "url": "/d/000000006",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Unspent Transaction Output Set",
+      "url": "/d/000000009",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Memory Pool",
+      "url": "/d/000000020",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Fee Estimates",
+      "url": "/d/000000017",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Mining",
+      "url": "/d/000000018",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Peers",
+      "url": "/d/000000008",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "P2P Messages",
+      "url": "/d/000000010",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Bandwidth Usage",
+      "url": "/d/000000001",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Function Timings",
+      "url": "/d/000000003",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "System Metrics",
+      "url": "/d/000000005",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Storage & Database Health",
+      "url": "/d/statoshi-storage",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "RPC & HTTP Service",
+      "url": "/d/statoshi-rpc-http",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Telemetry Pipeline",
+      "url": "/d/000000004",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "asDropdown": true,
+      "title": "All dashboards",
+      "type": "dashboards",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false,
+      "icon": "external link"
+    }
+  ]
 }

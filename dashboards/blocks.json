@@ -15,6 +15,31 @@
       }
     ]
   },
+  "templating": {
+    "list": [
+      {
+        "name": "node",
+        "label": "Node suffix",
+        "description": "The suffix that -statshostname appends to every node-emitted metric key, including the leading dot (e.g. \".mynode\"). Leave empty for a node started without -statshostname, which is how statoshi.info runs.",
+        "type": "textbox",
+        "query": "",
+        "current": {
+          "selected": false,
+          "text": "",
+          "value": ""
+        },
+        "options": [
+          {
+            "selected": true,
+            "text": "",
+            "value": ""
+          }
+        ],
+        "hide": 0,
+        "skipUrlSync": false
+      }
+    ]
+  },
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
@@ -148,7 +173,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByMetric(stats.gauges.blocks.currentSizeBytes)"
+          "target": "aliasByMetric(stats.gauges.blocks.currentSizeBytes$node)"
         },
         {
           "datasource": {
@@ -156,11 +181,12 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "aliasByMetric(stats.gauges.blocks.currentSizeWithWitnessBytes)"
+          "target": "aliasByMetric(stats.gauges.blocks.currentSizeWithWitnessBytes$node)"
         }
       ],
       "title": "Block Size",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -275,7 +301,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByMetric(stats.gauges.blocks.currentNumTransactions)"
+          "target": "aliasByMetric(stats.gauges.blocks.currentNumTransactions$node)"
         },
         {
           "datasource": {
@@ -283,11 +309,12 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "aliasByMetric(stats.gauges.blocks.currentSigOps)"
+          "target": "aliasByMetric(stats.gauges.blocks.currentSigOps$node)"
         }
       ],
       "title": "Transactions & SigOps per Block",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -385,11 +412,12 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByMetric(stats.gauges.blocks.currentWeight)"
+          "target": "aliasByMetric(stats.gauges.blocks.currentWeight$node)"
         }
       ],
       "title": "Block Weight",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -480,7 +508,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.message.received.block, 'block')"
+          "target": "alias(stats.message.received.block$node, 'block')"
         },
         {
           "datasource": {
@@ -488,7 +516,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.message.received.cmpctblock, 'cmpctblock')"
+          "target": "alias(stats.message.received.cmpctblock$node, 'cmpctblock')"
         },
         {
           "datasource": {
@@ -496,11 +524,12 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "alias(stats.message.received.inv_block, 'block inv')"
+          "target": "alias(stats.message.received.inv_block$node, 'block inv')"
         }
       ],
       "title": "Block Announcements Received",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -591,11 +620,12 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByMetric(stats.gauges.blocks.currentHeight)"
+          "target": "aliasByMetric(stats.gauges.blocks.currentHeight$node)"
         }
       ],
       "title": "Block Height",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -686,7 +716,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.message.received.block, 'block received')"
+          "target": "alias(stats.message.received.block$node, 'block received')"
         },
         {
           "datasource": {
@@ -694,7 +724,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.message.sent.block, 'block sent')"
+          "target": "alias(stats.message.sent.block$node, 'block sent')"
         },
         {
           "datasource": {
@@ -702,11 +732,12 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "alias(stats.message.received.getblocks, 'getblocks requested')"
+          "target": "alias(stats.message.received.getblocks$node, 'getblocks requested')"
         }
       ],
       "title": "Blocks Received vs Blocks Sent",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "collapsed": false,
@@ -783,11 +814,12 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.gauges.blocks.verificationProgress, 'verification progress')"
+          "target": "alias(stats.gauges.blocks.verificationProgress$node, 'verification progress')"
         }
       ],
       "title": "Chain Verification & Sync State",
-      "type": "gauge"
+      "type": "gauge",
+      "maxDataPoints": 960
     },
     {
       "datasource": {
@@ -856,11 +888,12 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.gauges.blocks.initialBlockDownload, 'IBD')"
+          "target": "alias(stats.gauges.blocks.initialBlockDownload$node, 'IBD')"
         }
       ],
       "title": "Initial Block Download",
-      "type": "state-timeline"
+      "type": "state-timeline",
+      "maxDataPoints": 480
     },
     {
       "datasource": {
@@ -953,7 +986,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.gauges.blocks.bestHeaderHeight, 'best header height')"
+          "target": "alias(stats.gauges.blocks.bestHeaderHeight$node, 'best header height')"
         },
         {
           "datasource": {
@@ -961,11 +994,12 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.gauges.blocks.currentHeight, 'block tip height')"
+          "target": "alias(stats.gauges.blocks.currentHeight$node, 'block tip height')"
         }
       ],
       "title": "Header vs Block Height",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -984,10 +1018,6 @@
               {
                 "color": "green",
                 "value": 0
-              },
-              {
-                "color": "red",
-                "value": 80
               }
             ]
           },
@@ -1002,7 +1032,7 @@
       },
       "id": 9,
       "options": {
-        "colorMode": "value",
+        "colorMode": "none",
         "graphMode": "area",
         "justifyMode": "auto",
         "orientation": "auto",
@@ -1025,11 +1055,12 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.gauges.blocks.currentTxCount, 'total txs in chain')"
+          "target": "alias(stats.gauges.blocks.currentTxCount$node, 'total txs in chain')"
         }
       ],
       "title": "Transactions In Chain",
-      "type": "stat"
+      "type": "stat",
+      "maxDataPoints": 480
     },
     {
       "datasource": {
@@ -1048,10 +1079,6 @@
               {
                 "color": "green",
                 "value": 0
-              },
-              {
-                "color": "red",
-                "value": 80
               }
             ]
           },
@@ -1066,7 +1093,7 @@
       },
       "id": 10,
       "options": {
-        "colorMode": "value",
+        "colorMode": "none",
         "graphMode": "area",
         "justifyMode": "auto",
         "orientation": "auto",
@@ -1089,11 +1116,12 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.gauges.blocks.currentVersion, 'block version')"
+          "target": "alias(stats.gauges.blocks.currentVersion$node, 'block version')"
         }
       ],
       "title": "Current Block Version",
-      "type": "stat"
+      "type": "stat",
+      "maxDataPoints": 480
     },
     {
       "datasource": {
@@ -1153,11 +1181,12 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.warnings.InvalidBlockFound, 'InvalidBlockFound')"
+          "target": "alias(stats.warnings.InvalidBlockFound$node, 'InvalidBlockFound')"
         }
       ],
       "title": "Invalid Block Warnings",
-      "type": "stat"
+      "type": "stat",
+      "maxDataPoints": 480
     },
     {
       "collapsed": false,
@@ -1262,7 +1291,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(divideSeries(stats.blocks.connected.transactions, stats.blocks.connected), 'txs per block')"
+          "target": "alias(divideSeries(stats.blocks.connected.transactions$node, stats.blocks.connected$node), 'txs per block')"
         },
         {
           "datasource": {
@@ -1270,7 +1299,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(divideSeries(stats.blocks.connected.inputs, stats.blocks.connected), 'inputs per block')"
+          "target": "alias(divideSeries(stats.blocks.connected.inputs$node, stats.blocks.connected$node), 'inputs per block')"
         },
         {
           "datasource": {
@@ -1278,11 +1307,12 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "alias(divideSeries(stats.blocks.connected.sigOpsCost, stats.blocks.connected), 'sigop cost per block')"
+          "target": "alias(divideSeries(stats.blocks.connected.sigOpsCost$node, stats.blocks.connected$node), 'sigop cost per block')"
         }
       ],
       "title": "Connected Block Workload",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -1375,7 +1405,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.blocks.cmpctblock.reconstruct.ok, 'reconstructed ok')"
+          "target": "alias(stats.blocks.cmpctblock.reconstruct.ok$node, 'reconstructed ok')"
         },
         {
           "datasource": {
@@ -1383,7 +1413,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.blocks.cmpctblock.reconstruct.invalid, 'invalid')"
+          "target": "alias(stats.blocks.cmpctblock.reconstruct.invalid$node, 'invalid')"
         },
         {
           "datasource": {
@@ -1391,7 +1421,7 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "alias(stats.blocks.cmpctblock.reconstruct.failed, 'failed (fell back to getdata)')"
+          "target": "alias(stats.blocks.cmpctblock.reconstruct.failed$node, 'failed (fell back to getdata)')"
         },
         {
           "datasource": {
@@ -1399,11 +1429,12 @@
             "uid": "000000001"
           },
           "refId": "D",
-          "target": "alias(stats.blocks.cmpctblock.txnsRequested, 'txns via getblocktxn')"
+          "target": "alias(stats.blocks.cmpctblock.txnsRequested$node, 'txns via getblocktxn')"
         }
       ],
       "title": "Compact Block Reconstruction Quality",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -1496,11 +1527,12 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.blocks.downloadTimeout, 'timeouts/s')"
+          "target": "alias(stats.blocks.downloadTimeout$node, 'timeouts/s')"
         }
       ],
       "title": "Block Download Timeouts",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 960
     },
     {
       "datasource": {
@@ -1556,11 +1588,12 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.gauges.blocks.downloadTimeoutHeight, 'height')"
+          "target": "alias(stats.gauges.blocks.downloadTimeoutHeight$node, 'height')"
         }
       ],
       "title": "Height That Timed Out",
-      "type": "stat"
+      "type": "stat",
+      "maxDataPoints": 480
     },
     {
       "datasource": {
@@ -1653,11 +1686,12 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.chain.reorg, 'reorgs/s')"
+          "target": "alias(stats.chain.reorg$node, 'reorgs/s')"
         }
       ],
       "title": "Reorgs",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 480
     },
     {
       "datasource": {
@@ -1750,7 +1784,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(divideSeries(stats.chain.reorg.disconnectedBlocks, stats.chain.reorg), 'blocks per reorg')"
+          "target": "alias(divideSeries(stats.chain.reorg.disconnectedBlocks$node, stats.chain.reorg$node), 'blocks per reorg')"
         },
         {
           "datasource": {
@@ -1758,15 +1792,16 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(divideSeries(stats.chain.reorg.disconnectedTxs, stats.chain.reorg), 'txs per reorg')"
+          "target": "alias(divideSeries(stats.chain.reorg.disconnectedTxs$node, stats.chain.reorg$node), 'txs per reorg')"
         }
       ],
       "title": "Reorg Severity",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 960
     }
   ],
   "preload": false,
-  "refresh": "",
+  "refresh": "30s",
   "schemaVersion": 42,
   "time": {
     "from": "now-12h",
@@ -1788,5 +1823,152 @@
   },
   "timezone": "browser",
   "title": "Blocks",
-  "uid": "000000002"
+  "uid": "000000002",
+  "links": [
+    {
+      "title": "Home",
+      "url": "/d/statoshi-home",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Blocks",
+      "url": "/d/000000002",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Transactions",
+      "url": "/d/000000006",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Unspent Transaction Output Set",
+      "url": "/d/000000009",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Memory Pool",
+      "url": "/d/000000020",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Fee Estimates",
+      "url": "/d/000000017",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Mining",
+      "url": "/d/000000018",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Peers",
+      "url": "/d/000000008",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "P2P Messages",
+      "url": "/d/000000010",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Bandwidth Usage",
+      "url": "/d/000000001",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Function Timings",
+      "url": "/d/000000003",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "System Metrics",
+      "url": "/d/000000005",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Storage & Database Health",
+      "url": "/d/statoshi-storage",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "RPC & HTTP Service",
+      "url": "/d/statoshi-rpc-http",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Telemetry Pipeline",
+      "url": "/d/000000004",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "asDropdown": true,
+      "title": "All dashboards",
+      "type": "dashboards",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false,
+      "icon": "external link"
+    }
+  ]
 }

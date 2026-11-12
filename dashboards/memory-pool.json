@@ -15,6 +15,31 @@
       }
     ]
   },
+  "templating": {
+    "list": [
+      {
+        "name": "node",
+        "label": "Node suffix",
+        "description": "The suffix that -statshostname appends to every node-emitted metric key, including the leading dot (e.g. \".mynode\"). Leave empty for a node started without -statshostname, which is how statoshi.info runs.",
+        "type": "textbox",
+        "query": "",
+        "current": {
+          "selected": false,
+          "text": "",
+          "value": ""
+        },
+        "options": [
+          {
+            "selected": true,
+            "text": "",
+            "value": ""
+          }
+        ],
+        "hide": 0,
+        "skipUrlSync": false
+      }
+    ]
+  },
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
@@ -110,11 +135,12 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByMetric(stats.gauges.transactions.mempool.totalTransactions)"
+          "target": "aliasByMetric(stats.gauges.transactions.mempool.totalTransactions$node)"
         }
       ],
       "title": "Mempool Occupancy",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -206,11 +232,12 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByMetric(stats.gauges.transactions.mempool.totalTxBytes)"
+          "target": "aliasByMetric(stats.gauges.transactions.mempool.totalTxBytes$node)"
         }
       ],
       "title": "Mempool Size",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -318,18 +345,19 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "aliasByMetric(stats.gauges.transactions.mempool.memoryUsageBytes)"
+          "target": "aliasByMetric(stats.gauges.transactions.mempool.memoryUsageBytes$node)"
         }
       ],
       "title": "Mempool Dynamic Memory Usage",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Minimum fee rate the mempool will accept, converted from satoshis per kvB to the satoshis-per-vbyte figure operators actually reason in.",
+      "description": "Minimum fee rate the mempool will accept, converted from satoshis per kvB to the satoshis-per-vbyte figure operators reason in. This is zero by design whenever the pool is below its size limit: the rolling floor only rises under memory pressure and then decays back down.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -430,11 +458,12 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(scale(stats.gauges.transactions.mempool.minFeePerKb, 0.001), 'min fee (sat/vB)')"
+          "target": "alias(scale(stats.gauges.transactions.mempool.minFeePerKb$node, 0.001), 'min fee (sat/vB)')"
         }
       ],
       "title": "Minimum Mempool Transaction Fee",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "collapsed": false,
@@ -539,7 +568,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.transactions.removed.block, 'included in block')"
+          "target": "alias(stats.transactions.removed.block$node, 'included in block')"
         },
         {
           "datasource": {
@@ -547,7 +576,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.transactions.removed.replaced, 'replaced (RBF)')"
+          "target": "alias(stats.transactions.removed.replaced$node, 'replaced (RBF)')"
         },
         {
           "datasource": {
@@ -555,7 +584,7 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "alias(stats.transactions.removed.reorg, 'reorg')"
+          "target": "alias(stats.transactions.removed.reorg$node, 'reorg')"
         },
         {
           "datasource": {
@@ -563,7 +592,7 @@
             "uid": "000000001"
           },
           "refId": "D",
-          "target": "alias(stats.transactions.removed.conflict, 'conflict')"
+          "target": "alias(stats.transactions.removed.conflict$node, 'conflict')"
         },
         {
           "datasource": {
@@ -571,7 +600,7 @@
             "uid": "000000001"
           },
           "refId": "E",
-          "target": "alias(stats.transactions.removed.expiry, 'expiry')"
+          "target": "alias(stats.transactions.removed.expiry$node, 'expiry')"
         },
         {
           "datasource": {
@@ -579,11 +608,12 @@
             "uid": "000000001"
           },
           "refId": "F",
-          "target": "alias(stats.transactions.removed.sizelimit, 'size limit')"
+          "target": "alias(stats.transactions.removed.sizelimit$node, 'size limit')"
         }
       ],
       "title": "Mempool Exits by Reason",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -676,7 +706,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.transactions.removed.block.fees, 'included in block')"
+          "target": "alias(stats.transactions.removed.block.fees$node, 'included in block')"
         },
         {
           "datasource": {
@@ -684,7 +714,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.transactions.removed.replaced.fees, 'replaced')"
+          "target": "alias(stats.transactions.removed.replaced.fees$node, 'replaced')"
         },
         {
           "datasource": {
@@ -692,11 +722,12 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "alias(stats.transactions.removed.expiry.fees, 'expired')"
+          "target": "alias(stats.transactions.removed.expiry.fees$node, 'expired')"
         }
       ],
       "title": "Mempool Exit Value",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -789,7 +820,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(divideSeries(stats.transactions.removed.block.residencySeconds, stats.transactions.removed.block), 'included in block')"
+          "target": "alias(divideSeries(stats.transactions.removed.block.residencySeconds$node, stats.transactions.removed.block$node), 'included in block')"
         },
         {
           "datasource": {
@@ -797,7 +828,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(divideSeries(stats.transactions.removed.replaced.residencySeconds, stats.transactions.removed.replaced), 'replaced')"
+          "target": "alias(divideSeries(stats.transactions.removed.replaced.residencySeconds$node, stats.transactions.removed.replaced$node), 'replaced')"
         },
         {
           "datasource": {
@@ -805,18 +836,19 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "alias(divideSeries(stats.transactions.removed.expiry.residencySeconds, stats.transactions.removed.expiry), 'expired')"
+          "target": "alias(divideSeries(stats.transactions.removed.expiry.residencySeconds$node, stats.transactions.removed.expiry$node), 'expired')"
         }
       ],
       "title": "Mempool Residency at Exit",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
         "type": "graphite",
         "uid": "000000001"
       },
-      "description": "Evictions caused by the size limit and expiries, per second, against the rolling minimum fee rate on the right axis. The fee floor is three to four orders of magnitude larger than the eviction rate, so sharing an axis hid the evictions entirely.",
+      "description": "Evictions and expiries per second against the rolling minimum fee floor. Note the floor stays at zero until the pool actually fills, so a flat line here is the healthy case, not a broken query.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -924,7 +956,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.transactions.evicted.sizelimit, 'evicted by size limit/s')"
+          "target": "alias(stats.transactions.evicted.sizelimit$node, 'evicted by size limit/s')"
         },
         {
           "datasource": {
@@ -932,7 +964,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.transactions.expired, 'expired/s')"
+          "target": "alias(stats.transactions.removed.expiry$node, 'expired/s')"
         },
         {
           "datasource": {
@@ -940,11 +972,12 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "alias(scale(stats.gauges.transactions.mempool.rollingMinFeePerKb, 0.001), 'rolling min fee (sat/vB)')"
+          "target": "alias(scale(stats.gauges.transactions.mempool.minFeePerKb$node, 0.001), 'min fee floor (sat/vB)')"
         }
       ],
       "title": "Mempool Eviction & Fee Floor",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -1051,7 +1084,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.gauges.transactions.orphans, 'orphans held')"
+          "target": "alias(stats.gauges.transactions.orphans$node, 'orphans held')"
         },
         {
           "datasource": {
@@ -1059,7 +1092,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.transactions.orphans.add, 'added/s')"
+          "target": "alias(stats.transactions.orphans.add$node, 'added/s')"
         },
         {
           "datasource": {
@@ -1067,11 +1100,12 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "alias(stats.transactions.orphans.remove, 'removed/s')"
+          "target": "alias(stats.transactions.orphans.remove$node, 'removed/s')"
         }
       ],
       "title": "Orphan Pool",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -1198,7 +1232,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.gauges.transactions.mempool.unbroadcast, 'unbroadcast')"
+          "target": "alias(stats.gauges.transactions.mempool.unbroadcast$node, 'unbroadcast')"
         },
         {
           "datasource": {
@@ -1206,7 +1240,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.gauges.transactions.mempool.prioritised, 'prioritiseTransaction entries')"
+          "target": "alias(stats.gauges.transactions.mempool.prioritised$node, 'prioritiseTransaction entries')"
         },
         {
           "datasource": {
@@ -1214,11 +1248,12 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "alias(stats.timers.transactions.mempool.check_us.mean, 'consistency check')"
+          "target": "alias(stats.timers.transactions.mempool.check_us.mean$node, 'consistency check')"
         }
       ],
       "title": "Mempool Structural State",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -1311,7 +1346,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.timers.transactions.mempool.txgraphUs.add.mean, 'add')"
+          "target": "alias(stats.timers.transactions.mempool.txgraphUs.add.mean$node, 'add')"
         },
         {
           "datasource": {
@@ -1319,7 +1354,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.timers.transactions.mempool.txgraphUs.block.mean, 'block')"
+          "target": "alias(stats.timers.transactions.mempool.txgraphUs.block.mean$node, 'block')"
         },
         {
           "datasource": {
@@ -1327,7 +1362,7 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "alias(stats.timers.transactions.mempool.txgraphUs.reorg.mean, 'reorg')"
+          "target": "alias(stats.timers.transactions.mempool.txgraphUs.reorg.mean$node, 'reorg')"
         },
         {
           "datasource": {
@@ -1335,11 +1370,12 @@
             "uid": "000000001"
           },
           "refId": "D",
-          "target": "alias(stats.timers.transactions.mempool.txgraphTrimUs.mean, 'trim')"
+          "target": "alias(stats.timers.transactions.mempool.txgraphTrimUs.mean$node, 'trim')"
         }
       ],
       "title": "Mempool Graph (Cluster) Cost",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "datasource": {
@@ -1432,7 +1468,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.transactions.mempool.txgraphBudgetExhausted.add, 'budget exhausted: add')"
+          "target": "alias(stats.transactions.mempool.txgraphBudgetExhausted.add$node, 'budget exhausted: add')"
         },
         {
           "datasource": {
@@ -1440,7 +1476,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(stats.transactions.mempool.txgraphBudgetExhausted.block, 'budget exhausted: block')"
+          "target": "alias(stats.transactions.mempool.txgraphBudgetExhausted.block$node, 'budget exhausted: block')"
         },
         {
           "datasource": {
@@ -1448,7 +1484,7 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "alias(stats.transactions.mempool.txgraphBudgetExhausted.reorg, 'budget exhausted: reorg')"
+          "target": "alias(stats.transactions.mempool.txgraphBudgetExhausted.reorg$node, 'budget exhausted: reorg')"
         },
         {
           "datasource": {
@@ -1456,11 +1492,12 @@
             "uid": "000000001"
           },
           "refId": "D",
-          "target": "alias(stats.transactions.mempool.txgraphTrimEvicted, 'evicted by trim')"
+          "target": "alias(stats.transactions.mempool.txgraphTrimEvicted$node, 'evicted by trim')"
         }
       ],
       "title": "Mempool Graph Overflow",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     },
     {
       "collapsed": false,
@@ -1591,7 +1628,7 @@
             "uid": "000000001"
           },
           "refId": "A",
-          "target": "alias(stats.transactions.rbf.feeDelta, 'fee delta (sat/s)')"
+          "target": "alias(stats.transactions.rbf.feeDelta$node, 'fee delta (sat/s)')"
         },
         {
           "datasource": {
@@ -1599,7 +1636,7 @@
             "uid": "000000001"
           },
           "refId": "B",
-          "target": "alias(divideSeries(stats.transactions.rbf.replacement.fees, stats.transactions.rbf.replacement.vsize), 'replacement fee rate (sat/vB)')"
+          "target": "alias(divideSeries(stats.transactions.rbf.replacement.fees$node, stats.transactions.rbf.replacement.vsize$node), 'replacement fee rate (sat/vB)')"
         },
         {
           "datasource": {
@@ -1607,15 +1644,16 @@
             "uid": "000000001"
           },
           "refId": "C",
-          "target": "alias(divideSeries(stats.transactions.rbf.replaced.fees, stats.transactions.rbf.replaced.vsize), 'replaced fee rate (sat/vB)')"
+          "target": "alias(divideSeries(stats.transactions.rbf.replaced.fees$node, stats.transactions.rbf.replaced.vsize$node), 'replaced fee rate (sat/vB)')"
         }
       ],
       "title": "RBF Economics",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 1440
     }
   ],
   "preload": false,
-  "refresh": "",
+  "refresh": "10s",
   "schemaVersion": 42,
   "time": {
     "from": "now-6h",
@@ -1637,5 +1675,152 @@
   },
   "timezone": "browser",
   "title": "Memory Pool",
-  "uid": "000000020"
+  "uid": "000000020",
+  "links": [
+    {
+      "title": "Home",
+      "url": "/d/statoshi-home",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Blocks",
+      "url": "/d/000000002",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Transactions",
+      "url": "/d/000000006",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Unspent Transaction Output Set",
+      "url": "/d/000000009",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Memory Pool",
+      "url": "/d/000000020",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Fee Estimates",
+      "url": "/d/000000017",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Mining",
+      "url": "/d/000000018",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Peers",
+      "url": "/d/000000008",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "P2P Messages",
+      "url": "/d/000000010",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Bandwidth Usage",
+      "url": "/d/000000001",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Function Timings",
+      "url": "/d/000000003",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "System Metrics",
+      "url": "/d/000000005",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Storage & Database Health",
+      "url": "/d/statoshi-storage",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "RPC & HTTP Service",
+      "url": "/d/statoshi-rpc-http",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "title": "Telemetry Pipeline",
+      "url": "/d/000000004",
+      "type": "link",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false
+    },
+    {
+      "asDropdown": true,
+      "title": "All dashboards",
+      "type": "dashboards",
+      "keepTime": true,
+      "includeVars": true,
+      "tags": [],
+      "targetBlank": false,
+      "icon": "external link"
+    }
+  ]
 }
