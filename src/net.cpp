@@ -1912,6 +1912,9 @@ void CConnman::CreateNodeFromAcceptedSocket(std::unique_ptr<Sock>&& sock,
                                  .use_v2transport = use_v2transport,
                              });
     pnode->AddRef();
+    // Read the node before it is published to m_nodes: from then on the socket
+    // handler thread may disconnect and delete it at any time.
+    const std::string net_name{GetNetworkName(pnode->ConnectedThroughNetwork())};
     m_msgproc->InitializeNode(*pnode, local_services);
     {
         LOCK(m_nodes_mutex);
@@ -1929,13 +1932,10 @@ void CConnman::CreateNodeFromAcceptedSocket(std::unique_ptr<Sock>&& sock,
     // accepts had no counter at all (only the gauge of current peers). The
     // network split matters because an eclipse attempt shows up as a flood of
     // inbound connections from one network.
-    {
-        const std::string net_name{GetNetworkName(pnode->ConnectedThroughNetwork())};
-        statsClient.countBatch({
-            {"peers.inbound.accepted", 1},
-            {"peers.inbound.network." + net_name, 1},
-        });
-    }
+    statsClient.countBatch({
+        {"peers.inbound.accepted", 1},
+        {"peers.inbound.network." + net_name, 1},
+    });
 
     // We received a new connection, harvest entropy from the time (and our peer count)
     RandAddEvent((uint32_t)id);
@@ -3328,6 +3328,15 @@ bool CConnman::OpenNetworkConnection(const CAddress& addrConnect,
         return false;
     pnode->grantOutbound = std::move(grant_outbound);
 
+    // peers.connect counts every attempt that produced a node, but it does not
+    // say which of the seven connection roles was established or over which
+    // network. Only the tracepoint had that, and tracing is off in production
+    // builds, so feeler/block-relay/private-broadcast churn was unobservable.
+    // Read the node before it is published to m_nodes: from then on the socket
+    // handler thread may disconnect and delete it at any time.
+    const std::string type_name{pnode->ConnectionTypeAsString()};
+    const std::string net_name{GetNetworkName(pnode->ConnectedThroughNetwork())};
+
     m_msgproc->InitializeNode(*pnode, m_local_services);
     {
         LOCK(m_nodes_mutex);
@@ -3344,18 +3353,10 @@ bool CConnman::OpenNetworkConnection(const CAddress& addrConnect,
         pnode->ConnectedThroughNetwork(),
         GetNodeCount(ConnectionDirection::Out));
 
-    // peers.connect counts every attempt that produced a node, but it does not
-    // say which of the seven connection roles was established or over which
-    // network. Only the tracepoint had that, and tracing is off in production
-    // builds, so feeler/block-relay/private-broadcast churn was unobservable.
-    {
-        const std::string type_name{pnode->ConnectionTypeAsString()};
-        const std::string net_name{GetNetworkName(pnode->ConnectedThroughNetwork())};
-        statsClient.countBatch({
-            {"peers.outbound.connected." + type_name, 1},
-            {"peers.outbound.connected." + type_name + ".network." + net_name, 1},
-        });
-    }
+    statsClient.countBatch({
+        {"peers.outbound.connected." + type_name, 1},
+        {"peers.outbound.connected." + type_name + ".network." + net_name, 1},
+    });
 
     return true;
 }
