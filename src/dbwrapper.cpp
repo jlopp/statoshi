@@ -312,7 +312,7 @@ CDBWrapper::~CDBWrapper()
 
 void CDBWrapper::WriteBatch(CDBBatch& batch, bool fSync)
 {
-    const auto start{MockableSteadyClock::now()};
+    const auto start{SteadyClock::now()};
     const bool log_memory = util::log::ShouldDebugLog(BCLog::LEVELDB);
     double mem_before = 0;
     if (log_memory) {
@@ -324,7 +324,7 @@ void CDBWrapper::WriteBatch(CDBBatch& batch, bool fSync)
     // anyway since it shapes the metric key.
     const std::string db_key{statsd::SanitizeKeyPart(m_name)};
     statsClient.timing("leveldb.writeBatch_us." + db_key,
-                       Ticks<std::chrono::microseconds>(MockableSteadyClock::now() - start), 1.0f);
+                       Ticks<std::chrono::microseconds>(SteadyClock::now() - start), 1.0f);
     statsClient.count("leveldb.writeBatch." + db_key, 1, 1.0f);
     if (fSync) {
         statsClient.count("leveldb.syncWrite." + db_key, 1, 1.0f);
@@ -356,7 +356,7 @@ size_t CDBWrapper::DynamicMemoryUsage() const
 
 std::optional<std::string> CDBWrapper::ReadImpl(std::span<const std::byte> key) const
 {
-    const auto start{MockableSteadyClock::now()};
+    const auto start{SteadyClock::now()};
     leveldb::Slice slKey(CharCast(key.data()), key.size());
     std::string strValue;
     leveldb::Status status = DBContext().pdb->Get(DBContext().readoptions, slKey, &strValue);
@@ -370,7 +370,7 @@ std::optional<std::string> CDBWrapper::ReadImpl(std::span<const std::byte> key) 
         HandleError(status);
     }
     statsClient.timing("leveldb.read_us." + statsd::SanitizeKeyPart(m_name),
-                       Ticks<std::chrono::microseconds>(MockableSteadyClock::now() - start), 1.0f);
+                       Ticks<std::chrono::microseconds>(SteadyClock::now() - start), 1.0f);
     statsClient.count("leveldb.readHit." + statsd::SanitizeKeyPart(m_name), 1, 1.0f);
     return strValue;
 }

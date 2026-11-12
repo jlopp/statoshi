@@ -116,10 +116,10 @@ void CTxMemPool::UpdateTransactionsFromBlock(const std::vector<Txid>& vHashesToU
     // Trim() reconciles the txgraph after a block disconnect, which happens for
     // every block of a reorg. Its cost was invisible even though the resulting
     // SIZELIMIT evictions were already counted.
-    const auto trim_start{MockableSteadyClock::now()};
+    const auto trim_start{SteadyClock::now()};
     auto txs_to_remove = m_txgraph->Trim(); // Enforce cluster size limits.
     statsClient.timing("transactions.mempool.txgraphTrimUs",
-                       Ticks<std::chrono::microseconds>(MockableSteadyClock::now() - trim_start), 1.0f);
+                       Ticks<std::chrono::microseconds>(SteadyClock::now() - trim_start), 1.0f);
     if (!txs_to_remove.empty()) {
         statsClient.count("transactions.mempool.txgraphTrimEvicted", txs_to_remove.size(), 1.0f);
     }
@@ -231,10 +231,10 @@ void CTxMemPool::Apply(ChangeSet* changeset)
 
         addNewTransaction(it);
     }
-    const auto txgraph_start{MockableSteadyClock::now()};
+    const auto txgraph_start{SteadyClock::now()};
     const bool optimal{m_txgraph->DoWork(/*max_cost=*/POST_CHANGE_COST)};
     statsClient.timing("transactions.mempool.txgraphUs.add",
-                       Ticks<std::chrono::microseconds>(MockableSteadyClock::now() - txgraph_start), 1.0f);
+                       Ticks<std::chrono::microseconds>(SteadyClock::now() - txgraph_start), 1.0f);
     if (!optimal) {
         LogDebug(BCLog::MEMPOOL, "Mempool in non-optimal ordering after addition(s).");
         statsClient.count("transactions.mempool.txgraphBudgetExhausted.add", 1, 1.0f);
@@ -418,10 +418,10 @@ void CTxMemPool::removeForReorg(CChain& chain, std::function<bool(txiter)> check
     for (indexed_transaction_set::const_iterator it = mapTx.begin(); it != mapTx.end(); it++) {
         assert(TestLockPointValidity(chain, it->GetLockPoints()));
     }
-    const auto txgraph_start{MockableSteadyClock::now()};
+    const auto txgraph_start{SteadyClock::now()};
     const bool optimal{m_txgraph->DoWork(/*max_cost=*/POST_CHANGE_COST)};
     statsClient.timing("transactions.mempool.txgraphUs.reorg",
-                       Ticks<std::chrono::microseconds>(MockableSteadyClock::now() - txgraph_start), 1.0f);
+                       Ticks<std::chrono::microseconds>(SteadyClock::now() - txgraph_start), 1.0f);
     if (!optimal) {
         LogDebug(BCLog::MEMPOOL, "Mempool in non-optimal ordering after reorg.");
         statsClient.count("transactions.mempool.txgraphBudgetExhausted.reorg", 1, 1.0f);
@@ -465,10 +465,10 @@ std::vector<RemovedMempoolTransactionInfo> CTxMemPool::removeForBlock(const std:
     }
     lastRollingFeeUpdate = GetTime();
     blockSinceLastRollingFeeBump = true;
-    const auto txgraph_start{MockableSteadyClock::now()};
+    const auto txgraph_start{SteadyClock::now()};
     const bool optimal{m_txgraph->DoWork(/*max_cost=*/POST_CHANGE_COST)};
     statsClient.timing("transactions.mempool.txgraphUs.block",
-                       Ticks<std::chrono::microseconds>(MockableSteadyClock::now() - txgraph_start), 1.0f);
+                       Ticks<std::chrono::microseconds>(SteadyClock::now() - txgraph_start), 1.0f);
     if (!optimal) {
         LogDebug(BCLog::MEMPOOL, "Mempool in non-optimal ordering after block.");
         statsClient.count("transactions.mempool.txgraphBudgetExhausted.block", 1, 1.0f);
@@ -488,7 +488,7 @@ void CTxMemPool::check(const CCoinsViewCache& active_coins_tip, int64_t spendhei
     // Rebuilding a duplicate coins view and walking every entry is expensive, and
     // on regtest (check_ratio=1) it runs after every block. It was debug-log only,
     // so this cost was invisible even though it sits on the critical path.
-    const auto check_start{MockableSteadyClock::now()};
+    const auto check_start{SteadyClock::now()};
 
     uint64_t checkTotal = 0;
     CAmount check_total_fee{0};
@@ -601,7 +601,7 @@ void CTxMemPool::check(const CCoinsViewCache& active_coins_tip, int64_t spendhei
     assert(diagram.back().size == check_total_adjusted_weight);
     assert(innerUsage == cachedInnerUsage);
     statsClient.timing("transactions.mempool.check_us",
-                       Ticks<std::chrono::microseconds>(MockableSteadyClock::now() - check_start), 1.0f);
+                       Ticks<std::chrono::microseconds>(SteadyClock::now() - check_start), 1.0f);
 }
 
 std::vector<CTxMemPool::txiter> CTxMemPool::ExtractBestByMiningScoreWithTopology(std::vector<Wtxid>& wtxids, size_t n_to_sort) const

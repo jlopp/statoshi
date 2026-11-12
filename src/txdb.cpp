@@ -158,7 +158,7 @@ void CCoinsViewDB::BatchWrite(CoinsViewCacheCursor& cursor, const uint256& block
     // entries, with an explicit warning that it can take minutes. It was only ever
     // measurable indirectly, as chainstate.flush_us minus its component parts, so
     // make the coins-cache write its own first-class series.
-    const auto coins_write_start{MockableSteadyClock::now()};
+    const auto coins_write_start{SteadyClock::now()};
     LOG_TIME_MILLIS_WITH_CATEGORY(strprintf("write coins cache to disk (%d out of %d cached coins)",
         dirty_count, cursor.GetTotalCount()), BCLog::BENCH);
 
@@ -203,7 +203,7 @@ void CCoinsViewDB::BatchWrite(CoinsViewCacheCursor& cursor, const uint256& block
     m_db->WriteBatch(batch);
     LogDebug(BCLog::COINDB, "Committed %u changed transaction outputs (out of %u) to coin database...", (unsigned int)dirty_count, (unsigned int)count);
     statsClient.timing("chainstate.writeCoinsCache_us",
-                       Ticks<std::chrono::microseconds>(MockableSteadyClock::now() - coins_write_start), 1.0f);
+                       Ticks<std::chrono::microseconds>(SteadyClock::now() - coins_write_start), 1.0f);
     statsClient.count("chainstate.writeCoinsCacheEntries", static_cast<int64_t>(dirty_count), 1.0f);
     statsClient.count("chainstate.writeCoinsCacheCached", static_cast<int64_t>(cursor.GetTotalCount()), 1.0f);
 }

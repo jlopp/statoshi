@@ -803,17 +803,15 @@ bool MemPoolAccept::PreChecks(ATMPArgs& args, Workspace& ws)
 
     // Time CheckTransaction here rather than inside the consensus library: this
     // is the mempool path, so block validation and bitcoin-tx do not pay for
-    // it, and consensus/ has no statsd dependency at all. Skipped entirely when
-    // metrics are off, so callers do not read the clock for nothing (the fuzz
-    // harness rejects unmocked time reads).
-    const bool timed{statsClient.IsEnabled()};
-    const auto check_tx_start{timed ? MockableSteadyClock::now() : MockableSteadyClock::time_point{}};
+    // it, and consensus/ has no statsd dependency at all. Plain SteadyClock
+    // (not the mockable one) because this is only for a metric: the fuzz
+    // harness rejects unmocked time reads, and tests have no reason to
+    // simulate this particular duration.
+    const auto check_tx_start{SteadyClock::now()};
     if (!CheckTransaction(tx, state)) {
         return false; // state filled in by CheckTransaction
     }
-    if (timed) {
-        statsClient.timing("CheckTransaction_us", Ticks<std::chrono::microseconds>(MockableSteadyClock::now() - check_tx_start), 1.0f);
-    }
+    statsClient.timing("CheckTransaction_us", Ticks<std::chrono::microseconds>(SteadyClock::now() - check_tx_start), 1.0f);
 
     // Coinbase is only valid in a block, not as a loose transaction
     if (tx.IsCoinBase())
@@ -1365,7 +1363,7 @@ bool MemPoolAccept::SubmitPackage(const ATMPArgs& args, std::vector<Workspace>& 
 
 MempoolAcceptResult MemPoolAccept::AcceptSingleTransactionInternal(const CTransactionRef& ptx, ATMPArgs& args)
 {
-    const auto start{MockableSteadyClock::now()};
+    const auto start{SteadyClock::now()};
     AssertLockHeld(cs_main);
     AssertLockHeld(m_pool.cs);
 
@@ -1468,7 +1466,7 @@ MempoolAcceptResult MemPoolAccept::AcceptSingleTransactionInternal(const CTransa
         m_pool.m_opts.signals->TransactionAddedToMempool(tx_info, m_pool.GetAndIncrementSequence());
     }
 
-    const auto diff{MockableSteadyClock::now() - start};
+    const auto diff{SteadyClock::now() - start};
     statsClient.timing("AcceptToMemoryPool_ms", Ticks<std::chrono::milliseconds>(diff), 1.0f);
     statsClient.gauge("transactions.txInMemoryPool", m_pool.size(), 1.0f);
     // Count only first-time admissions here. A re-admission (a transaction we already
@@ -2139,7 +2137,7 @@ bool CheckInputScripts(const CTransaction& tx, TxValidationState& state,
                        ValidationCache& validation_cache,
                        std::vector<CScriptCheck>* pvChecks)
 {
-    const auto start{MockableSteadyClock::now()};
+    const auto start{SteadyClock::now()};
     if (tx.IsCoinBase()) return true;
 
     if (pvChecks) {
@@ -2210,7 +2208,7 @@ bool CheckInputScripts(const CTransaction& tx, TxValidationState& state,
         validation_cache.m_script_execution_cache.insert(hashCacheEntry);
     }
 
-    const auto diff{MockableSteadyClock::now() - start};
+    const auto diff{SteadyClock::now() - start};
     statsClient.timing("CheckInputs_ms", Ticks<std::chrono::milliseconds>(diff), 1.0f);
 
     return true;
@@ -2261,7 +2259,7 @@ int ApplyTxInUndo(Coin&& undo, CCoinsViewCache& view, const COutPoint& out)
  *  When FAILED is returned, view is left in an indeterminate state. */
 DisconnectResult Chainstate::DisconnectBlock(const CBlock& block, const CBlockIndex* pindex, CCoinsViewCache& view)
 {
-    const auto start{MockableSteadyClock::now()};
+    const auto start{SteadyClock::now()};
     AssertLockHeld(::cs_main);
     bool fClean = true;
 
@@ -2328,7 +2326,7 @@ DisconnectResult Chainstate::DisconnectBlock(const CBlock& block, const CBlockIn
     // move best block pointer to prevout block
     view.SetBestBlock(pindex->pprev->GetBlockHash());
 
-    const auto diff{MockableSteadyClock::now() - start};
+    const auto diff{SteadyClock::now() - start};
     statsClient.timing("DisconnectBlock_ms", Ticks<std::chrono::milliseconds>(diff), 1.0f);
     statsClient.gauge("transactions.txCacheSize", view.GetCacheSize(), 1.0f);
 
@@ -2465,7 +2463,7 @@ script_verify_flags GetBlockScriptFlags(const CBlockIndex& block_index, const Ch
 bool Chainstate::ConnectBlock(const CBlock& block, BlockValidationState& state, CBlockIndex* pindex,
                                CCoinsViewCache& view, bool fJustCheck)
 {
-    const auto start{MockableSteadyClock::now()};
+    const auto start{SteadyClock::now()};
     AssertLockHeld(cs_main);
     assert(pindex);
 
@@ -2840,7 +2838,7 @@ bool Chainstate::ConnectBlock(const CBlock& block, BlockValidationState& state, 
         Ticks<std::chrono::nanoseconds>(time_5 - time_start)
     );
 
-    const auto diff{MockableSteadyClock::now() - start};
+    const auto diff{SteadyClock::now() - start};
     statsClient.timing("ConnectBlock_ms", Ticks<std::chrono::milliseconds>(diff), 1.0f);
     // Everything below is already computed for the tracepoint above, so this
     // adds no work beyond building one datagram. The block-level aggregates
@@ -2910,7 +2908,7 @@ bool Chainstate::FlushStateToDisk(
 {
     LOCK(cs_main);
     assert(this->CanFlushToDisk());
-    const auto flush_start{MockableSteadyClock::now()};
+    const auto flush_start{SteadyClock::now()};
     std::set<int> setFilesToPrune;
     bool full_flush_completed = false;
 
@@ -2945,23 +2943,23 @@ bool Chainstate::FlushStateToDisk(
             if (nManualPruneHeight > 0) {
                 LOG_TIME_MILLIS_WITH_CATEGORY("find files to prune (manual)", BCLog::BENCH);
 
-                const auto prune_scan_start{MockableSteadyClock::now()};
+                const auto prune_scan_start{SteadyClock::now()};
                 m_blockman.FindFilesToPruneManual(
                     setFilesToPrune,
                     std::min(last_prune, nManualPruneHeight),
                     *this);
                 statsClient.timing("blocks.findFilesToPrune_us.manual",
-                                   Ticks<std::chrono::microseconds>(MockableSteadyClock::now() - prune_scan_start), 1.0f);
+                                   Ticks<std::chrono::microseconds>(SteadyClock::now() - prune_scan_start), 1.0f);
             } else {
                 LOG_TIME_MILLIS_WITH_CATEGORY("find files to prune", BCLog::BENCH);
 
                 // Walk of the whole block index; only its result (blocks.prunedFiles)
                 // was counted, never its duration, so a prune-induced flush stall was
                 // indistinguishable from a chainstate write stall.
-                const auto prune_scan_start{MockableSteadyClock::now()};
+                const auto prune_scan_start{SteadyClock::now()};
                 m_blockman.FindFilesToPrune(setFilesToPrune, last_prune, *this, m_chainman);
                 statsClient.timing("blocks.findFilesToPrune_us",
-                                   Ticks<std::chrono::microseconds>(MockableSteadyClock::now() - prune_scan_start), 1.0f);
+                                   Ticks<std::chrono::microseconds>(SteadyClock::now() - prune_scan_start), 1.0f);
                 m_blockman.m_check_for_pruning = false;
             }
             statsClient.gauge("blocks.pruneCandidates", setFilesToPrune.size(), 1.0f);
@@ -3014,10 +3012,10 @@ bool Chainstate::FlushStateToDisk(
 
                 // Unlinking is filesystem I/O inside the flush critical section and
                 // was only ever logged.
-                const auto unlink_start{MockableSteadyClock::now()};
+                const auto unlink_start{SteadyClock::now()};
                 m_blockman.UnlinkPrunedFiles(setFilesToPrune);
                 statsClient.timing("blocks.unlinkPrunedFiles_us",
-                                   Ticks<std::chrono::microseconds>(MockableSteadyClock::now() - unlink_start), 1.0f);
+                                   Ticks<std::chrono::microseconds>(SteadyClock::now() - unlink_start), 1.0f);
             }
 
             if (!CoinsTip().GetBestBlock().IsNull()) {
@@ -3035,7 +3033,7 @@ bool Chainstate::FlushStateToDisk(
                 full_flush_completed = true;
                 // Flush cost is the main chainstate I/O metric: it was only
                 // visible in bench logs before.
-                statsClient.timing("chainstate.flush_us", Ticks<std::chrono::microseconds>(MockableSteadyClock::now() - flush_start), 1.0f);
+                statsClient.timing("chainstate.flush_us", Ticks<std::chrono::microseconds>(SteadyClock::now() - flush_start), 1.0f);
                 statsClient.gauge("chainstate.flushCoins", coins_count, 1.0f);
                 statsClient.gauge("chainstate.flushCoinsDirty", CoinsTip().GetDirtyCount(), 1.0f);
                 statsClient.gauge("chainstate.flushCoinsMemoryBytes", coins_mem_usage, 1.0f);
@@ -3258,7 +3256,7 @@ bool Chainstate::ConnectTip(
     std::vector<ConnectedBlock>& connected_blocks,
     DisconnectedBlockTransactions& disconnectpool)
 {
-    const auto start{MockableSteadyClock::now()};
+    const auto start{SteadyClock::now()};
     AssertLockHeld(cs_main);
     if (m_mempool) AssertLockHeld(m_mempool->cs);
 
@@ -3358,7 +3356,7 @@ bool Chainstate::ConnectTip(
     Chainstate& current_cs{m_chainman.CurrentChainstate()};
     m_chainman.MaybeValidateSnapshot(*this, current_cs);
 
-    const auto diff{MockableSteadyClock::now() - start};
+    const auto diff{SteadyClock::now() - start};
     statsClient.timing("ConnectTip_ms", Ticks<std::chrono::milliseconds>(diff), 1.0f);
     // Phase breakdown of ConnectTip. All six intervals were already measured for
     // -debug=bench, but only the total reached statsd, so a ConnectTip_ms spike
@@ -3613,7 +3611,7 @@ bool Chainstate::ActivateBestChain(BlockValidationState& state, std::shared_ptr<
     // sanely for performance or correctness!
     AssertLockNotHeld(::cs_main);
 
-    const auto start{MockableSteadyClock::now()};
+    const auto start{SteadyClock::now()};
     // ABC maintains a fair degree of expensive-to-calculate internal state
     // because this function periodically releases cs_main so that it does not lock up other threads for too long
     // during large connects - and to allow for e.g. the callback queue to drain
@@ -3778,7 +3776,7 @@ bool Chainstate::ActivateBestChain(BlockValidationState& state, std::shared_ptr<
 
     m_chainman.CheckBlockIndex();
 
-    const auto diff{MockableSteadyClock::now() - start};
+    const auto diff{SteadyClock::now() - start};
     statsClient.timing("ActivateBestChain_ms", Ticks<std::chrono::milliseconds>(diff), 1.0f);
     // Emit the reorg event once for the whole call. The depth/churn counters are
     // emitted per step inside ActivateBestChainStep and sum across steps, so this
@@ -4229,12 +4227,9 @@ bool CheckBlock(const CBlock& block, BlockValidationState& state, const Consensu
     if (block.fChecked)
         return true;
 
-    // Only pay for timing when metrics are switched on. Reading the clock when
-    // emission is disabled is not just wasted work: the fuzz harness rejects
-    // unmocked time reads (CheckGlobals), so an unconditional read made the
-    // block fuzz target fail without ever reporting a metric.
-    const bool timed{statsClient.IsEnabled()};
-    const auto start{timed ? MockableSteadyClock::now() : MockableSteadyClock::time_point{}};
+    // Plain SteadyClock (not the mockable one): this only feeds a metric, and
+    // the fuzz harness rejects unmocked time reads.
+    const auto start{SteadyClock::now()};
 
     // Check that the header is valid (particularly PoW).  This is mostly
     // redundant with the call in AcceptBlockHeader.
@@ -4297,10 +4292,8 @@ bool CheckBlock(const CBlock& block, BlockValidationState& state, const Consensu
     // worth timing, but it does not describe a block that will be connected.
     const bool full_check{fCheckPOW && fCheckMerkleRoot};
 
-    const auto finish{timed ? MockableSteadyClock::now() : MockableSteadyClock::time_point{}};
-    if (timed) {
-        statsClient.timing("CheckBlock_us", Ticks<std::chrono::microseconds>(finish - start), 1.0f);
-    }
+    const auto finish{SteadyClock::now()};
+    statsClient.timing("CheckBlock_us", Ticks<std::chrono::microseconds>(finish - start), 1.0f);
 
     // Only a full check corresponds to a block that is about to be accepted.
     // Emitting on partial (template) checks used to overwrite these gauges
@@ -4632,7 +4625,7 @@ void ChainstateManager::ReportHeadersPresync(int64_t height, int64_t timestamp)
 /** Store block on disk. If dbp is non-nullptr, the file is known to already reside on disk */
 bool ChainstateManager::AcceptBlock(const std::shared_ptr<const CBlock>& pblock, BlockValidationState& state, CBlockIndex** ppindex, bool fRequested, const FlatFilePos* dbp, bool* fNewBlock, bool min_pow_checked)
 {
-    const auto start{MockableSteadyClock::now()};
+    const auto start{SteadyClock::now()};
     const CBlock& block = *pblock;
 
     if (fNewBlock) *fNewBlock = false;
@@ -4735,7 +4728,7 @@ bool ChainstateManager::AcceptBlock(const std::shared_ptr<const CBlock>& pblock,
 
     CheckBlockIndex();
 
-    const auto diff{MockableSteadyClock::now() - start};
+    const auto diff{SteadyClock::now() - start};
     statsClient.timing("AcceptBlock_us", Ticks<std::chrono::microseconds>(diff), 1.0f);
 
     return true;
@@ -6088,11 +6081,11 @@ static void FlushSnapshotToDisk(CCoinsViewCache& coins_cache, bool snapshot_load
     // above is MSG_ONCE, so only the first flush in the process was ever
     // reported, and its duration never reached metrics at all. Snapshot
     // population is minutes of I/O in production, so give it a real series.
-    const auto snapshot_flush_start{MockableSteadyClock::now()};
+    const auto snapshot_flush_start{SteadyClock::now()};
     const int64_t memory_bytes{static_cast<int64_t>(coins_cache.DynamicMemoryUsage())};
     coins_cache.Flush();
     statsClient.timing("snapshot.flush_us",
-                       Ticks<std::chrono::microseconds>(MockableSteadyClock::now() - snapshot_flush_start), 1.0f);
+                       Ticks<std::chrono::microseconds>(SteadyClock::now() - snapshot_flush_start), 1.0f);
     statsClient.count("snapshot.flush.memoryBytes", memory_bytes, 1.0f);
     statsClient.count(std::string{"snapshot.flush."} + (snapshot_loaded ? "save" : "populate"), 1, 1.0f);
 }
@@ -6393,7 +6386,7 @@ SnapshotCompletionResult ChainstateManager::MaybeValidateSnapshot(Chainstate& va
         "snapshot - this could take a few minutes");
     // This holds cs_main for potentially minutes and was only announced in a log
     // line, with no measure of how long it actually took.
-    const auto utxo_stats_start{MockableSteadyClock::now()};
+    const auto utxo_stats_start{SteadyClock::now()};
     try {
         validated_cs_stats = ComputeUTXOStats(
             CoinStatsHashType::HASH_SERIALIZED,
@@ -6405,7 +6398,7 @@ SnapshotCompletionResult ChainstateManager::MaybeValidateSnapshot(Chainstate& va
         return SnapshotCompletionResult::STATS_FAILED;
     }
     statsClient.timing("snapshot.validation.computeStats_us",
-                       Ticks<std::chrono::microseconds>(MockableSteadyClock::now() - utxo_stats_start), 1.0f);
+                       Ticks<std::chrono::microseconds>(SteadyClock::now() - utxo_stats_start), 1.0f);
 
     // XXX note that this function is slow and will hold cs_main for potentially minutes.
     if (!validated_cs_stats) {

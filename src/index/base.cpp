@@ -251,14 +251,14 @@ void BaseIndex::Sync()
             pindex = pindex_next;
 
 
-            const auto process_start{MockableSteadyClock::now()};
+            const auto process_start{SteadyClock::now()};
             if (!ProcessBlock(pindex)) return; // error logged internally
             // Per-block index work, attributed to the index by name so one
             // slow index is identifiable on a node running several.
             {
                 const std::string index_name{statsd::SanitizeKeyPart(GetName())};
                 statsClient.timing("index." + index_name + ".block_us",
-                                   Ticks<std::chrono::microseconds>(MockableSteadyClock::now() - process_start), 1.0f);
+                                   Ticks<std::chrono::microseconds>(SteadyClock::now() - process_start), 1.0f);
                 statsClient.gauge("index." + index_name + ".height", pindex->nHeight, 1.0f);
             }
 

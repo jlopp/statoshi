@@ -546,9 +546,9 @@ void BlockManager::WriteBlockIndexDB()
     // WriteBatchSync() also fsyncs the block index DB, so this is a real disk
     // stall. It ran with no timer, which made it look like an unexplained
     // ConnectTip_ms spike whenever the dirty set was large.
-    const auto start{MockableSteadyClock::now()};
+    const auto start{SteadyClock::now()};
     m_block_tree_db->WriteBatchSync(vFiles, max_blockfile, vBlocks);
-    statsClient.timing("blocks.indexWrite_us", Ticks<std::chrono::microseconds>(MockableSteadyClock::now() - start), 1.0f);
+    statsClient.timing("blocks.indexWrite_us", Ticks<std::chrono::microseconds>(SteadyClock::now() - start), 1.0f);
     statsClient.count("blocks.indexWriteEntries", vBlocks.size(), 1.0f);
     statsClient.count("blocks.indexWriteFiles", vFiles.size(), 1.0f);
 }
@@ -990,7 +990,7 @@ bool BlockManager::FindUndoPos(BlockValidationState& state, int nFile, FlatFileP
 bool BlockManager::WriteBlockUndo(const CBlockUndo& blockundo, BlockValidationState& state, CBlockIndex& block)
 {
     AssertLockHeld(::cs_main);
-    const auto start{MockableSteadyClock::now()};
+    const auto start{SteadyClock::now()};
     const BlockfileType type = BlockfileTypeForHeight(block.nHeight);
     auto& cursor = *Assert(m_blockfile_cursors[type]);
 
@@ -1053,7 +1053,7 @@ bool BlockManager::WriteBlockUndo(const CBlockUndo& blockundo, BlockValidationSt
         block.nStatus |= BLOCK_HAVE_UNDO;
         m_dirty_blockindex.insert(&block);
 
-        statsClient.timing("blocks.undoWrite_us", Ticks<std::chrono::microseconds>(MockableSteadyClock::now() - start), 1.0f);
+        statsClient.timing("blocks.undoWrite_us", Ticks<std::chrono::microseconds>(SteadyClock::now() - start), 1.0f);
         statsClient.count("blocks.undoWriteBytes", blockundo_size, 1.0f);
     }
 
@@ -1109,7 +1109,7 @@ bool BlockManager::ReadBlock(CBlock& block, const CBlockIndex& index) const
 
 BlockManager::ReadRawBlockResult BlockManager::ReadRawBlock(const FlatFilePos& pos, std::optional<std::pair<size_t, size_t>> block_part) const
 {
-    const auto start{MockableSteadyClock::now()};
+    const auto start{SteadyClock::now()};
     if (pos.nPos < STORAGE_HEADER_BYTES) {
         // If nPos is less than STORAGE_HEADER_BYTES, we can't read the header that precedes the block data
         // This would cause an unsigned integer underflow when trying to position the file cursor
@@ -1156,7 +1156,7 @@ BlockManager::ReadRawBlockResult BlockManager::ReadRawBlock(const FlatFilePos& p
 
         std::vector<std::byte> data(blk_size); // Zeroing of memory is intentional here
         filein.read(data);
-        statsClient.timing("blocks.read_us", Ticks<std::chrono::microseconds>(MockableSteadyClock::now() - start), 1.0f);
+        statsClient.timing("blocks.read_us", Ticks<std::chrono::microseconds>(SteadyClock::now() - start), 1.0f);
         statsClient.count("blocks.readBytes", blk_size, 1.0f);
         return data;
     } catch (const std::exception& e) {
@@ -1169,7 +1169,7 @@ BlockManager::ReadRawBlockResult BlockManager::ReadRawBlock(const FlatFilePos& p
 FlatFilePos BlockManager::WriteBlock(const CBlock& block, int nHeight)
 {
     AssertLockHeld(::cs_main);
-    const auto start{MockableSteadyClock::now()};
+    const auto start{SteadyClock::now()};
     const unsigned int block_size{static_cast<unsigned int>(GetSerializeSize(TX_WITH_WITNESS(block)))};
     FlatFilePos pos{FindNextBlockPos(block_size + STORAGE_HEADER_BYTES, nHeight, block.GetBlockTime())};
     if (pos.IsNull()) {
@@ -1201,7 +1201,7 @@ FlatFilePos BlockManager::WriteBlock(const CBlock& block, int nHeight)
         return FlatFilePos();
     }
 
-    statsClient.timing("blocks.write_us", Ticks<std::chrono::microseconds>(MockableSteadyClock::now() - start), 1.0f);
+    statsClient.timing("blocks.write_us", Ticks<std::chrono::microseconds>(SteadyClock::now() - start), 1.0f);
     statsClient.count("blocks.writeBytes", block_size, 1.0f);
     return pos;
 }

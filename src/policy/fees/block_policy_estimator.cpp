@@ -678,7 +678,7 @@ void CBlockPolicyEstimator::processBlock(const std::vector<RemovedMempoolTransac
     // exponentials are decayed for every tracked target. That cost was never
     // measured, so an estimator-induced ConnectTip_ms regression was
     // indistinguishable from disk or script-verification cost.
-    const auto estimator_start{MockableSteadyClock::now()};
+    const auto estimator_start{SteadyClock::now()};
     {
         LOCK(m_cs_fee_estimator);
 
@@ -760,7 +760,7 @@ void CBlockPolicyEstimator::processBlock(const std::vector<RemovedMempoolTransac
         statsClient.gaugeBatch("estimates.fee.block", fee_estimates, /*first_index=*/1);
     }
     statsClient.timing("estimates.processBlock_us",
-                       Ticks<std::chrono::microseconds>(MockableSteadyClock::now() - estimator_start), 1.0f);
+                       Ticks<std::chrono::microseconds>(SteadyClock::now() - estimator_start), 1.0f);
 }
 
 CFeeRate CBlockPolicyEstimator::estimateFee(int confTarget) const
