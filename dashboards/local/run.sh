@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+export LC_ALL=C.UTF-8
 # Run Grafana locally against the live statoshi.info Graphite data.
 #
 # The dashboards in dashboards/*.json are mounted read-only, so this serves

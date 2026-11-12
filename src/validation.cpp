@@ -803,12 +803,17 @@ bool MemPoolAccept::PreChecks(ATMPArgs& args, Workspace& ws)
 
     // Time CheckTransaction here rather than inside the consensus library: this
     // is the mempool path, so block validation and bitcoin-tx do not pay for
-    // it, and consensus/ has no statsd dependency at all.
-    const auto check_tx_start{MockableSteadyClock::now()};
+    // it, and consensus/ has no statsd dependency at all. Skipped entirely when
+    // metrics are off, so callers do not read the clock for nothing (the fuzz
+    // harness rejects unmocked time reads).
+    const bool timed{statsClient.IsEnabled()};
+    const auto check_tx_start{timed ? MockableSteadyClock::now() : MockableSteadyClock::time_point{}};
     if (!CheckTransaction(tx, state)) {
         return false; // state filled in by CheckTransaction
     }
-    statsClient.timing("CheckTransaction_us", Ticks<std::chrono::microseconds>(MockableSteadyClock::now() - check_tx_start), 1.0f);
+    if (timed) {
+        statsClient.timing("CheckTransaction_us", Ticks<std::chrono::microseconds>(MockableSteadyClock::now() - check_tx_start), 1.0f);
+    }
 
     // Coinbase is only valid in a block, not as a loose transaction
     if (tx.IsCoinBase())
@@ -4224,7 +4229,12 @@ bool CheckBlock(const CBlock& block, BlockValidationState& state, const Consensu
     if (block.fChecked)
         return true;
 
-    const auto start{MockableSteadyClock::now()};
+    // Only pay for timing when metrics are switched on. Reading the clock when
+    // emission is disabled is not just wasted work: the fuzz harness rejects
+    // unmocked time reads (CheckGlobals), so an unconditional read made the
+    // block fuzz target fail without ever reporting a metric.
+    const bool timed{statsClient.IsEnabled()};
+    const auto start{timed ? MockableSteadyClock::now() : MockableSteadyClock::time_point{}};
 
     // Check that the header is valid (particularly PoW).  This is mostly
     // redundant with the call in AcceptBlockHeader.
@@ -4287,8 +4297,10 @@ bool CheckBlock(const CBlock& block, BlockValidationState& state, const Consensu
     // worth timing, but it does not describe a block that will be connected.
     const bool full_check{fCheckPOW && fCheckMerkleRoot};
 
-    const auto finish{MockableSteadyClock::now()};
-    statsClient.timing("CheckBlock_us", Ticks<std::chrono::microseconds>(finish - start), 1.0f);
+    const auto finish{timed ? MockableSteadyClock::now() : MockableSteadyClock::time_point{}};
+    if (timed) {
+        statsClient.timing("CheckBlock_us", Ticks<std::chrono::microseconds>(finish - start), 1.0f);
+    }
 
     // Only a full check corresponds to a block that is about to be accepted.
     // Emitting on partial (template) checks used to overwrite these gauges

@@ -54,6 +54,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <thread>
 #include <utility>
 
+#include <random.h>
 #include <statsd_client.h>
 
 using namespace std;
@@ -180,34 +181,28 @@ inline bool should_send(float sample_rate)
         return true;
     }
 
+    // Monotonic per-thread seed component, so two threads starting at once get
+    // different streams without consulting a clock.
+    static std::atomic<uint64_t> g_statsd_thread_counter{0};
+
     // random() serialises on a global lock, which costs ~9x more once several
-    // threads sample concurrently. A per-thread xorshift keeps sampling local
+    // threads sample concurrently. A per-thread generator keeps sampling local
     // to the emitting thread. Sampling decisions do not need a global stream.
     //
-    // Deliberately multiply-free: wrapping unsigned multiplication is flagged
-    // by the integer sanitizer, and masking it with a suppression would hide
-    // real overflow bugs elsewhere. Shifts and xors cannot overflow.
-    thread_local uint64_t state{[] {
-        // Mix a per-thread address with a clock read, so two threads started
-        // in the same tick do not get identical streams.
-        uint64_t x{static_cast<uint64_t>(reinterpret_cast<uintptr_t>(&state)) ^
-                   static_cast<uint64_t>(std::chrono::steady_clock::now().time_since_epoch().count())};
-        // Scramble the seed; xorshift requires a non-zero state.
-        x ^= x >> 33;
-        x ^= x << 17;
-        x ^= x >> 29;
-        return x == 0 ? 0x9e3779b97f4a7c15ULL : x;
+    // InsecureRandomContext is Core's xoroshiro128++ helper and is exactly what
+    // it is for: cheap, non-cryptographic decisions. It also keeps the wrapping
+    // arithmetic in one place, where the sanitizer suppressions already live,
+    // instead of duplicating a hand-rolled xorshift here.
+    thread_local InsecureRandomContext rng{[] {
+        // Seed from per-thread state only - never the system clock, which fuzz
+        // builds forbid (CheckGlobals rejects unmocked time reads).
+        return static_cast<uint64_t>(reinterpret_cast<uintptr_t>(&rng)) ^ g_statsd_thread_counter.fetch_add(1, std::memory_order_relaxed);
     }()};
 
-    // xorshift64
-    state ^= state >> 12;
-    state ^= state << 25;
-    state ^= state >> 27;
-
-    // Map to [0, 1) and compare, so behaviour matches the documented meaning of
-    // a sample rate: the fraction of events that survive. The top 53 bits are
-    // the well-mixed ones, and 2^-53 is exact in a double.
-    const double p{static_cast<double>(state >> 11) * (1.0 / 9007199254740992.0)};
+    // Map to [0, 1) so the comparison matches the documented meaning of a
+    // sample rate: the fraction of events that survive. The top 53 bits are the
+    // well-mixed ones, and 2^-53 is exact in a double.
+    const double p{static_cast<double>(rng.rand64() >> 11) * (1.0 / 9007199254740992.0)};
     return sample_rate > p;
 }
 

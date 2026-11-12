@@ -6,6 +6,7 @@
 
 #include <netaddress.h>
 #include <netbase.h>
+#include <statsd_client.h>
 #include <test/fuzz/util/check_globals.h>
 #include <test/util/coverage.h>
 #include <test/util/random.h>
@@ -101,6 +102,11 @@ static void initialize()
 
     // Set time to the genesis block timestamp for deterministic initialization.
     SetMockTime(1231006505s);
+
+    // Fuzzing must not emit metrics: there is no backend, the counters would
+    // only slow the harness down, and emission would make otherwise pure code
+    // read the clock or the RNG, which CheckGlobals rejects.
+    statsClient.SetEnabled(false);
 
     // Terminate immediately if a fuzzing harness ever tries to create a socket.
     // Individual tests can override this by pointing CreateSock to a mocked alternative.
